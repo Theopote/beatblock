@@ -1,21 +1,22 @@
 package com.beatblock.ui.panels;
 
 import com.beatblock.BeatBlock;
-import com.beatblock.automap.AutoMapConfig;
-import com.beatblock.automap.AutoMapGenerator;
+import com.beatblock.automap.engine.SmartAutoMapEngine;
 import com.beatblock.ui.layout.BeatBlockDockSpaceLayoutBuilder;
 import imgui.ImGui;
 import imgui.flag.ImGuiWindowFlags;
 
 /**
- * 左侧工具面板。提供 Smart Auto Map 等工具。
+ * 左侧工具面板。提供 Smart Auto Map：点击后弹出设置（风格/复杂度/镜头/粒子），生成完整编排。
  */
 public class ToolPanel {
 
 	private static final int WINDOW_FLAGS = ImGuiWindowFlags.NoCollapse;
 
-	/** 上次 Smart Auto Map 生成数量，用于界面反馈 */
-	private int lastAutoMapCount = -1;
+	private boolean showAutoMapSettings = false;
+	private final AutoMapSettingsPanel autoMapSettingsPanel = new AutoMapSettingsPanel();
+	/** 上次生成统计 */
+	private SmartAutoMapEngine.AutoMapResult lastAutoMapResult = null;
 
 	public void render() {
 		if (!ImGui.begin(BeatBlockDockSpaceLayoutBuilder.TOOL_PANEL_WINDOW, WINDOW_FLAGS)) {
@@ -26,23 +27,27 @@ public class ToolPanel {
 		ImGui.separator();
 
 		if (ImGui.button("Smart Auto Map")) {
-			if (BeatBlock.timeline != null) {
-				AutoMapConfig config = AutoMapConfig.createDefault();
-				lastAutoMapCount = AutoMapGenerator.generate(BeatBlock.timeline, config, true);
-			} else {
-				lastAutoMapCount = -1;
-			}
+			showAutoMapSettings = true;
 		}
 		if (ImGui.isItemHovered()) {
-			ImGui.setTooltip("根据当前频段事件自动生成动画事件（先导入音乐）");
+			ImGui.setTooltip("自动编排：根据音乐生成方块动画、摄像机、粒子与节奏结构（先导入音乐）");
 		}
-		if (lastAutoMapCount >= 0) {
+		if (lastAutoMapResult != null) {
 			ImGui.sameLine();
-			ImGui.textDisabled(String.format("已生成 %d 个", lastAutoMapCount));
+			ImGui.textDisabled(String.format("动画 %d, 镜头 %d, 粒子 %d",
+				lastAutoMapResult.getAnimationEvents(),
+				lastAutoMapResult.getCameraEvents(),
+				lastAutoMapResult.getParticleEvents()));
 		}
 
 		ImGui.spacing();
 		ImGui.textWrapped("选择、画笔、橡皮等工具将在此列出。");
 		ImGui.end();
+
+		// 设置弹窗（独立窗口）
+		if (showAutoMapSettings) {
+			boolean done = autoMapSettingsPanel.render(res -> lastAutoMapResult = res);
+			if (done) showAutoMapSettings = false;
+		}
 	}
 }
