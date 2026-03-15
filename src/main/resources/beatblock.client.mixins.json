@@ -2,7 +2,9 @@
 	"required": true,
 	"package": "com.beatblock.mixin.client",
 	"compatibilityLevel": "JAVA_21",
-	"mixins": [],
+	"mixins": [
+		"RenderSystemMixin"
+	],
 	"client": [],
 	"injectors": {
 		"defaultRequire": 1
