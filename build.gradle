@@ -18,15 +18,12 @@ repositories {
 }
 
 loom {
-	splitEnvironmentSourceSets()
-
+	// 仅使用 main 源集，客户端代码放在 src/main/java/com/beatblock/client/
 	mods {
 		"beatblock" {
 			sourceSet sourceSets.main
-			sourceSet sourceSets.client
 		}
 	}
-
 }
 
 dependencies {
