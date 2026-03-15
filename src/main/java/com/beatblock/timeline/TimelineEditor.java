@@ -103,7 +103,7 @@ public final class TimelineEditor {
 	public void renderTrackArea() {
 		if (timeline == null) return;
 		TimelineLayout layout = new TimelineLayout();
-		layout.build(true, trackListState.getTrackHeaderWidth()); // 在可滚动子窗口内，无标尺行
+		layout.build(true, trackListState.getTrackHeaderWidth(), trackListState); // 在可滚动子窗口内，考虑折叠
 		TimelineViewState viewState = state.getViewState();
 		renderer.renderTrackArea(
 			timeline,

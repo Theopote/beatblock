@@ -53,13 +53,15 @@ public final class TimelineRenderer {
 		// 预留轨道区总高度，使子窗口滚动范围正确
 		ImGui.dummy(0, layout.contentHeight);
 
-		// 轨道槽交替背景（间隔色），轨道与轨道之间靠 ROW_GAP 留白，不用线
+		// 轨道槽交替背景（仅可见行），轨道与轨道之间靠 ROW_GAP 留白
 		float x0 = layout.trackHeaderLeft;
 		float x1 = layout.contentLeft + layout.contentWidth;
 		for (int i = 0; i < TimelineLayout.CONTENT_ROW_COUNT; i++) {
+			if (!layout.isRowVisible(i)) continue;
 			float rowScreenY = layout.getRowScreenY(i);
 			float rowH = layout.rowHeight;
-			int bg = (i % 2 == 0) ? ROW_BG_EVEN : ROW_BG_ODD;
+			int vi = layout.getVisibleIndex(i);
+			int bg = (vi % 2 == 0) ? ROW_BG_EVEN : ROW_BG_ODD;
 			ImGui.getWindowDrawList().addRectFilled(x0, rowScreenY, x1, rowScreenY + rowH, bg);
 		}
 
@@ -70,8 +72,9 @@ public final class TimelineRenderer {
 		// 网格竖线（仅时间轴方向，不画行间线）
 		gridRenderer.render(viewState, layout, layout.contentHeight);
 
-		// 轨道名 + 内容区；轨道名来自元数据（可自定义），音频为一级、波形/低中高频为子轨道
+		// 轨道名 + 内容区（仅可见行）；组可折叠，折叠后子轨道不绘制
 		for (int i = 0; i < TimelineLayout.CONTENT_ROW_COUNT; i++) {
+			if (!layout.isRowVisible(i)) continue;
 			float rowY = layout.getRowCursorY(i);
 			boolean isGroup = TimelineTrackMeta.isGroupRow(i);
 			String displayName = trackListState != null ? trackListState.getDisplayName(i) : TimelineTrackMeta.getDefaultName(i);

@@ -1,7 +1,9 @@
 package com.beatblock.timeline.rendering;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import imgui.type.ImString;
 
 /**
@@ -22,6 +24,9 @@ public final class TimelineTrackListState {
 	private float trackHeaderWidthPx = 130f;
 	private static final float TRACK_HEADER_WIDTH_MIN = 80f;
 	private static final float TRACK_HEADER_WIDTH_MAX = 380f;
+
+	/** 已折叠的组轨道行号（0=音频，5=动画），折叠后其子轨道不显示 */
+	private final Set<Integer> collapsedGroupRows = new HashSet<>();
 
 	public TimelineTrackListState() {
 		for (int i = 0; i < visible.length; i++) {
@@ -99,5 +104,24 @@ public final class TimelineTrackListState {
 
 	public void setTrackHeaderWidth(float width) {
 		trackHeaderWidthPx = Math.max(TRACK_HEADER_WIDTH_MIN, Math.min(TRACK_HEADER_WIDTH_MAX, width));
+	}
+
+	/** 组轨道是否已折叠（仅对组行 0、5 有效） */
+	public boolean isGroupCollapsed(int groupRowIndex) {
+		return collapsedGroupRows.contains(groupRowIndex);
+	}
+
+	public void setGroupCollapsed(int groupRowIndex, boolean collapsed) {
+		if (groupRowIndex == 0 || groupRowIndex == 5) {
+			if (collapsed) collapsedGroupRows.add(groupRowIndex);
+			else collapsedGroupRows.remove(groupRowIndex);
+		}
+	}
+
+	public void toggleGroupCollapsed(int groupRowIndex) {
+		if (groupRowIndex == 0 || groupRowIndex == 5) {
+			if (collapsedGroupRows.contains(groupRowIndex)) collapsedGroupRows.remove(groupRowIndex);
+			else collapsedGroupRows.add(groupRowIndex);
+		}
 	}
 }

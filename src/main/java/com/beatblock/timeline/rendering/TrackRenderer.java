@@ -22,7 +22,20 @@ public final class TrackRenderer {
 	public float drawTrackLabel(float rowY, int rowIndex, String displayName, boolean isGroup, TimelineTrackListState listState) {
 		ImGui.setCursorPosY(rowY);
 		float nameStartX = 4f;
-		if (TimelineTrackMeta.hasParent(rowIndex)) {
+		// 组轨道：左侧折叠/展开箭头，点击可折叠子轨道
+		if (isGroup && listState != null) {
+			boolean collapsed = listState.isGroupCollapsed(rowIndex);
+			ImGui.setCursorPosX(4f);
+			ImGui.text(collapsed ? "\u25B6" : "\u25BC"); // ▶ / ▼
+			if (ImGui.isItemClicked(0)) {
+				listState.toggleGroupCollapsed(rowIndex);
+			}
+			if (ImGui.isItemHovered()) {
+				ImGui.setTooltip(collapsed ? "展开子轨道" : "折叠子轨道");
+			}
+			ImGui.sameLine();
+			nameStartX = ImGui.getCursorPosX();
+		} else if (TimelineTrackMeta.hasParent(rowIndex)) {
 			nameStartX += CHILD_INDENT_PX;
 		}
 		ImGui.setCursorPosX(nameStartX);

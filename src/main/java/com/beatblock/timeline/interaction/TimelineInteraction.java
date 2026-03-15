@@ -117,7 +117,9 @@ public final class TimelineInteraction {
 				return;
 			}
 			for (int i = 0; i < layout.getInteractiveRowCount() && i < INTERACTIVE_TRACK_IDS.length; i++) {
-				float rowScreenY = layout.getInteractiveRowScreenY(i);
+				int logicalRow = TimelineLayout.INTERACTIVE_ROW_INDICES[i];
+				if (!layout.isRowVisible(logicalRow)) continue;
+				float rowScreenY = layout.getRowScreenY(logicalRow);
 				HitResult hit = HitTestSystem.hitTestTrackContent(timeline, INTERACTIVE_TRACK_IDS[i], mx, my,
 					layout.contentLeft, rowScreenY, TimelineLayout.ROW_HEIGHT, layout.contentWidth, viewState);
 				if (hit.isEmpty()) continue;

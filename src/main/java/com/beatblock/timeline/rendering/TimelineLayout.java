@@ -67,8 +67,12 @@ public final class TimelineLayout {
 
 	// ----- 行位置（供渲染与 HitTest 共用） -----
 
-	/** 每行顶部 Y（屏幕），index 0 = 第一行内容（波形行），共 CONTENT_ROW_COUNT 个 */
+	/** 每行顶部 Y（屏幕），不可见行为 -1 */
 	private final float[] rowScreenY = new float[CONTENT_ROW_COUNT];
+	/** 逻辑行对应的可见行序号（0-based），不可见为 -1 */
+	private final int[] logicalToVisibleIndex = new int[CONTENT_ROW_COUNT];
+	/** 当前可见行数（考虑折叠） */
+	private int visibleRowCount;
 
 	/** 时间线区域在窗口内的起始 Y（用于 setCursorPosY） */
 	public float startY;
@@ -80,8 +84,9 @@ public final class TimelineLayout {
 	 * 根据当前 ImGui 窗口状态填充布局（在 begin 之后、绘制前调用）。
 	 * @param trackAreaOnly 若为 true，表示在可滚动的轨道区子窗口内，无标尺行，行从 0 开始。
 	 * @param trackHeaderWidthPx 轨道头区域宽度（可拖动分割线调整），若 &lt;= 0 则用 TRACK_LABEL_WIDTH。
+	 * @param trackListState 若非 null，则根据组折叠状态计算可见行；为 null 时全部可见。
 	 */
-	public void build(boolean trackAreaOnly, float trackHeaderWidthPx) {
+	public void build(boolean trackAreaOnly, float trackHeaderWidthPx, TimelineTrackListState trackListState) {
 		this.trackAreaOnly = trackAreaOnly;
 		float headerW = trackHeaderWidthPx > 0 ? trackHeaderWidthPx : TRACK_LABEL_WIDTH;
 		float winX = ImGui.getWindowPosX();
@@ -100,7 +105,22 @@ public final class TimelineLayout {
 		trackHeaderLeft = winX + scrollX;
 		trackHeaderTop = winY + scrollY + startY + (trackAreaOnly ? 0f : RULER_HEIGHT);
 		trackHeaderWidth = headerW;
-		trackHeaderHeight = CONTENT_ROW_COUNT * ROW_STRIDE;
+		rowHeight = ROW_HEIGHT;
+
+		int v = 0;
+		for (int i = 0; i < CONTENT_ROW_COUNT; i++) {
+			boolean visible = isRowVisible(i, trackListState);
+			if (visible) {
+				logicalToVisibleIndex[i] = v;
+				rowScreenY[i] = trackHeaderTop + v * ROW_STRIDE;
+				v++;
+			} else {
+				logicalToVisibleIndex[i] = -1;
+				rowScreenY[i] = -1f;
+			}
+		}
+		visibleRowCount = v;
+		trackHeaderHeight = visibleRowCount * ROW_STRIDE;
 
 		contentLeft = rulerLeft;
 		contentTop = trackHeaderTop;
@@ -108,11 +128,18 @@ public final class TimelineLayout {
 		contentHeight = trackHeaderHeight;
 		timelineWidth = contentWidth;
 		trackLabelWidth = headerW;
-		rowHeight = ROW_HEIGHT;
+	}
 
-		for (int i = 0; i < CONTENT_ROW_COUNT; i++) {
-			rowScreenY[i] = contentTop + i * ROW_STRIDE;
-		}
+	private static boolean isRowVisible(int rowIndex, TimelineTrackListState state) {
+		if (state == null) return true;
+		int parent = TimelineTrackMeta.getParentRowIndex(rowIndex);
+		if (parent == TimelineTrackMeta.NO_PARENT) return true;
+		return !state.isGroupCollapsed(parent);
+	}
+
+	/** 兼容旧调用：不传 state，全部行可见。 */
+	public void build(boolean trackAreaOnly, float trackHeaderWidthPx) {
+		build(trackAreaOnly, trackHeaderWidthPx, null);
 	}
 
 	/** 兼容旧调用：按「含标尺」、默认轨道头宽度构建。 */
@@ -125,16 +152,33 @@ public final class TimelineLayout {
 		build(false);
 	}
 
-	/** 第 i 行内容区的屏幕 Y（行顶），i 从 0 到 CONTENT_ROW_COUNT-1 */
+	/** 第 i 行是否可见（未折叠或其父组未折叠） */
+	public boolean isRowVisible(int rowIndex) {
+		if (rowIndex < 0 || rowIndex >= CONTENT_ROW_COUNT) return false;
+		return logicalToVisibleIndex[rowIndex] >= 0;
+	}
+
+	/** 第 i 行在可见行中的序号（0-based），不可见返回 -1 */
+	public int getVisibleIndex(int rowIndex) {
+		if (rowIndex < 0 || rowIndex >= CONTENT_ROW_COUNT) return -1;
+		return logicalToVisibleIndex[rowIndex];
+	}
+
+	public int getVisibleRowCount() { return visibleRowCount; }
+
+	/** 第 i 行内容区的屏幕 Y（行顶），不可见返回 -1 */
 	public float getRowScreenY(int rowIndex) {
-		if (rowIndex < 0 || rowIndex >= CONTENT_ROW_COUNT) return contentTop;
+		if (rowIndex < 0 || rowIndex >= CONTENT_ROW_COUNT) return -1f;
 		return rowScreenY[rowIndex];
 	}
 
-	/** 第 i 行内容区的光标 Y（用于 ImGui.setCursorPosY），i 从 0 到 CONTENT_ROW_COUNT-1 */
+	/** 第 i 行内容区的光标 Y（用于 ImGui.setCursorPosY），不可见返回 -1 */
 	public float getRowCursorY(int rowIndex) {
+		if (rowIndex < 0 || rowIndex >= CONTENT_ROW_COUNT) return -1f;
+		int vi = logicalToVisibleIndex[rowIndex];
+		if (vi < 0) return -1f;
 		float rulerOffset = trackAreaOnly ? 0f : RULER_HEIGHT;
-		return startY + rulerOffset + rowIndex * ROW_STRIDE;
+		return startY + rulerOffset + vi * ROW_STRIDE;
 	}
 
 	/** 第 i 个可交互轨道的屏幕 Y（与 INTERACTIVE_TRACK_IDS[i] 对应） */
