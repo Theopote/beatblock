@@ -36,6 +36,9 @@ public final class BeatBlockClientDriver {
 
 		BeatBlock.beatScheduler.tick(currentTime);
 		BeatBlock.animationManager.tick(currentTime);
+		if (BeatBlock.blockAnimationEngine != null) {
+			BeatBlock.blockAnimationEngine.tick(currentTime);
+		}
 
 		Vec3d base = BeatBlock.stageManager.getCurrentStage()
 			.map(s -> new Vec3d(s.getCenterX(), s.getCenterY(), s.getCenterZ()))

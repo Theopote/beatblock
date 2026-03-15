@@ -14,6 +14,7 @@ import com.beatblock.timeline.Timeline;
 import com.beatblock.timeline.TimelineEditor;
 import com.beatblock.visual.BlockDisplayPool;
 import com.beatblock.visual.BlockSpawner;
+import com.beatblock.engine.BlockAnimationEngine;
 import com.beatblock.visual.TransformUpdater;
 import net.fabricmc.api.ModInitializer;
 import org.slf4j.Logger;
@@ -44,6 +45,7 @@ public class BeatBlock implements ModInitializer {
 	public static StageManager stageManager;
 	public static Timeline timeline;
 	public static TimelineEditor timelineEditor;
+	public static BlockAnimationEngine blockAnimationEngine;
 
 	@Override
 	public void onInitialize() {
@@ -59,6 +61,7 @@ public class BeatBlock implements ModInitializer {
 		stageManager = new StageManager();
 		timeline = Timeline.createDefault();
 		timelineEditor = new TimelineEditor(timeline);
+		blockAnimationEngine = new BlockAnimationEngine();
 
 		// 注册默认动画模板
 		animationRegistry.register(new AnimationTemplate("bounce", 0.5, AnimationTemplate.Easing.EASE_OUT, AnimationTemplate.TransformType.SCALE));
