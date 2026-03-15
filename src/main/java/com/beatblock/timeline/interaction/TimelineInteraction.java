@@ -6,12 +6,10 @@ import com.beatblock.timeline.rendering.TimelineLayout;
 import imgui.ImGui;
 
 /**
- * 时间线输入：鼠标按下/拖拽/释放，驱动 InteractionState、SelectionState、Clock。
+ * 时间线输入：鼠标按下/拖拽/释放，使用 TimelineLayout 四区域做 HitTest，驱动状态与 Clock。
  */
 public final class TimelineInteraction {
 
-	private static final float RULER_HEIGHT = 20f;
-	private static final float ROW_HEIGHT = 22f;
 	private static final float DRAG_THRESHOLD_PX = 4f;
 
 	private static final String[] INTERACTIVE_TRACK_IDS = {
@@ -21,9 +19,6 @@ public final class TimelineInteraction {
 		Timeline.TRACK_ID_GLOBAL
 	};
 
-	/** 四行可交互轨道在内容区的行偏移（相对 baseContentScreenY） */
-	private static final float[] ROW_OFFSETS = { 5 * ROW_HEIGHT, 6 * ROW_HEIGHT, 8 * ROW_HEIGHT, 10 * ROW_HEIGHT };
-
 	public void update(
 		Timeline timeline,
 		TimelineViewState viewState,
@@ -31,13 +26,9 @@ public final class TimelineInteraction {
 		SelectionState selectionState,
 		TimelineClock clock,
 		SelectionBox selectionBox,
-		float contentLeft,
-		float contentWidth,
-		float rulerScreenTop,
-		float rulerScreenBottom,
-		float baseContentScreenY
+		TimelineLayout layout
 	) {
-		if (timeline == null || viewState == null || interactionState == null || selectionState == null) return;
+		if (timeline == null || viewState == null || interactionState == null || selectionState == null || layout == null) return;
 		if (!ImGui.isWindowHovered()) return;
 
 		float mx = ImGui.getMousePosX();
@@ -45,7 +36,6 @@ public final class TimelineInteraction {
 		double duration = timeline.getDurationSeconds();
 		if (duration <= 0) duration = 60.0;
 
-		// 鼠标释放
 		if (ImGui.isMouseReleased(0)) {
 			if (interactionState.getMode() == InteractionMode.DRAG_EVENT && interactionState.getActiveEventId() != null) {
 				float dx = mx - interactionState.getMouseStartX();
@@ -55,44 +45,41 @@ public final class TimelineInteraction {
 					selectionState.selectEvent(interactionState.getActiveEventId());
 				}
 			}
-			if (interactionState.getMode() == InteractionMode.BOX_SELECT) {
-				// 框选解析可在此扩展
-			}
+			if (interactionState.getMode() == InteractionMode.BOX_SELECT) {}
 			interactionState.setMode(InteractionMode.NONE);
 			interactionState.clearActive();
 			if (selectionBox != null) selectionBox.setActive(false);
 			return;
 		}
 
-		// 拖拽中
 		if (ImGui.isMouseDown(0) && interactionState.getMode() != InteractionMode.NONE) {
 			if (interactionState.getMode() == InteractionMode.SCRUB_TIME && clock != null) {
-				double t = viewState.screenToTime(mx - contentLeft);
+				double t = viewState.screenToTime(mx - layout.contentLeft);
 				clock.seek(Math.max(0, Math.min(t, duration)));
 				return;
 			}
 			if (interactionState.getMode() == InteractionMode.DRAG_EVENT && interactionState.getActiveEventId() != null
 				&& interactionState.getActiveTrackId() != null && interactionState.getActiveClipId() != null) {
-				double t = viewState.screenToTime(mx - contentLeft);
+				double t = viewState.screenToTime(mx - layout.contentLeft);
 				DragController.dragEvent(timeline, interactionState.getActiveTrackId(), interactionState.getActiveClipId(), interactionState.getActiveEventId(), t, duration);
 				return;
 			}
 			return;
 		}
 
-		// 鼠标按下：HitTest
 		if (ImGui.isMouseClicked(0)) {
 			boolean ctrl = ImGui.getIO().getKeyCtrl();
-			HitResult rulerHit = HitTestSystem.hitTestTimeRuler(mx, my, contentLeft, rulerScreenTop, RULER_HEIGHT, contentWidth, viewState);
-			if (!rulerHit.isEmpty() && rulerHit.getHitType() == HitType.TIME_HEADER) {
+			if (layout.rulerContains(mx, my)) {
+				double t = viewState.screenToTime(mx - layout.contentLeft);
 				interactionState.setMode(InteractionMode.SCRUB_TIME);
 				interactionState.setMouseStart(mx, my);
-				if (clock != null) clock.seek(Math.max(0, Math.min(rulerHit.getTimeSeconds(), duration)));
+				if (clock != null) clock.seek(Math.max(0, Math.min(t, duration)));
 				return;
 			}
-			for (int i = 0; i < INTERACTIVE_TRACK_IDS.length && i < ROW_OFFSETS.length; i++) {
-				float rowScreenY = baseContentScreenY + ROW_OFFSETS[i];
-				HitResult hit = HitTestSystem.hitTestTrackContent(timeline, INTERACTIVE_TRACK_IDS[i], mx, my, contentLeft, rowScreenY, ROW_HEIGHT, contentWidth, viewState);
+			for (int i = 0; i < layout.getInteractiveRowCount() && i < INTERACTIVE_TRACK_IDS.length; i++) {
+				float rowScreenY = layout.getInteractiveRowScreenY(i);
+				HitResult hit = HitTestSystem.hitTestTrackContent(timeline, INTERACTIVE_TRACK_IDS[i], mx, my,
+					layout.contentLeft, rowScreenY, TimelineLayout.ROW_HEIGHT, layout.contentWidth, viewState);
 				if (hit.isEmpty()) continue;
 				if (hit.getHitType() == HitType.EVENT || hit.getHitType() == HitType.CLIP) {
 					interactionState.setMode(InteractionMode.DRAG_EVENT);

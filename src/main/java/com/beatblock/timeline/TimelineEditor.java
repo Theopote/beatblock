@@ -4,6 +4,7 @@ import com.beatblock.BeatBlock;
 import com.beatblock.timeline.command.CommandManager;
 import com.beatblock.timeline.editor.*;
 import com.beatblock.timeline.interaction.TimelineInteraction;
+import com.beatblock.timeline.rendering.TimelineLayout;
 import com.beatblock.timeline.rendering.TimelineRenderer;
 import imgui.ImGui;
 
@@ -12,9 +13,6 @@ import imgui.ImGui;
  * 职责：UI 入口、协调各子系统。
  */
 public final class TimelineEditor {
-
-	private static final float TRACK_LABEL_WIDTH = 110f;
-	private static final float RULER_HEIGHT = 20f;
 
 	private final Timeline timeline;
 	private final com.beatblock.timeline.editor.TimelineEditor state;
@@ -78,32 +76,24 @@ public final class TimelineEditor {
 			state.getClock().setCurrentTimeSeconds(BeatBlock.musicPlayer.getCurrentTimeSeconds());
 		}
 
-		float contentWidth = ImGui.getContentRegionAvailX();
-		float timelineWidth = Math.max(200f, contentWidth - TRACK_LABEL_WIDTH - 20f);
+		TimelineLayout layout = new TimelineLayout();
+		layout.build();
 		double duration = timeline.getDurationSeconds() > 0 ? timeline.getDurationSeconds() : 60.0;
 		TimelineViewState viewState = state.getViewState();
 
-		// 首次或默认可见范围时 fit
-		if (viewState.getViewEndTimeSeconds() >= 59 && viewState.getViewEndTimeSeconds() <= 61 && duration > 0 && timelineWidth > 0) {
-			viewState.fitToDuration(duration, timelineWidth);
+		if (viewState.getViewEndTimeSeconds() >= 59 && viewState.getViewEndTimeSeconds() <= 61 && duration > 0 && layout.contentWidth > 0) {
+			viewState.fitToDuration(duration, layout.contentWidth);
+			layout.build();
 		}
 
-		float startY = ImGui.getCursorPosY();
 		renderer.render(
 			timeline,
 			viewState,
 			state.getSelectionState(),
 			state.getClock(),
 			state.getSelectionBox(),
-			timelineWidth
+			layout
 		);
-
-		float contentLeft = ImGui.getWindowPosX() + ImGui.getScrollX() + TRACK_LABEL_WIDTH;
-		float scrollY = ImGui.getScrollY();
-		float winY = ImGui.getWindowPosY();
-		float rulerScreenTop = winY + scrollY + startY;
-		float rulerScreenBottom = rulerScreenTop + RULER_HEIGHT;
-		float baseContentScreenY = rulerScreenTop + RULER_HEIGHT;
 
 		interactionSystem.update(
 			timeline,
@@ -112,11 +102,7 @@ public final class TimelineEditor {
 			state.getSelectionState(),
 			state.getClock(),
 			state.getSelectionBox(),
-			contentLeft,
-			timelineWidth,
-			rulerScreenTop,
-			rulerScreenBottom,
-			baseContentScreenY
+			layout
 		);
 	}
 }

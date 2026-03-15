@@ -34,6 +34,9 @@ public final class TimelineRenderer {
 		// 1. 时间标尺区域
 		gridRenderer.renderRuler(layout.startY, viewState, layout);
 
+		// 3. 网格（内容区竖线，先画在底层）
+		gridRenderer.render(viewState, layout, layout.contentHeight);
+
 		// 2. 轨道名 + 4. 内容区（按行交错）
 		for (int i = 0; i < TimelineLayout.CONTENT_ROW_COUNT; i++) {
 			float rowY = layout.getRowCursorY(i);
@@ -42,9 +45,6 @@ public final class TimelineRenderer {
 			trackRenderer.drawTrackLabel(rowY, label, isGroup);
 			drawRowContent(i, rowY, timeline, viewState, selectionState, layout);
 		}
-
-		// 3. 网格（内容区竖线）
-		gridRenderer.render(viewState, layout, layout.contentHeight);
 
 		// 播放头（内容区范围内）
 		if (clock != null) {
