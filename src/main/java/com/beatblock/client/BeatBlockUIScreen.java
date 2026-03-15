@@ -2,16 +2,22 @@ package com.beatblock.client;
 
 import com.beatblock.client.imgui.ImGuiRenderer;
 import com.beatblock.ui.BeatBlockUIManager;
+import imgui.ImGui;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.gui.Click;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.text.Text;
+import net.minecraft.util.hit.BlockHitResult;
+import net.minecraft.util.hit.EntityHitResult;
+import net.minecraft.util.hit.HitResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
  * BeatBlock 主界面：手持控制器右键打开。
- * 使用 ImGui Dockspace 布局：顶部菜单栏、左侧工具、右侧事件属性、底部时间线、中间场景；动画库可菜单开关。
+ * 打开时禁用原版十字准星、解锁光标使用 ImGui；关闭时恢复。
+ * 鼠标在面板内操作 UI，在面板外操作 Minecraft（中键按住移动视角）。
  */
 public class BeatBlockUIScreen extends Screen {
 
@@ -22,11 +28,19 @@ public class BeatBlockUIScreen extends Screen {
 
 	public BeatBlockUIScreen() {
 		super(Text.translatable("gui.beatblock.title"));
+		MinecraftClient client = MinecraftClient.getInstance();
+		if (client != null && client.mouse != null) {
+			client.mouse.unlockCursor();
+		}
 	}
 
 	@Override
 	protected void init() {
 		super.init();
+		MinecraftClient client = MinecraftClient.getInstance();
+		if (client != null && client.mouse != null) {
+			client.mouse.unlockCursor();
+		}
 		if (uiManager != null) return;
 
 		if (!ImGuiRenderer.getInstance().isInitialized()) {
@@ -76,11 +90,80 @@ public class BeatBlockUIScreen extends Screen {
 	}
 
 	@Override
+	public void removed() {
+		super.removed();
+		MinecraftClient client = MinecraftClient.getInstance();
+		// 仅当关闭后没有其他 Screen 时恢复锁定（回到游戏视角）
+		if (client != null && client.mouse != null && client.currentScreen == null) {
+			client.mouse.lockCursor();
+		}
+	}
+
+	@Override
 	public void close() {
 		if (uiManager != null) {
 			uiManager.resetLayoutState();
 		}
 		super.close();
+	}
+
+	/** 鼠标是否在 BeatBlock 面板内（由 ImGui 判定） */
+	public static boolean isMouseOverUI() {
+		return ImGui.getIO() != null && ImGui.getIO().getWantCaptureMouse();
+	}
+
+	@Override
+	public boolean mouseClicked(Click click, boolean doubleClick) {
+		if (ImGui.getIO() != null && ImGui.getIO().getWantCaptureMouse()) {
+			return super.mouseClicked(click, doubleClick);
+		}
+		// 在场景区域：交给游戏（攻击/使用）
+		handleGameMouseClick(click);
+		return true;
+	}
+
+	@Override
+	public boolean mouseDragged(Click click, double deltaX, double deltaY) {
+		if (ImGui.getIO() != null && ImGui.getIO().getWantCaptureMouse()) {
+			return super.mouseDragged(click, deltaX, deltaY);
+		}
+		return false;
+	}
+
+	@Override
+	public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
+		if (ImGui.getIO() != null && ImGui.getIO().getWantCaptureMouse()) {
+			return super.mouseScrolled(mouseX, mouseY, horizontalAmount, verticalAmount);
+		}
+		return false;
+	}
+
+	@Override
+	public boolean keyPressed(net.minecraft.client.input.KeyInput input) {
+		if (ImGui.getIO() != null && ImGui.getIO().getWantCaptureKeyboard()) {
+			return super.keyPressed(input);
+		}
+		return false;
+	}
+
+	private void handleGameMouseClick(Click click) {
+		MinecraftClient client = MinecraftClient.getInstance();
+		if (client == null || client.interactionManager == null || client.player == null || client.world == null) return;
+		HitResult hit = client.crosshairTarget;
+		if (hit == null) return;
+		if (click.button() == 0) { // left
+			if (hit.getType() == HitResult.Type.ENTITY && hit instanceof EntityHitResult entityHit) {
+				client.interactionManager.attackEntity(client.player, entityHit.getEntity());
+			} else if (hit.getType() == HitResult.Type.BLOCK && hit instanceof BlockHitResult blockHit) {
+				client.interactionManager.attackBlock(blockHit.getBlockPos(), blockHit.getSide());
+			}
+		} else if (click.button() == 1) { // right
+			if (hit.getType() == HitResult.Type.BLOCK && hit instanceof BlockHitResult blockHit) {
+				client.interactionManager.interactBlock(client.player, net.minecraft.util.Hand.MAIN_HAND, blockHit);
+			} else {
+				client.interactionManager.interactItem(client.player, net.minecraft.util.Hand.MAIN_HAND);
+			}
+		}
 	}
 
 	@Override

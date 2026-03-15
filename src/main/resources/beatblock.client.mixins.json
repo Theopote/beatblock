@@ -3,6 +3,8 @@
 	"package": "com.beatblock.mixin.client",
 	"compatibilityLevel": "JAVA_21",
 	"mixins": [
+		"InGameHudMixin",
+		"MouseMixin",
 		"RenderSystemMixin"
 	],
 	"client": [],
