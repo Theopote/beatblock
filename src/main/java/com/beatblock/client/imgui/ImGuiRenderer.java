@@ -67,6 +67,8 @@ public class ImGuiRenderer {
 		imGuiGl3 = new ImGuiImplGl3();
 		imGuiGl3.init(glsl);
 
+		// 参考 ChronoBlocks：首帧前必须设置显示尺寸，否则坐标/裁剪错误导致“全黑无内容”
+		updateDisplaySize();
 		initialized = true;
 		LOGGER.info("BeatBlock ImGui 初始化完成");
 	}
@@ -79,16 +81,19 @@ public class ImGuiRenderer {
 		GL11.glPixelStorei(GL12.GL_PACK_ROW_LENGTH, 0);
 	}
 
+	/** 参考 ChronoBlocks：GLSL 版本过高在部分环境会导致 shader 编译失败，界面全黑。 */
 	private static String pickGlslVersion() {
 		try {
 			String sl = GL11.glGetString(GL20.GL_SHADING_LANGUAGE_VERSION);
 			if (sl != null) {
-				String[] p = sl.trim().split("[^0-9.]+");
-				if (p.length > 0) {
-					String[] v = p[0].split("\\.");
+				String[] parts = sl.trim().split("[^0-9.]+");
+				if (parts.length > 0) {
+					String[] v = parts[0].split("\\.");
 					int major = v.length >= 1 ? Integer.parseInt(v[0]) : 0;
-					if (major >= 4) return "#version 410 core";
+					int minor = v.length >= 2 ? Integer.parseInt(v[1]) : 0;
+					if (major <= 1) return "#version 150";
 					if (major == 3) return "#version 330 core";
+					if (major >= 4) return (major > 4 || minor >= 10) ? "#version 410 core" : "#version 330 core";
 				}
 			}
 		} catch (Throwable ignored) {}
@@ -142,7 +147,7 @@ public class ImGuiRenderer {
 		}
 	}
 
-	/** 在 swap 前由 Mixin 调用 */
+	/** 在 swap 前由 Mixin 调用；参考 ChronoBlocks 保存/恢复 viewport 与 scissor。 */
 	public void renderPendingDrawData() {
 		if (!initialized || !drawDataReady || imGuiGl3 == null) return;
 		try {

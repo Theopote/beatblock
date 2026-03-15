@@ -18,6 +18,7 @@ public class BeatBlockUIManager {
 	private static final Logger LOGGER = LoggerFactory.getLogger(BeatBlockUIManager.class);
 	private static final String DOCKSPACE_WINDOW_NAME = "BeatBlockDockSpace";
 	private static final String DOCKSPACE_ID = "BeatBlockDockSpace";
+	// 与 ChronoBlocks 一致：NoBackground + 完全透明，否则整屏一块黑半透明遮挡
 	private static final int DOCKSPACE_FLAGS =
 		ImGuiWindowFlags.NoTitleBar
 			| ImGuiWindowFlags.NoCollapse
@@ -61,7 +62,7 @@ public class BeatBlockUIManager {
 		// 1. 菜单栏（独立于 Dockspace）
 		menuBarPanel.render();
 
-		// 2. Dockspace 窗口（全屏透明，仅提供停靠区域）
+		// 2. Dockspace 窗口（与 ChronoBlocks 一致：完全透明 + NoBackground，不遮挡场景）
 		imgui.ImGuiViewport viewport = ImGui.getMainViewport();
 		ImGui.setNextWindowPos(viewport.getWorkPosX(), viewport.getWorkPosY());
 		ImGui.setNextWindowSize(viewport.getWorkSizeX(), viewport.getWorkSizeY());
@@ -77,7 +78,6 @@ public class BeatBlockUIManager {
 		int dockspaceId = -1;
 		if (ImGui.begin(DOCKSPACE_WINDOW_NAME, DOCKSPACE_FLAGS)) {
 			dockspaceId = ImGui.getID(DOCKSPACE_ID);
-			// PassthruCentralNode：中央不捕获鼠标，可看到并操作场景
 			ImGui.dockSpace(dockspaceId, 0, 0, imgui.internal.flag.ImGuiDockNodeFlags.PassthruCentralNode);
 
 			if (firstLayout && dockspaceId != -1) {
@@ -92,15 +92,19 @@ public class BeatBlockUIManager {
 
 		if (dockspaceId == -1) return;
 
-		// 3. 各停靠面板
+		// 3. 各停靠面板：显式不透明背景，确保文字与控件可见（参考 ChronoBlocks 面板风格）
+		ImGui.pushStyleColor(ImGuiCol.WindowBg, 0.18f, 0.18f, 0.2f, 1f);
 		toolPanel.render();
 		eventPropertiesPanel.render();
 		timelinePanel.render();
 		centralViewPanel.render();
+		ImGui.popStyleColor();
 
-		// 4. 动画库（可选，可从菜单打开/关闭）
+		// 4. 动画库（可选）
 		if (animationLibraryVisible) {
+			ImGui.pushStyleColor(ImGuiCol.WindowBg, 0.18f, 0.18f, 0.2f, 1f);
 			animationLibraryPanel.render();
+			ImGui.popStyleColor();
 		}
 	}
 

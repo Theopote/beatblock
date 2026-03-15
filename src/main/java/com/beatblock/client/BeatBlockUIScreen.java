@@ -85,8 +85,8 @@ public class BeatBlockUIScreen extends Screen {
 		}
 		renderer.endFrame();
 
-		// 实际 GL 绘制在 RenderSystemMixin.flipFrame(HEAD) 中执行
-		super.render(context, mouseX, mouseY, delta);
+		// 与 ChronoBlocks 一致：不调用 super.render()，避免默认 Screen 绘制（如暗角/遮罩）覆盖场景
+		// ImGui 实际 GL 绘制在 RenderSystemMixin.flipFrame(HEAD) 中执行
 	}
 
 	@Override
