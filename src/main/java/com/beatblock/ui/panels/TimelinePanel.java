@@ -29,25 +29,19 @@ public class TimelinePanel {
 
 		TimelineEditor editor = BeatBlock.timelineEditor;
 
-		// ----- 顶部工具栏 -----
+		// ----- 顶部工具栏（右侧显示当前时间/总时长） -----
 		if (editor != null) {
 			toolbar.render(editor, editor.getToolbarState());
 		}
-		ImGui.separator();
-
-		// ----- 标题与当前时间 -----
 		double duration = editor != null && BeatBlock.timeline.getDurationSeconds() > 0
 			? BeatBlock.timeline.getDurationSeconds()
 			: (BeatBlock.musicPlayer != null && BeatBlock.musicPlayer.getDurationSeconds() > 0 ? BeatBlock.musicPlayer.getDurationSeconds() : 60.0);
 		double currentTime = editor != null ? editor.getClock().getCurrentTimeSeconds() : 0;
+		ImGui.sameLine(ImGui.getWindowWidth() - 100);
+		ImGui.textDisabled(String.format("%.1fs / %.1fs", currentTime, duration));
 
-		ImGui.text("时间线");
-		ImGui.sameLine();
-		ImGui.textDisabled("(音乐 | 摄像机 | 动画事件)");
-		ImGui.sameLine(ImGui.getWindowWidth() - 120);
-		ImGui.text(String.format("%.1fs / %.1fs", currentTime, duration));
+		// ----- 紧接工具栏下方：时间刻度（标尺） -----
 		ImGui.separator();
-
 		if (editor != null) {
 			editor.render();
 		}
