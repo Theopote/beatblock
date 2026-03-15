@@ -40,6 +40,9 @@ public class AudioLoader {
 			BeatBlock.musicPlayer.setDurationSeconds(audio.getDurationSeconds());
 			BeatBlock.musicPlayer.setCurrentTimeSeconds(0);
 		}
+		if (BeatBlock.timelineEditor != null) {
+			BeatBlock.timelineEditor.syncClockDuration();
+		}
 		loadedPath = pathOrId;
 		LOGGER.info("BeatBlock: 已导入音乐 {} ({}s)", pathOrId, audio.getDurationSeconds());
 		return true;
@@ -56,6 +59,9 @@ public class AudioLoader {
 		if (BeatBlock.musicPlayer != null) {
 			BeatBlock.musicPlayer.setDurationSeconds(audio.getDurationSeconds());
 			BeatBlock.musicPlayer.setCurrentTimeSeconds(0);
+		}
+		if (BeatBlock.timelineEditor != null) {
+			BeatBlock.timelineEditor.syncClockDuration();
 		}
 		loadedPath = "(decoded)";
 	}

@@ -4,6 +4,8 @@ import com.beatblock.BeatBlock;
 import com.beatblock.ui.layout.BeatBlockDockSpaceLayoutBuilder;
 import com.beatblock.timeline.Timeline;
 import com.beatblock.timeline.*;
+import com.beatblock.timeline.editor.TimelineEditor;
+import com.beatblock.timeline.editor.TimelineViewState;
 import imgui.ImGui;
 import imgui.flag.ImGuiCol;
 import imgui.flag.ImGuiWindowFlags;
@@ -11,9 +13,8 @@ import imgui.flag.ImGuiWindowFlags;
 import java.util.List;
 
 /**
- * 底部通栏时间线面板：分层轨道系统。
- * Audio（Waveform / Low / Mid / High）| Animation（Block / Auto）| Camera | Global Event。
- * 显示播放头、波形占位与频段/事件点。
+ * 底部通栏时间线面板：接入 TimelineEditor（TimeSystem + Viewport + Selection + Interaction）。
+ * Step1：轨道 / 网格 / 事件 / 播放头，时间↔屏幕由 ViewState 驱动。
  */
 public class TimelinePanel {
 
@@ -21,12 +22,13 @@ public class TimelinePanel {
 	private static final float TRACK_LABEL_WIDTH = 110f;
 	private static final float ROW_HEIGHT = 22f;
 	private static final float RULER_HEIGHT = 20f;
-	private static final float PLAYHEAD_COLOR = 0xFF_FF_66_66;
-	private static final float ZERO_COLOR = 0xFF_88_88_88;
-	private static final float WAVEFORM_COLOR = 0xFF_66_AA_FF;
-	private static final float EVENT_DOT_COLOR = 0xFF_AA_CC_FF;
-	private static final float KEYFRAME_COLOR = 0xFF_FF_CC_66;
-	private static final float GLOBAL_EVENT_COLOR = 0xFF_AA_FF_AA;
+	private static final int PLAYHEAD_COLOR = 0xFF_FF_66_66;
+	private static final int ZERO_COLOR = 0xFF_88_88_88;
+	private static final int GRID_COLOR = 0x22_88_88_88;
+	private static final int WAVEFORM_COLOR = 0xFF_66_AA_FF;
+	private static final int EVENT_DOT_COLOR = 0xFF_AA_CC_FF;
+	private static final int KEYFRAME_COLOR = 0xFF_FF_CC_66;
+	private static final int GLOBAL_EVENT_COLOR = 0xFF_AA_FF_AA;
 
 	public void render() {
 		if (!ImGui.begin(BeatBlockDockSpaceLayoutBuilder.TIMELINE_PANEL_WINDOW, WINDOW_FLAGS)) {
@@ -34,16 +36,26 @@ public class TimelinePanel {
 			return;
 		}
 
-		double duration = getDuration();
-		double currentTime = getCurrentTime();
 		Timeline model = BeatBlock.timeline;
+		TimelineEditor editor = BeatBlock.timelineEditor;
 		if (model == null) {
 			ImGui.text("时间线（未加载模型）");
 			ImGui.end();
 			return;
 		}
 
-		// 顶部：标题 + 时间信息
+		double duration = getDuration();
+		double currentTime = getCurrentTime();
+		if (editor != null) {
+			editor.syncClockDuration();
+			if (BeatBlock.musicPlayer != null && BeatBlock.musicPlayer.isPlaying()) {
+				editor.getClock().setCurrentTimeSeconds(BeatBlock.musicPlayer.getCurrentTimeSeconds());
+			} else {
+				editor.getClock().setCurrentTimeSeconds(currentTime);
+			}
+			currentTime = editor.getClock().getCurrentTimeSeconds();
+		}
+
 		ImGui.text("时间线");
 		ImGui.sameLine();
 		ImGui.textDisabled("(音乐 | 摄像机 | 动画事件)");
@@ -54,48 +66,56 @@ public class TimelinePanel {
 		float contentWidth = ImGui.getContentRegionAvailX();
 		float startY = ImGui.getCursorPosY();
 		float timelineWidth = Math.max(200f, contentWidth - TRACK_LABEL_WIDTH - 20f);
-		float pixelsPerSecond = duration > 0 ? (timelineWidth / (float) duration) : 10f;
 
-		// 时间标尺行（左侧留空，右侧画刻度）
+		TimelineViewState viewState = editor != null ? editor.getViewState() : null;
+		float zoom = (viewState != null) ? viewState.getZoom() : (duration > 0 ? (timelineWidth / (float) duration) : 10f);
+		double viewStart = viewState != null ? viewState.getViewStartTimeSeconds() : 0;
+		double viewEnd = viewState != null ? viewState.getViewEndTimeSeconds() : duration;
+		// 首次打开（仍为默认 0~60 可见范围）时适配整段时长
+		if (viewState != null && duration > 0 && timelineWidth > 0
+			&& viewState.getViewEndTimeSeconds() >= 59 && viewState.getViewEndTimeSeconds() <= 61) {
+			viewState.fitToDuration(duration, timelineWidth);
+			viewStart = viewState.getViewStartTimeSeconds();
+			viewEnd = viewState.getViewEndTimeSeconds();
+			zoom = viewState.getZoom();
+		}
+
 		drawTrackLabel(startY, "", false);
-		drawRuler(startY, timelineWidth, duration, pixelsPerSecond);
+		drawRuler(startY, timelineWidth, viewStart, viewEnd, zoom);
+		drawGrid(startY + RULER_HEIGHT, timelineWidth, viewStart, viewEnd, zoom, 260);
 		float rowY = startY + RULER_HEIGHT;
 
-		// 轨道区：左侧标签 + 右侧内容
-		// --- Audio Track ---
 		rowY = drawTrackLabel(rowY, "音频", true);
 		drawTrackLabel(rowY, "波形", false);
-		rowY = drawAudioWaveformRow(rowY, model, timelineWidth, pixelsPerSecond);
+		rowY = drawAudioWaveformRow(rowY, model, timelineWidth, zoom, viewStart, viewEnd);
 		drawTrackLabel(rowY, "低频", false);
-		rowY = drawFrequencyDots(rowY, model.getFrequencyEventsByBand(FrequencyBand.LOW), timelineWidth, pixelsPerSecond);
+		rowY = drawFrequencyDots(rowY, model.getFrequencyEventsByBand(FrequencyBand.LOW), timelineWidth, zoom, viewStart, viewEnd);
 		drawTrackLabel(rowY, "中频", false);
-		rowY = drawFrequencyDots(rowY, model.getFrequencyEventsByBand(FrequencyBand.MID), timelineWidth, pixelsPerSecond);
+		rowY = drawFrequencyDots(rowY, model.getFrequencyEventsByBand(FrequencyBand.MID), timelineWidth, zoom, viewStart, viewEnd);
 		drawTrackLabel(rowY, "高频", false);
-		rowY = drawFrequencyDots(rowY, model.getFrequencyEventsByBand(FrequencyBand.HIGH), timelineWidth, pixelsPerSecond);
+		rowY = drawFrequencyDots(rowY, model.getFrequencyEventsByBand(FrequencyBand.HIGH), timelineWidth, zoom, viewStart, viewEnd);
 
-		// --- Animation Track ---
 		rowY = drawTrackLabel(rowY, "动画", true);
 		drawTrackLabel(rowY, "方块动画", false);
-		rowY = drawAnimationEventBlocks(rowY, model.getBlockAnimationEvents(), timelineWidth, pixelsPerSecond);
+		rowY = drawAnimationEventBlocks(rowY, model.getBlockAnimationEvents(), timelineWidth, zoom, viewStart, viewEnd);
 		drawTrackLabel(rowY, "自动动画", false);
-		rowY = drawAnimationEventBlocks(rowY, model.getAutoAnimationEvents(), timelineWidth, pixelsPerSecond);
+		rowY = drawAnimationEventBlocks(rowY, model.getAutoAnimationEvents(), timelineWidth, zoom, viewStart, viewEnd);
 
-		// --- Camera Track ---
 		rowY = drawTrackLabel(rowY, "摄像机", false);
 		drawTrackLabel(rowY, "关键帧", false);
-		rowY = drawCameraKeyframeRow(rowY, model.getCameraKeyframes(), timelineWidth, pixelsPerSecond);
+		rowY = drawCameraKeyframeRow(rowY, model.getCameraKeyframes(), timelineWidth, zoom, viewStart, viewEnd);
 
-		// --- Global Event Track ---
 		rowY = drawTrackLabel(rowY, "全局事件", false);
 		drawTrackLabel(rowY, "事件", false);
-		rowY = drawGlobalEventRow(rowY, model.getGlobalEvents(), timelineWidth, pixelsPerSecond);
+		rowY = drawGlobalEventRow(rowY, model.getGlobalEvents(), timelineWidth, zoom, viewStart, viewEnd);
 
-		// 播放头（贯穿轨道区域）
-		float playheadX = (float) (currentTime * pixelsPerSecond);
-		float padX = ImGui.getWindowPosX() + ImGui.getScrollX() + TRACK_LABEL_WIDTH;
-		float py0 = ImGui.getWindowPosY() + startY + ImGui.getScrollY();
-		float py1 = ImGui.getWindowPosY() + rowY + ImGui.getScrollY();
-		ImGui.getWindowDrawList().addLine(padX + playheadX, py0, padX + playheadX, py1, (int) PLAYHEAD_COLOR, 2f);
+		float playheadX = (float) ((currentTime - viewStart) * zoom);
+		if (playheadX >= -2 && playheadX <= timelineWidth + 2) {
+			float padX = ImGui.getWindowPosX() + ImGui.getScrollX() + TRACK_LABEL_WIDTH;
+			float py0 = ImGui.getWindowPosY() + startY + ImGui.getScrollY();
+			float py1 = ImGui.getWindowPosY() + rowY + ImGui.getScrollY();
+			ImGui.getWindowDrawList().addLine(padX + playheadX, py0, padX + playheadX, py1, PLAYHEAD_COLOR, 2f);
+		}
 
 		ImGui.end();
 	}
@@ -114,18 +134,43 @@ public class TimelinePanel {
 		if (BeatBlock.musicPlayer != null) {
 			return BeatBlock.musicPlayer.getCurrentTimeSeconds();
 		}
+		if (BeatBlock.timelineEditor != null) {
+			return BeatBlock.timelineEditor.getClock().getCurrentTimeSeconds();
+		}
 		return 0;
 	}
 
-	private void drawRuler(float startY, float width, double duration, float pixelsPerSecond) {
+	private float timeToScreen(double timeSeconds, double viewStart, float zoom) {
+		return (float) (timeSeconds - viewStart) * zoom;
+	}
+
+	private void drawRuler(float startY, float width, double viewStart, double viewEnd, float zoom) {
 		float padX = ImGui.getWindowPosX() + ImGui.getScrollX() + TRACK_LABEL_WIDTH;
 		float screenY = ImGui.getWindowPosY() + startY + ImGui.getScrollY();
-		int gray = (int) ZERO_COLOR;
-		double step = duration > 30 ? 5 : (duration > 10 ? 2 : 1);
-		for (double t = 0; t <= duration; t += step) {
-			float x = (float) (t * pixelsPerSecond);
-			ImGui.getWindowDrawList().addLine(padX + x, screenY, padX + x, screenY + RULER_HEIGHT, gray, 1f);
-			ImGui.getWindowDrawList().addText(padX + x + 2, screenY + 2, gray, String.format("%.0f", t));
+		double range = Math.max(0.1, viewEnd - viewStart);
+		double step = range > 60 ? 10 : (range > 20 ? 5 : (range > 5 ? 2 : (range > 1 ? 1 : 0.5)));
+		double t0 = Math.floor(viewStart / step) * step;
+		for (double t = t0; t <= viewEnd + 0.001; t += step) {
+			float x = timeToScreen(t, viewStart, zoom);
+			if (x >= -2 && x <= width + 2) {
+				ImGui.getWindowDrawList().addLine(padX + x, screenY, padX + x, screenY + RULER_HEIGHT, ZERO_COLOR, 1f);
+				ImGui.getWindowDrawList().addText(padX + x + 2, screenY + 2, ZERO_COLOR, String.format("%.1f", t));
+			}
+		}
+	}
+
+	/** 时间线网格：可见范围内按步长画竖线 */
+	private void drawGrid(float contentTopY, float width, double viewStart, double viewEnd, float zoom, float contentHeight) {
+		float padX = ImGui.getWindowPosX() + ImGui.getScrollX() + TRACK_LABEL_WIDTH;
+		float screenY0 = ImGui.getWindowPosY() + contentTopY + ImGui.getScrollY();
+		double range = Math.max(0.01, viewEnd - viewStart);
+		double step = range > 30 ? 5 : (range > 10 ? 2 : (range > 2 ? 1 : 0.5));
+		double t0 = Math.floor(viewStart / step) * step;
+		for (double t = t0; t <= viewEnd + 0.001; t += step) {
+			float x = timeToScreen(t, viewStart, zoom);
+			if (x >= 0 && x <= width) {
+				ImGui.getWindowDrawList().addLine(padX + x, screenY0, padX + x, screenY0 + contentHeight, GRID_COLOR, 1f);
+			}
 		}
 	}
 
@@ -143,22 +188,26 @@ public class TimelinePanel {
 		return isGroup ? rowY + ROW_HEIGHT : rowY;
 	}
 
-	private float drawAudioWaveformRow(float rowY, Timeline model, float width, float pixelsPerSecond) {
+	private float drawAudioWaveformRow(float rowY, Timeline model, float width, float zoom, double viewStart, double viewEnd) {
 		ImGui.setCursorPosY(rowY);
 		ImGui.setCursorPosX(TRACK_LABEL_WIDTH);
 		float minX = ImGui.getCursorScreenPosX();
 		float minY = ImGui.getCursorScreenPosY();
 		WaveformData wf = model.getWaveform();
 		if (wf != null && wf.getSampleCount() > 0) {
-			int n = wf.getSampleCount();
+			double dur = model.getDurationSeconds();
+			int samples = (int) Math.min(width, 800);
 			float halfH = ROW_HEIGHT * 0.4f;
-			for (int i = 0; i < width && i < n; i++) {
-				double t = (double) i / width * model.getDurationSeconds();
+			for (int i = 0; i < samples; i++) {
+				double t = viewStart + (viewEnd - viewStart) * (double) i / samples;
+				if (t < 0 || t > dur) continue;
 				int idx = wf.timeToIndex(t);
 				float s = wf.getSample(idx);
+				float x = timeToScreen(t, viewStart, zoom);
+				if (x < -1 || x > width + 1) continue;
 				float y0 = minY + ROW_HEIGHT * 0.5f;
 				float y1 = y0 - s * halfH;
-				ImGui.getWindowDrawList().addLine(minX + i, y0, minX + i, y1, (int) WAVEFORM_COLOR, 1f);
+				ImGui.getWindowDrawList().addLine(minX + x, y0, minX + x, y1, WAVEFORM_COLOR, 1f);
 			}
 		} else {
 			ImGui.textDisabled("~~~~ 波形（导入音乐后生成）~~~~");
@@ -167,36 +216,41 @@ public class TimelinePanel {
 		return rowY + ROW_HEIGHT;
 	}
 
-	private float drawFrequencyDots(float rowY, List<FrequencyEvent> events, float width, float pixelsPerSecond) {
+	private float drawFrequencyDots(float rowY, List<FrequencyEvent> events, float width, float zoom, double viewStart, double viewEnd) {
 		ImGui.setCursorPosY(rowY);
 		ImGui.setCursorPosX(TRACK_LABEL_WIDTH);
 		float baseX = ImGui.getCursorScreenPosX();
 		float baseY = ImGui.getCursorScreenPosY() + ROW_HEIGHT * 0.5f;
 		for (FrequencyEvent e : events) {
-			float x = (float) (e.getTimeSeconds() * pixelsPerSecond);
-			if (x >= 0 && x <= width) {
+			double t = e.getTimeSeconds();
+			if (t < viewStart || t > viewEnd) continue;
+			float x = timeToScreen(t, viewStart, zoom);
+			if (x >= -4 && x <= width + 4) {
 				float r = 3f + e.getEnergy() * 3f;
-				ImGui.getWindowDrawList().addCircleFilled(baseX + x, baseY, r, (int) EVENT_DOT_COLOR);
+				ImGui.getWindowDrawList().addCircleFilled(baseX + x, baseY, r, EVENT_DOT_COLOR);
 			}
 		}
 		ImGui.setCursorPosY(rowY + ROW_HEIGHT);
 		return rowY + ROW_HEIGHT;
 	}
 
-	private float drawAnimationEventBlocks(float rowY, List<TimelineAnimationEvent> events, float width, float pixelsPerSecond) {
+	private float drawAnimationEventBlocks(float rowY, List<TimelineAnimationEvent> events, float width, float zoom, double viewStart, double viewEnd) {
 		ImGui.setCursorPosY(rowY);
 		ImGui.setCursorPosX(TRACK_LABEL_WIDTH);
 		float baseX = ImGui.getCursorScreenPosX();
 		float baseY = ImGui.getCursorScreenPosY() + ROW_HEIGHT * 0.5f;
 		for (TimelineAnimationEvent e : events) {
-			float x = (float) (e.getTimeSeconds() * pixelsPerSecond);
-			float w = (float) (e.getDurationSeconds() * pixelsPerSecond);
-			w = Math.max(8f, Math.min(w, width - x));
-			if (x + w >= 0 && x <= width) {
+			double t = e.getTimeSeconds();
+			double end = e.getEndTimeSeconds();
+			if (end < viewStart || t > viewEnd) continue;
+			float x = timeToScreen(t, viewStart, zoom);
+			float w = (float) (e.getDurationSeconds() * zoom);
+			w = Math.max(8f, Math.min(w, width - x + 1));
+			if (x + w >= -2 && x <= width + 2) {
 				ImGui.getWindowDrawList().addRectFilled(
 					baseX + x, baseY - ROW_HEIGHT * 0.35f,
 					baseX + x + w, baseY + ROW_HEIGHT * 0.35f,
-					(int) KEYFRAME_COLOR, 2f
+					KEYFRAME_COLOR, 2f
 				);
 			}
 		}
@@ -204,19 +258,21 @@ public class TimelinePanel {
 		return rowY + ROW_HEIGHT;
 	}
 
-	private float drawCameraKeyframeRow(float rowY, List<CameraKeyframe> keyframes, float width, float pixelsPerSecond) {
+	private float drawCameraKeyframeRow(float rowY, List<CameraKeyframe> keyframes, float width, float zoom, double viewStart, double viewEnd) {
 		ImGui.setCursorPosY(rowY);
 		ImGui.setCursorPosX(TRACK_LABEL_WIDTH);
 		float baseX = ImGui.getCursorScreenPosX();
 		float baseY = ImGui.getCursorScreenPosY() + ROW_HEIGHT * 0.5f;
 		for (CameraKeyframe k : keyframes) {
-			float x = (float) (k.getTimeSeconds() * pixelsPerSecond);
-			if (x >= 0 && x <= width) {
+			double t = k.getTimeSeconds();
+			if (t < viewStart || t > viewEnd) continue;
+			float x = timeToScreen(t, viewStart, zoom);
+			if (x >= -8 && x <= width + 8) {
 				ImGui.getWindowDrawList().addTriangleFilled(
 					baseX + x, baseY - 6,
 					baseX + x - 5, baseY + 5,
 					baseX + x + 5, baseY + 5,
-					(int) KEYFRAME_COLOR
+					KEYFRAME_COLOR
 				);
 			}
 		}
@@ -224,15 +280,17 @@ public class TimelinePanel {
 		return rowY + ROW_HEIGHT;
 	}
 
-	private float drawGlobalEventRow(float rowY, List<GlobalEvent> events, float width, float pixelsPerSecond) {
+	private float drawGlobalEventRow(float rowY, List<GlobalEvent> events, float width, float zoom, double viewStart, double viewEnd) {
 		ImGui.setCursorPosY(rowY);
 		ImGui.setCursorPosX(TRACK_LABEL_WIDTH);
 		float baseX = ImGui.getCursorScreenPosX();
 		float baseY = ImGui.getCursorScreenPosY() + ROW_HEIGHT * 0.5f;
 		for (GlobalEvent e : events) {
-			float x = (float) (e.getTimeSeconds() * pixelsPerSecond);
-			if (x >= 0 && x <= width) {
-				ImGui.getWindowDrawList().addCircleFilled(baseX + x, baseY, 5f, (int) GLOBAL_EVENT_COLOR);
+			double t = e.getTimeSeconds();
+			if (t < viewStart || t > viewEnd) continue;
+			float x = timeToScreen(t, viewStart, zoom);
+			if (x >= -6 && x <= width + 6) {
+				ImGui.getWindowDrawList().addCircleFilled(baseX + x, baseY, 5f, GLOBAL_EVENT_COLOR);
 			}
 		}
 		ImGui.setCursorPosY(rowY + ROW_HEIGHT);

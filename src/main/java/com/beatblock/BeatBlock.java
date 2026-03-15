@@ -11,6 +11,7 @@ import com.beatblock.beat.BeatEvent;
 import com.beatblock.beat.BeatScheduler;
 import com.beatblock.stage.StageManager;
 import com.beatblock.timeline.Timeline;
+import com.beatblock.timeline.editor.TimelineEditor;
 import com.beatblock.visual.BlockDisplayPool;
 import com.beatblock.visual.BlockSpawner;
 import com.beatblock.visual.TransformUpdater;
@@ -42,6 +43,7 @@ public class BeatBlock implements ModInitializer {
 	public static TransformUpdater transformUpdater;
 	public static StageManager stageManager;
 	public static Timeline timeline;
+	public static TimelineEditor timelineEditor;
 
 	@Override
 	public void onInitialize() {
@@ -56,6 +58,7 @@ public class BeatBlock implements ModInitializer {
 		transformUpdater = new TransformUpdater();
 		stageManager = new StageManager();
 		timeline = Timeline.createDefault();
+		timelineEditor = new TimelineEditor(timeline);
 
 		// 注册默认动画模板
 		animationRegistry.register(new AnimationTemplate("bounce", 0.5, AnimationTemplate.Easing.EASE_OUT, AnimationTemplate.TransformType.SCALE));

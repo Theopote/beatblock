@@ -1,18 +1,16 @@
-package com.beatblock.timeline.v2;
+package com.beatblock.timeline;
 
 import java.util.Map;
 import java.util.UUID;
 
 /**
- * 时间线数据操作系统：AddTrack / AddClip / AddEvent / MoveEvent / DeleteEvent，供 UI 与脚本使用。
+ * 时间线数据操作：AddTrack / AddClip / AddEvent / MoveEvent / DeleteEvent。
  */
 public final class TimelineOperations {
 
 	private static String nextId() {
 		return UUID.randomUUID().toString().replace("-", "").substring(0, 12);
 	}
-
-	// --- Track ---
 
 	public static Track addTrack(Timeline timeline, String name, TrackType type) {
 		if (timeline == null) return null;
@@ -26,16 +24,10 @@ public final class TimelineOperations {
 		return timeline != null && timeline.removeTrack(trackId);
 	}
 
-	// --- Clip ---
-
 	public static Clip addClip(Timeline timeline, String trackId, double startTimeSeconds, double endTimeSeconds) {
 		if (timeline == null || trackId == null) return null;
 		Track track = timeline.getTrack(trackId);
-		if (track == null) return null;
-		String id = nextId();
-		Clip clip = new Clip(id, startTimeSeconds, endTimeSeconds);
-		track.addClip(clip);
-		return clip;
+		return track != null ? addClip(track, startTimeSeconds, endTimeSeconds) : null;
 	}
 
 	public static Clip addClip(Track track, double startTimeSeconds, double endTimeSeconds) {
@@ -60,8 +52,6 @@ public final class TimelineOperations {
 		return true;
 	}
 
-	// --- Event ---
-
 	public static TimelineEvent addEvent(Clip clip, double timeSeconds, EventType type, Map<String, Object> parameters) {
 		if (clip == null) return null;
 		String id = nextId();
@@ -75,19 +65,10 @@ public final class TimelineOperations {
 		Track track = timeline.getTrack(trackId);
 		if (track == null) return null;
 		Clip clip = track.getClip(clipId);
-		if (clip == null) return null;
-		return addEvent(clip, timeSeconds, type, parameters);
+		return clip != null ? addEvent(clip, timeSeconds, type, parameters) : null;
 	}
 
 	public static boolean removeEvent(Clip clip, String eventId) {
-		return clip != null && clip.removeEvent(eventId);
-	}
-
-	public static boolean removeEvent(Timeline timeline, String trackId, String clipId, String eventId) {
-		if (timeline == null) return false;
-		Track track = timeline.getTrack(trackId);
-		if (track == null) return false;
-		Clip clip = track.getClip(clipId);
 		return clip != null && clip.removeEvent(eventId);
 	}
 
@@ -95,9 +76,5 @@ public final class TimelineOperations {
 		if (event == null) return false;
 		event.setTimeSeconds(newTimeSeconds);
 		return true;
-	}
-
-	public static void setEventTime(TimelineEvent event, double timeSeconds) {
-		if (event != null) event.setTimeSeconds(timeSeconds);
 	}
 }

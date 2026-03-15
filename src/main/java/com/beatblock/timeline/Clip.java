@@ -1,4 +1,4 @@
-package com.beatblock.timeline.v2;
+package com.beatblock.timeline;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -15,9 +15,7 @@ public class Clip {
 	private double endTimeSeconds;
 	private final List<TimelineEvent> events = new ArrayList<>();
 
-	public Clip() {
-		this("", 0, 0);
-	}
+	public Clip() { this("", 0, 0); }
 
 	public Clip(String id, double startTimeSeconds, double endTimeSeconds) {
 		this.id = id != null ? id : "";
@@ -25,55 +23,30 @@ public class Clip {
 		this.endTimeSeconds = Math.max(this.startTimeSeconds, endTimeSeconds);
 	}
 
-	public String getId() {
-		return id;
-	}
-
-	public void setId(String id) {
-		this.id = id != null ? id : "";
-	}
-
-	public double getStartTimeSeconds() {
-		return startTimeSeconds;
-	}
-
+	public String getId() { return id; }
+	public void setId(String id) { this.id = id != null ? id : ""; }
+	public double getStartTimeSeconds() { return startTimeSeconds; }
 	public void setStartTimeSeconds(double startTimeSeconds) {
 		this.startTimeSeconds = Math.max(0, startTimeSeconds);
 		if (endTimeSeconds < this.startTimeSeconds) endTimeSeconds = this.startTimeSeconds;
 	}
-
-	public double getEndTimeSeconds() {
-		return endTimeSeconds;
-	}
-
+	public double getEndTimeSeconds() { return endTimeSeconds; }
 	public void setEndTimeSeconds(double endTimeSeconds) {
 		this.endTimeSeconds = Math.max(startTimeSeconds, endTimeSeconds);
 	}
-
-	public double getDurationSeconds() {
-		return endTimeSeconds - startTimeSeconds;
-	}
-
-	public List<TimelineEvent> getEvents() {
-		return Collections.unmodifiableList(events);
-	}
-
+	public double getDurationSeconds() { return endTimeSeconds - startTimeSeconds; }
+	public List<TimelineEvent> getEvents() { return Collections.unmodifiableList(events); }
 	public void addEvent(TimelineEvent event) {
-		if (event != null) events.add(event);
-		sortEvents();
+		if (event != null) { events.add(event); sortEvents(); }
 	}
-
 	public boolean removeEvent(String eventId) {
 		return events.removeIf(e -> eventId != null && eventId.equals(e.getId()));
 	}
-
 	public TimelineEvent getEvent(String eventId) {
-		for (TimelineEvent e : events) {
+		for (TimelineEvent e : events)
 			if (eventId != null && eventId.equals(e.getId())) return e;
-		}
 		return null;
 	}
-
 	private void sortEvents() {
 		events.sort(Comparator.comparingDouble(TimelineEvent::getTimeSeconds));
 	}

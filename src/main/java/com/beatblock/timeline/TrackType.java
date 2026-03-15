@@ -1,4 +1,4 @@
-package com.beatblock.timeline.v2;
+package com.beatblock.timeline;
 
 /**
  * 轨道类型：对应编辑器中的一条轨道。
