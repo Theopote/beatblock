@@ -3,12 +3,13 @@ package com.beatblock.ui.panels;
 import com.beatblock.BeatBlock;
 import com.beatblock.ui.layout.BeatBlockDockSpaceLayoutBuilder;
 import com.beatblock.timeline.TimelineEditor;
+import com.beatblock.timeline.rendering.TimelineLayout;
 import com.beatblock.timeline.rendering.TimelineToolbar;
 import imgui.ImGui;
 import imgui.flag.ImGuiWindowFlags;
 
 /**
- * 底部通栏时间线面板：顶部工具栏 + 标题/时间 + 时间线主体（由 TimelineEditor 渲染）。
+ * 底部通栏时间线面板：固定工具栏 + 固定时间刻度，轨道区在可滚动子窗口中一行一行显示。
  */
 public class TimelinePanel {
 
@@ -29,7 +30,7 @@ public class TimelinePanel {
 
 		TimelineEditor editor = BeatBlock.timelineEditor;
 
-		// ----- 顶部工具栏（右侧显示当前时间/总时长） -----
+		// ----- 固定区域：工具栏（不随滚动条滚动） -----
 		if (editor != null) {
 			toolbar.render(editor, editor.getToolbarState());
 		}
@@ -40,11 +41,19 @@ public class TimelinePanel {
 		ImGui.sameLine(ImGui.getWindowWidth() - 100);
 		ImGui.textDisabled(String.format("%.1fs / %.1fs", currentTime, duration));
 
-		// ----- 紧接工具栏下方：时间刻度（标尺） -----
+		// ----- 固定区域：时间刻度（标尺），紧接工具栏下方 -----
 		ImGui.separator();
 		if (editor != null) {
-			editor.render();
+			editor.renderRulerOnly();
 		}
+
+		// ----- 可滚动区域：轨道区（无外边框），仅此处出现滚动条；高度取剩余空间 -----
+		if (ImGui.beginChild("##TimelineTracks", 0, -1, false)) {
+			if (editor != null) {
+				editor.renderTrackArea();
+			}
+		}
+		ImGui.endChild();
 
 		ImGui.end();
 	}

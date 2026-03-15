@@ -13,7 +13,8 @@ import imgui.ImGui;
  */
 public final class TimelineLayout {
 
-	public static final float TRACK_LABEL_WIDTH = 110f;
+	/** 左侧轨道列表区宽度（含可见/锁定图标 + 轨道名），与时间刻度分界线对齐 */
+	public static final float TRACK_LABEL_WIDTH = 130f;
 	public static final float ROW_HEIGHT = 22f;
 	public static final float RULER_HEIGHT = 20f;
 
@@ -67,10 +68,15 @@ public final class TimelineLayout {
 	/** 时间线区域在窗口内的起始 Y（用于 setCursorPosY） */
 	public float startY;
 
+	/** 是否在「仅轨道区」子窗口中构建（无标尺行，startY 即轨道区顶部）。 */
+	private boolean trackAreaOnly;
+
 	/**
 	 * 根据当前 ImGui 窗口状态填充布局（在 begin 之后、绘制前调用）。
+	 * @param trackAreaOnly 若为 true，表示在可滚动的轨道区子窗口内，无标尺行，行从 0 开始。
 	 */
-	public void build() {
+	public void build(boolean trackAreaOnly) {
+		this.trackAreaOnly = trackAreaOnly;
 		float winX = ImGui.getWindowPosX();
 		float scrollX = ImGui.getScrollX();
 		float scrollY = ImGui.getScrollY();
@@ -79,12 +85,13 @@ public final class TimelineLayout {
 		float availX = ImGui.getContentRegionAvailX();
 		contentWidth = Math.max(200f, availX - TRACK_LABEL_WIDTH - 20f);
 
+		float rulerOffset = trackAreaOnly ? 0f : RULER_HEIGHT;
 		rulerLeft = winX + scrollX + TRACK_LABEL_WIDTH;
 		rulerTop = winY + scrollY + startY;
 		rulerWidth = contentWidth;
 
 		trackHeaderLeft = winX + scrollX;
-		trackHeaderTop = winY + scrollY + startY + RULER_HEIGHT;
+		trackHeaderTop = winY + scrollY + startY + (trackAreaOnly ? 0f : RULER_HEIGHT);
 		trackHeaderWidth = TRACK_LABEL_WIDTH;
 		trackHeaderHeight = CONTENT_ROW_COUNT * ROW_HEIGHT;
 
@@ -101,6 +108,11 @@ public final class TimelineLayout {
 		}
 	}
 
+	/** 兼容旧调用：按「含标尺」模式构建。 */
+	public void build() {
+		build(false);
+	}
+
 	/** 第 i 行内容区的屏幕 Y（行顶），i 从 0 到 CONTENT_ROW_COUNT-1 */
 	public float getRowScreenY(int rowIndex) {
 		if (rowIndex < 0 || rowIndex >= CONTENT_ROW_COUNT) return contentTop;
@@ -109,7 +121,8 @@ public final class TimelineLayout {
 
 	/** 第 i 行内容区的光标 Y（用于 ImGui.setCursorPosY），i 从 0 到 CONTENT_ROW_COUNT-1 */
 	public float getRowCursorY(int rowIndex) {
-		return startY + RULER_HEIGHT + rowIndex * ROW_HEIGHT;
+		float rulerOffset = trackAreaOnly ? 0f : RULER_HEIGHT;
+		return startY + rulerOffset + rowIndex * ROW_HEIGHT;
 	}
 
 	/** 第 i 个可交互轨道的屏幕 Y（与 INTERACTIVE_TRACK_IDS[i] 对应） */

@@ -15,44 +15,70 @@ public final class TimelineRenderer {
 
 	private static final int PLAYHEAD_COLOR = 0xFF_FF_66_66;
 	private static final int SELECTED_BORDER_COLOR = 0xFF_FF_FF_00;
+	private static final int ROW_SEPARATOR_COLOR = 0x33_88_88_88;
+	/** 左侧轨道列表与右侧内容区的竖线分隔 */
+	private static final int DIVIDER_COLOR = 0x66_88_88_88;
 
 	private final GridRenderer gridRenderer = new GridRenderer();
 	private final TrackRenderer trackRenderer = new TrackRenderer();
 	private final EventRenderer eventRenderer = new EventRenderer();
 	private final WaveformRenderer waveformRenderer = new WaveformRenderer();
 
-	public void render(
+	/** 固定区域：只绘制时间刻度行（左侧「时间」标签 + 标尺），分界线与轨道区对齐，并占位。 */
+	public void renderRulerRow(TimelineLayout layout, TimelineViewState viewState) {
+		if (viewState == null || layout == null) return;
+		ImGui.setCursorPosX(4);
+		ImGui.textDisabled("时间");
+		gridRenderer.renderRuler(layout.startY, viewState, layout);
+		// 分区竖线：时间刻度与轨道区在同一分界处开始
+		float divX = layout.trackHeaderLeft + layout.trackHeaderWidth;
+		ImGui.getWindowDrawList().addLine(divX, layout.rulerTop, divX, layout.rulerTop + layout.rulerHeight, DIVIDER_COLOR, 1f);
+		ImGui.setCursorPosY(layout.startY + TimelineLayout.RULER_HEIGHT);
+	}
+
+	/** 可滚动区域：轨道区（左侧轨道列表 + 竖线分隔 + 网格 + 一行一行轨道 + 播放头 + 框选）。 */
+	public void renderTrackArea(
 		Timeline timeline,
 		TimelineViewState viewState,
 		SelectionState selectionState,
 		TimelineClock clock,
 		SelectionBox selectionBox,
+		TimelineTrackListState trackListState,
 		TimelineLayout layout
 	) {
 		if (timeline == null || viewState == null || layout == null) return;
 
-		// 1. 时间标尺区域
-		gridRenderer.renderRuler(layout.startY, viewState, layout);
+		// 预留轨道区总高度，使子窗口滚动范围正确
+		ImGui.dummy(0, layout.contentHeight);
 
-		// 3. 网格（内容区竖线，先画在底层）
+		// 左侧轨道列表与右侧内容区的竖线分隔（与标尺分界对齐）
+		float divX = layout.trackHeaderLeft + layout.trackHeaderWidth;
+		ImGui.getWindowDrawList().addLine(divX, layout.contentTop, divX, layout.contentTop + layout.contentHeight, DIVIDER_COLOR, 1f);
+
+		// 网格竖线（底层）
 		gridRenderer.render(viewState, layout, layout.contentHeight);
 
-		// 2. 轨道名 + 4. 内容区（按行交错）
+		// 轨道名 + 内容区，每行后画分隔线，使轨道看起来一行一行
 		for (int i = 0; i < TimelineLayout.CONTENT_ROW_COUNT; i++) {
 			float rowY = layout.getRowCursorY(i);
 			boolean isGroup = (i == 0 || i == 5);
 			String label = rowLabel(i);
-			trackRenderer.drawTrackLabel(rowY, label, isGroup);
+			trackRenderer.drawTrackLabel(rowY, i, label, isGroup, trackListState);
 			drawRowContent(i, rowY, timeline, viewState, selectionState, layout);
+			// 行底分隔线
+			float lineY = layout.getRowScreenY(i) + layout.rowHeight;
+			float x0 = layout.trackHeaderLeft;
+			float x1 = layout.contentLeft + layout.contentWidth;
+			ImGui.getWindowDrawList().addLine(x0, lineY, x1, lineY, ROW_SEPARATOR_COLOR, 1f);
 		}
 
-		// 播放头（内容区范围内）
+		// 播放头（仅限轨道区高度）
 		if (clock != null) {
 			double currentTime = clock.getCurrentTimeSeconds();
 			float playheadX = viewState.timeToScreen(currentTime);
 			if (playheadX >= -2 && playheadX <= layout.contentWidth + 2) {
 				float px = layout.contentLeft + playheadX;
-				float py0 = layout.rulerTop;
+				float py0 = layout.contentTop;
 				float py1 = layout.contentTop + layout.contentHeight;
 				ImGui.getWindowDrawList().addLine(px, py0, px, py1, PLAYHEAD_COLOR, 2f);
 			}
