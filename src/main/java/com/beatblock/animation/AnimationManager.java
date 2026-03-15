@@ -13,15 +13,16 @@ import java.util.function.BiConsumer;
 public class AnimationManager {
 
 	private final List<AnimationInstance> activeInstances = new ArrayList<>();
-	private BiConsumer<BeatEvent, AnimationManager> eventHandler; // 由外部设置：根据 event 创建并添加 instance
+	private BiConsumer<BeatEvent, AnimationManager> eventHandler;
+	private java.util.function.Consumer<AnimationInstance> onInstanceEnded; // 实例结束时回调，便于归还 Display 等
 	private double currentTimeSeconds;
-
-	public AnimationManager() {
-		// 订阅由外部在 BeatBlock/Client 里连接
-	}
 
 	public void setEventHandler(BiConsumer<BeatEvent, AnimationManager> eventHandler) {
 		this.eventHandler = eventHandler;
+	}
+
+	public void setOnInstanceEnded(java.util.function.Consumer<AnimationInstance> onInstanceEnded) {
+		this.onInstanceEnded = onInstanceEnded;
 	}
 
 	public void setBeatScheduler(BeatScheduler scheduler) {
@@ -44,7 +45,14 @@ public class AnimationManager {
 
 	public void tick(double currentTimeSeconds) {
 		this.currentTimeSeconds = currentTimeSeconds;
-		activeInstances.removeIf(inst -> !inst.isActiveAt(currentTimeSeconds));
+		for (AnimationInstance inst : new ArrayList<>(activeInstances)) {
+			if (!inst.isActiveAt(currentTimeSeconds)) {
+				if (onInstanceEnded != null) {
+					onInstanceEnded.accept(inst);
+				}
+				activeInstances.remove(inst);
+			}
+		}
 	}
 
 	public List<AnimationInstance> getActiveInstances() {

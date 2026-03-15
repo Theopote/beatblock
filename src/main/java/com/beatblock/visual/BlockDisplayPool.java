@@ -11,6 +11,7 @@ import java.util.Deque;
 
 /**
  * BlockDisplay 实体池：复用显示实体，减少生成/销毁。
+ * 服务端与客户端均可将新创建的实体加入 Level 以便渲染/同步。
  */
 public class BlockDisplayPool {
 
@@ -25,12 +26,9 @@ public class BlockDisplayPool {
 		this.maxPoolSize = Math.max(1, maxPoolSize);
 	}
 
-	private static boolean isServerLevel(Level level) {
-		return level instanceof ServerLevel;
-	}
-
 	/**
-	 * 从池中获取一个 BlockDisplay；若池空则在 level 中创建并加入世界（仅服务端生成实体）。
+	 * 从池中获取一个 BlockDisplay；若池空则在 level 中创建并加入世界。
+	 * 客户端调用时也会将实体加入 ClientLevel，以便渲染。
 	 */
 	public Display.BlockDisplay obtain(Level level) {
 		Display.BlockDisplay display = available.poll();
@@ -42,8 +40,10 @@ public class BlockDisplayPool {
 		Display.BlockDisplay newDisplay = EntityType.BLOCK_DISPLAY.create(level, EntitySpawnReason.COMMAND);
 		if (newDisplay != null) {
 			newDisplay.setNoGravity(true);
-			if (isServerLevel(level)) {
-				((ServerLevel) level).addFreshEntity(newDisplay);
+			if (level instanceof ServerLevel server) {
+				server.addFreshEntity(newDisplay);
+			} else {
+				level.addFreshEntity(newDisplay);
 			}
 		}
 		return newDisplay;
