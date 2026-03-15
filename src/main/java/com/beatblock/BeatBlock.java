@@ -11,7 +11,7 @@ import com.beatblock.beat.BeatEvent;
 import com.beatblock.beat.BeatScheduler;
 import com.beatblock.stage.StageManager;
 import com.beatblock.timeline.Timeline;
-import com.beatblock.timeline.editor.TimelineEditor;
+import com.beatblock.timeline.TimelineEditor;
 import com.beatblock.visual.BlockDisplayPool;
 import com.beatblock.visual.BlockSpawner;
 import com.beatblock.visual.TransformUpdater;
