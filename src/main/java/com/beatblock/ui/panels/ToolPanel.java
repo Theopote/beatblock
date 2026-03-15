@@ -15,6 +15,11 @@ public class ToolPanel {
 
 	private boolean showAutoMapSettings = false;
 	private final AutoMapSettingsPanel autoMapSettingsPanel = new AutoMapSettingsPanel();
+
+	/** 由菜单栏「演出 → Smart Auto Map」调用，打开设置弹窗 */
+	public void setShowAutoMapSettings(boolean show) {
+		this.showAutoMapSettings = show;
+	}
 	/** 上次生成统计 */
 	private SmartAutoMapEngine.AutoMapResult lastAutoMapResult = null;
 

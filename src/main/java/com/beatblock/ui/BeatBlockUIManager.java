@@ -11,7 +11,7 @@ import org.slf4j.LoggerFactory;
 
 /**
  * BeatBlock 主 UI 管理器：菜单栏 + Dockspace + 各面板。
- * 布局：顶部菜单栏；底部时间线；左侧工具；右侧事件属性；中间场景；动画库可开关。
+ * 布局：顶部菜单栏；底部时间线；左侧工具；右侧事件属性；中间不放置面板（即 Minecraft 场景）；动画库可开关。
  */
 public class BeatBlockUIManager {
 
@@ -32,7 +32,6 @@ public class BeatBlockUIManager {
 	private final ToolPanel toolPanel;
 	private final EventPropertiesPanel eventPropertiesPanel;
 	private final TimelinePanel timelinePanel;
-	private final CentralViewPanel centralViewPanel;
 	private final AnimationLibraryPanel animationLibraryPanel;
 
 	private boolean animationLibraryVisible = false;
@@ -41,11 +40,10 @@ public class BeatBlockUIManager {
 
 	public BeatBlockUIManager(Runnable onCloseRequest) {
 		this.onCloseRequest = onCloseRequest;
-		this.menuBarPanel = new MenuBarPanel(onCloseRequest, this::toggleAnimationLibrary);
 		this.toolPanel = new ToolPanel();
+		this.menuBarPanel = new MenuBarPanel(onCloseRequest, this::toggleAnimationLibrary, () -> toolPanel.setShowAutoMapSettings(true));
 		this.eventPropertiesPanel = new EventPropertiesPanel();
 		this.timelinePanel = new TimelinePanel();
-		this.centralViewPanel = new CentralViewPanel();
 		this.animationLibraryPanel = new AnimationLibraryPanel();
 	}
 
@@ -101,7 +99,6 @@ public class BeatBlockUIManager {
 		toolPanel.render();
 		eventPropertiesPanel.render();
 		timelinePanel.render();
-		centralViewPanel.render();
 		ImGui.popStyleColor(5);
 
 		// 4. 动画库（可选）

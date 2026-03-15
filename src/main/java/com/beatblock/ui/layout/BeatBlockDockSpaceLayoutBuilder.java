@@ -12,7 +12,7 @@ import org.slf4j.LoggerFactory;
  * 顶部 = 菜单栏（单独渲染）；
  * 右侧 = 事件属性面板；
  * 左侧 = 工具面板；
- * 中间 = 留空，可见 Minecraft 场景；
+ * 中间 = 不放置任何面板，该区域即为 Minecraft 场景可见区域；
  * 动画库面板 = 可通过菜单打开/关闭，可为浮动或停靠。
  */
 public final class BeatBlockDockSpaceLayoutBuilder {
@@ -23,7 +23,6 @@ public final class BeatBlockDockSpaceLayoutBuilder {
 	public static final String TOOL_PANEL_WINDOW       = "工具###ToolPanel";
 	public static final String EVENT_PROPERTIES_WINDOW = "事件属性###EventPropertiesPanel";
 	public static final String TIMELINE_PANEL_WINDOW   = "时间线###TimelinePanel";
-	public static final String CENTRAL_VIEW_WINDOW     = "场景###CentralViewPanel";
 	public static final String ANIMATION_LIBRARY_WINDOW = "动画库###AnimationLibraryPanel";
 
 	private static boolean layoutInitialized = false;
@@ -51,11 +50,10 @@ public final class BeatBlockDockSpaceLayoutBuilder {
 			ImInt dockRight = new ImInt();
 			imgui.internal.ImGui.dockBuilderSplitNode(dockMain.get(), ImGuiDir.Right, 0.22f, dockRight, dockMain);
 
-			// 4. 停靠窗口
+			// 4. 停靠窗口（中间不 dock 任何窗口，即为 Minecraft 场景区域）
 			imgui.internal.ImGui.dockBuilderDockWindow(TIMELINE_PANEL_WINDOW, dockBottom.get());
 			imgui.internal.ImGui.dockBuilderDockWindow(TOOL_PANEL_WINDOW, dockLeft.get());
 			imgui.internal.ImGui.dockBuilderDockWindow(EVENT_PROPERTIES_WINDOW, dockRight.get());
-			imgui.internal.ImGui.dockBuilderDockWindow(CENTRAL_VIEW_WINDOW, dockMain.get());
 
 			imgui.internal.ImGui.dockBuilderFinish(dockspaceId);
 			layoutInitialized = true;
