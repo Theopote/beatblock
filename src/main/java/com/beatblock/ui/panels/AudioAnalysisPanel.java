@@ -603,19 +603,7 @@ public final class AudioAnalysisPanel {
         if (total == 0) return;
 
         float barW = ImGui.getContentRegionAvailX();
-        float barH = 8f;
-        float x0   = ImGui.getCursorScreenPosX();
-        float y0   = ImGui.getCursorScreenPosY();
-
-        float lowW  = barW * (asset.getLowCount()  / (float) total);
-        float midW  = barW * (asset.getMidCount()  / (float) total);
-        float highW = barW - lowW - midW;
-
-        var dl = ImGui.getWindowDrawList();
-        float r = 3f; // 圆角
-        dl.addRectFilled(x0,             y0, x0 + lowW,            y0 + barH, 0xFF7777D0, r);
-        dl.addRectFilled(x0 + lowW,      y0, x0 + lowW + midW,     y0 + barH, 0xFF57C4A0);
-        dl.addRectFilled(x0 + lowW + midW, y0, x0 + barW,          y0 + barH, 0xFF27A0EF, r);
+        float barH = getBarH(asset, barW, (float) total);
 
         // 推进光标，使后续控件不重叠
         ImGui.dummy(barW, barH + 2f);
@@ -635,6 +623,23 @@ public final class AudioAnalysisPanel {
                 COLOR_HIGH.x, COLOR_HIGH.y, COLOR_HIGH.z, COLOR_HIGH.w);
         ImGui.text("■ 高");
         ImGui.popStyleColor();
+    }
+
+    private static float getBarH(AudioAsset asset, float barW, float total) {
+        float barH = 8f;
+        float x0   = ImGui.getCursorScreenPosX();
+        float y0   = ImGui.getCursorScreenPosY();
+
+        float lowW  = barW * (asset.getLowCount()  / total);
+        float midW  = barW * (asset.getMidCount()  / total);
+        float highW = barW - lowW - midW;
+
+        var dl = ImGui.getWindowDrawList();
+        float r = 3f; // 圆角
+        dl.addRectFilled(x0,             y0, x0 + lowW,            y0 + barH, 0xFF7777D0, r);
+        dl.addRectFilled(x0 + lowW,      y0, x0 + lowW + midW,     y0 + barH, 0xFF57C4A0);
+        dl.addRectFilled(x0 + lowW + midW, y0, x0 + barW,          y0 + barH, 0xFF27A0EF, r);
+        return barH;
     }
 
     // ── 辅助：进度计算 ────────────────────────────────────────────────────
