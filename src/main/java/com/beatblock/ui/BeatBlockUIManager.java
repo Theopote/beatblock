@@ -29,6 +29,7 @@ public class BeatBlockUIManager {
 			| ImGuiWindowFlags.NoBackground;
 
 	private final MenuBarPanel menuBarPanel;
+	private final AudioAnalysisPanel audioAnalysisPanel;
 	private final ToolPanel toolPanel;
 	private final EventPropertiesPanel eventPropertiesPanel;
 	private final TimelinePanel timelinePanel;
@@ -41,6 +42,7 @@ public class BeatBlockUIManager {
 	public BeatBlockUIManager(Runnable onCloseRequest) {
 		this.onCloseRequest = onCloseRequest;
 		this.toolPanel = new ToolPanel();
+		this.audioAnalysisPanel = new AudioAnalysisPanel();
 		this.menuBarPanel = new MenuBarPanel(onCloseRequest, this::toggleAnimationLibrary, () -> toolPanel.setShowAutoMapSettings(true));
 		this.eventPropertiesPanel = new EventPropertiesPanel();
 		this.timelinePanel = new TimelinePanel();
@@ -96,6 +98,7 @@ public class BeatBlockUIManager {
 		ImGui.pushStyleColor(ImGuiCol.TitleBg, 0.125f, 0.125f, 0.14f, 1f);         // 标题栏
 		ImGui.pushStyleColor(ImGuiCol.TitleBgActive, 0.16f, 0.16f, 0.18f, 1f);
 		ImGui.pushStyleColor(ImGuiCol.TitleBgCollapsed, 0.11f, 0.11f, 0.12f, 1f);
+		audioAnalysisPanel.render();
 		toolPanel.render();
 		eventPropertiesPanel.render();
 		timelinePanel.render();

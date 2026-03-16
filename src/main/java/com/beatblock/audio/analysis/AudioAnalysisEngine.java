@@ -63,15 +63,12 @@ public final class AudioAnalysisEngine {
 		return lastFeatureTimeline;
 	}
 
-	/**
-	 * 将上次分析得到的 FeatureTimeline 写入 Timeline：波形、频段事件、metadata（bpm/beats）。
-	 */
-	public void fillTimeline(Timeline timeline) {
-		if (timeline == null || lastFeatureTimeline == null) return;
-		timeline.setDurationSeconds(lastFeatureTimeline.getDurationSeconds());
+	private void fillTimelineInternal(Timeline timeline, AudioFeatureTimeline ft, int sampleRate) {
+		if (timeline == null || ft == null) return;
+		timeline.setDurationSeconds(ft.getDurationSeconds());
 
 		// 波形：转为 Timeline 的 WaveformData（peaks 归一化）
-		WaveformExtractor.WaveformFrame[] wf = lastFeatureTimeline.getWaveformFrames();
+		WaveformExtractor.WaveformFrame[] wf = ft.getWaveformFrames();
 		if (wf.length > 0) {
 			float[] peaks = new float[wf.length];
 			float maxPeak = 0;
@@ -82,14 +79,14 @@ public final class AudioAnalysisEngine {
 			if (maxPeak > 1e-6f) {
 				for (int i = 0; i < peaks.length; i++) peaks[i] /= maxPeak;
 			}
-			timeline.setWaveform(new WaveformData(peaks, lastFeatureTimeline.getDurationSeconds(),
-				lastBuffer != null ? lastBuffer.getSampleRate() : 44100));
+			int sr = sampleRate > 0 ? sampleRate : (lastBuffer != null ? lastBuffer.getSampleRate() : 44100);
+			timeline.setWaveform(new WaveformData(peaks, ft.getDurationSeconds(), sr));
 		}
 
 		// 频段事件：从 bands 生成 FrequencyEvent（超过阈值即加）
 		float threshold = 0.02f;
 		List<FrequencyEvent> events = new ArrayList<>();
-		for (FrequencyBands b : lastFeatureTimeline.getBands()) {
+		for (FrequencyBands b : ft.getBands()) {
 			float low = b.getLow(), mid = b.getMid(), high = b.getHigh();
 			float sum = low + mid + high;
 			if (sum < 1e-10f) continue;
@@ -102,8 +99,23 @@ public final class AudioAnalysisEngine {
 		for (FrequencyEvent e : events) timeline.addFrequencyEvent(e);
 		timeline.sortAll();
 
-		timeline.setMetadata("bpm", lastFeatureTimeline.getBpm());
-		timeline.setMetadata("beatCount", lastFeatureTimeline.getBeats().size());
+		timeline.setMetadata("bpm", ft.getBpm());
+		timeline.setMetadata("beatCount", ft.getBeats().size());
+	}
+
+	/**
+	 * 将上次分析得到的 FeatureTimeline 写入 Timeline：波形、频段事件、metadata（bpm/beats）。
+	 */
+	public void fillTimeline(Timeline timeline) {
+		if (lastFeatureTimeline == null) return;
+		fillTimelineInternal(timeline, lastFeatureTimeline, lastBuffer != null ? lastBuffer.getSampleRate() : 44100);
+	}
+
+	/**
+	 * 使用指定的分析结果写入 Timeline，仅影响音频相关数据。
+	 */
+	public void fillTimelineFromFeature(Timeline timeline, AudioFeatureTimeline feature, int sampleRate) {
+		fillTimelineInternal(timeline, feature, sampleRate);
 	}
 
 	public AudioFeatureTimeline getLastFeatureTimeline() {

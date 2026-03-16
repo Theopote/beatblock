@@ -1,5 +1,8 @@
 package com.beatblock.timeline.rendering;
 
+import com.beatblock.BeatBlock;
+import com.beatblock.audio.assets.AudioAsset;
+import com.beatblock.audio.assets.AudioAssetManager;
 import com.beatblock.timeline.FrequencyBand;
 import com.beatblock.timeline.Timeline;
 import com.beatblock.timeline.editor.SelectionBox;
@@ -102,9 +105,27 @@ public final class TimelineRenderer {
 
 	private void drawRowContent(int rowIndex, float rowY, Timeline timeline, TimelineViewState viewState, SelectionState selectionState, TimelineLayout layout) {
 		switch (rowIndex) {
-			case 1:
+			case 1: {
+				// Audio 轨：支持从「音频解析」面板拖拽资产到此处
+				float dropX = layout.contentLeft;
+				float dropY = rowY;
+				ImGui.setCursorScreenPos(dropX, dropY);
+				ImGui.invisibleButton("##AudioTrackDropTarget", layout.contentWidth, layout.rowHeight);
+				if (ImGui.beginDragDropTarget()) {
+					if (ImGui.acceptDragDropPayload("BB_AUDIO_ASSET_ID") != null) {
+						AudioAsset asset = AudioAssetManager.getInstance().getCurrentDragAsset();
+						if (asset != null && asset.getFeatureTimeline() != null && BeatBlock.audioAnalysisEngine != null) {
+							BeatBlock.audioAnalysisEngine.fillTimelineFromFeature(timeline, asset.getFeatureTimeline(), asset.getSampleRate());
+							if (BeatBlock.timelineEditor != null) {
+								BeatBlock.timelineEditor.syncClockDuration();
+							}
+						}
+					}
+					ImGui.endDragDropTarget();
+				}
 				waveformRenderer.render(rowY, timeline, layout, viewState);
 				break;
+			}
 			case 2:
 				eventRenderer.renderFrequencyDots(rowY, timeline.getFrequencyEventsByBand(FrequencyBand.LOW), layout, viewState);
 				break;
