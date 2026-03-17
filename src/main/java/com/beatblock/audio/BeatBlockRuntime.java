@@ -31,11 +31,7 @@ public final class BeatBlockRuntime {
 		BeatClock.IAudioPlayer player = new StubAudioPlayer();
 		this.beatClock = new BeatClock(player);
 		this.scheduler = new AnimationScheduler();
-		this.analysisService = new AudioAnalysisService(
-			"python",
-			Paths.get("config/beatblock/analyzer/analyze.py"),
-			Paths.get("config/beatblock/beatmaps")
-		);
+		this.analysisService = new AudioAnalysisService();
 		scheduler.addListener(this::onBeatEvent);
 	}
 

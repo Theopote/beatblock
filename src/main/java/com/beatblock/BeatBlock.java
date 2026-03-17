@@ -8,6 +8,7 @@ import com.beatblock.audio.AudioLoader;
 import com.beatblock.audio.BeatmapGenerator;
 import com.beatblock.audio.MusicPlayer;
 import com.beatblock.audio.AudioAnalysisService;
+import com.beatblock.audio.AnalyzerInstaller;
 import com.beatblock.beat.BeatEvent;
 import com.beatblock.beat.BeatScheduler;
 import com.beatblock.stage.StageManager;
@@ -67,11 +68,8 @@ public class BeatBlock implements ModInitializer {
 		timelineEditor = new TimelineEditor(timeline);
 		blockAnimationEngine = new BlockAnimationEngine();
 		audioAnalysisEngine = new AudioAnalysisEngine();
-		externalAudioAnalyzer = new AudioAnalysisService(
-			"python",
-			java.nio.file.Paths.get("config/beatblock/analyzer/analyze.py"),
-			java.nio.file.Paths.get("config/beatblock/beatmaps")
-		);
+		// 外部 Python 音频分析器（librosa），脚本由 AnalyzerInstaller 从资源解压到 config 目录
+		externalAudioAnalyzer = new AudioAnalysisService();
 
 		// 注册默认动画模板
 		animationRegistry.register(new AnimationTemplate("bounce", 0.5, AnimationTemplate.Easing.EASE_OUT, AnimationTemplate.TransformType.SCALE));

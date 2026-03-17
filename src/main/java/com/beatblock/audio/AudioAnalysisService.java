@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
 /**
@@ -33,19 +34,6 @@ public final class AudioAnalysisService {
 		t.setDaemon(true);
 		return t;
 	});
-
-	/** Python 可执行文件路径（可配置） */
-	private final String pythonExe;
-	/** analyze.py 脚本路径 */
-	private final Path scriptPath;
-	/** .beatmap 文件输出目录 */
-	private final Path outputDir;
-
-	public AudioAnalysisService(String pythonExe, Path scriptPath, Path outputDir) {
-		this.pythonExe = pythonExe;
-		this.scriptPath = scriptPath;
-		this.outputDir = outputDir;
-	}
 
 	// ── 公共 API ─────────────────────────────────────────────────────────────
 
@@ -79,15 +67,28 @@ public final class AudioAnalysisService {
 		Consumer<Beatmap> onComplete,
 		Consumer<String> onError
 	) {
+		// 确保脚本与输出目录已就绪
+		Path scriptPath;
+		Path outputDir;
+		try {
+			scriptPath = AnalyzerInstaller.ensureInstalled();
+			outputDir = AnalyzerInstaller.getBeatmapOutputDir();
+		} catch (AnalyzerInstaller.AnalyzerInstallException e) {
+			onError.accept("脚本安装失败：" + e.getMessage());
+			return;
+		}
+
 		// 输出文件名：将音频扩展名替换为 .beatmap
 		String baseName = audioPath.getFileName().toString()
 			.replaceAll("\\.[^.]+$", "");
 		Path beatmapPath = outputDir.resolve(baseName + ".beatmap");
 
-		try {
-			Files.createDirectories(outputDir);
-		} catch (IOException e) {
-			onError.accept("无法创建输出目录：" + e.getMessage());
+		// 解析 Python 可执行文件
+		String pythonExe = resolvePythonExe(outputDir.getParent());
+		if (pythonExe == null) {
+			onError.accept("""
+				找不到 Python 解释器。
+				请确认已安装 Python，或在 config/beatblock/python_path.txt 中指定完整路径。""");
 			return;
 		}
 
@@ -182,6 +183,41 @@ public final class AudioAnalysisService {
 			onError.accept(line.substring("ERROR ".length()));
 		}
 		return currentResultJson;
+	}
+
+	// ── Python 路径解析 ───────────────────────────────────────────────────────
+
+	/**
+	 * 查找 Python 可执行文件。
+	 * 1) config/beatblock/python_path.txt
+	 * 2) PATH 中的 python3
+	 * 3) PATH 中的 python
+	 */
+	private String resolvePythonExe(Path configDir) {
+		// 用户自定义
+		Path custom = configDir.resolve("python_path.txt");
+		if (Files.exists(custom)) {
+			try {
+				String txt = Files.readString(custom).trim();
+				if (!txt.isEmpty() && isExecutable(txt)) return txt;
+			} catch (IOException ignored) {}
+		}
+		for (String cand : List.of("python3", "python")) {
+			if (isExecutable(cand)) return cand;
+		}
+		return null;
+	}
+
+	private boolean isExecutable(String exe) {
+		try {
+			Process p = new ProcessBuilder(exe, "--version")
+				.redirectErrorStream(true)
+				.start();
+			p.waitFor(3, TimeUnit.SECONDS);
+			return p.exitValue() == 0;
+		} catch (Exception e) {
+			return false;
+		}
 	}
 
 	@FunctionalInterface
