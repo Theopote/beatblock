@@ -1,0 +1,6 @@
+<!-- bb-action-warning.svg | 警告 | 三角形内感叹号 -->
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <polygon points="16,6 28,26 4,26" fill="#fffbe6" stroke="#e6b800" stroke-width="2.2"/>
+  <rect x="15" y="14" width="2" height="7" rx="1" fill="#e6b800"/>
+  <circle cx="16" cy="23" r="1.2" fill="#e6b800"/>
+</svg>
