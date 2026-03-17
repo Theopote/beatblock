@@ -2,5 +2,5 @@
 <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
   <rect width="32" height="32" fill="white" fill-opacity="0"/>
   <path d="M24 24c-4-4-12-4-16 0" stroke="#888780" stroke-width="2.2" fill="none"/>
-  <polygon points="7,24 13,19 13,29" fill="#888780"/>
+  <path d="M10 20 L6 24 L10 28" fill="none" stroke="#888780" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>
