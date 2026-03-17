@@ -1,0 +1,8 @@
+<!-- bb-tool-stretch.svg | 拉伸工具 | 水平双向箭头夹矩形 -->
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect x="12" y="14" width="8" height="4" rx="1.5" fill="#5DCAA5"/>
+  <polyline points="8,16 12,16" fill="none" stroke="#5DCAA5" stroke-width="2" stroke-linecap="round"/>
+  <polyline points="24,16 20,16" fill="none" stroke="#5DCAA5" stroke-width="2" stroke-linecap="round"/>
+  <polygon points="6,16 10,14 10,18" fill="#5DCAA5"/>
+  <polygon points="26,16 22,14 22,18" fill="#5DCAA5"/>
+</svg>

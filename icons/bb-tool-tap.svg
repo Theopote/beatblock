@@ -1,0 +1,6 @@
+<!-- bb-tool-tap.svg | Tap Tempo | 手指轻触波纹 -->
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <ellipse cx="16" cy="22" rx="6" ry="2" fill="#5DCAA5" fill-opacity="0.3"/>
+  <rect x="14" y="10" width="4" height="10" rx="2" fill="#5DCAA5"/>
+  <circle cx="16" cy="10" r="2" fill="#5DCAA5"/>
+</svg>

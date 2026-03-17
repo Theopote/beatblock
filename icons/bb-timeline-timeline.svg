@@ -1,0 +1,7 @@
+<!-- bb-timeline-timeline.svg | 时间线 | 水平线 + 多个节点 -->
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <line x1="6" y1="16" x2="26" y2="16" stroke="#378ADD" stroke-width="2.2"/>
+  <circle cx="8" cy="16" r="2" fill="#378ADD"/>
+  <circle cx="16" cy="16" r="2" fill="#378ADD"/>
+  <circle cx="24" cy="16" r="2" fill="#378ADD"/>
+</svg>

@@ -1,0 +1,8 @@
+<!-- bb-tool-snap-grid.svg | 对齐网格 | 竖线组 + 磁铁吸附 -->
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="32" height="32" fill="white" fill-opacity="0"/>
+  <rect x="8" y="14" width="2" height="8" rx="1" fill="#5DCAA5"/>
+  <rect x="14" y="14" width="2" height="8" rx="1" fill="#5DCAA5"/>
+  <rect x="20" y="14" width="2" height="8" rx="1" fill="#5DCAA5"/>
+  <circle cx="24" cy="20" r="3" fill="#5DCAA5" fill-opacity="0.3"/>
+</svg>

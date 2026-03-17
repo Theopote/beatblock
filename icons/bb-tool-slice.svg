@@ -1,0 +1,6 @@
+<!-- bb-tool-slice.svg | 切割工具 | 刀片斜切 -->
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="32" height="32" fill="white" fill-opacity="0"/>
+  <rect x="10" y="20" width="12" height="4" rx="2" fill="#5DCAA5"/>
+  <polygon points="12,20 20,8 22,10 14,22" fill="#BA7517"/>
+</svg>

@@ -1,0 +1,6 @@
+<!-- bb-tool-eraser.svg | 橡皮擦 | 橡皮擦形态 -->
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="32" height="32" fill="white" fill-opacity="0"/>
+  <rect x="10" y="18" width="12" height="6" rx="2" fill="#5DCAA5"/>
+  <rect x="14" y="8" width="4" height="10" rx="2" fill="#fff" stroke="#5DCAA5" stroke-width="2"/>
+</svg>

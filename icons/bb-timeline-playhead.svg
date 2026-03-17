@@ -1,0 +1,5 @@
+<!-- bb-timeline-playhead.svg | 播放头 | 垂直线 + 顶部菱形 -->
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <line x1="16" y1="8" x2="16" y2="26" stroke="#378ADD" stroke-width="2.2"/>
+  <polygon points="16,4 20,8 16,12 12,8" fill="#378ADD"/>
+</svg>
