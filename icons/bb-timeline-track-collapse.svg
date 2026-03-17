@@ -1,0 +1,5 @@
+<!-- bb-timeline-track-collapse.svg | 收起轨道 | 轨道条 + 向上箭头 -->
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect x="8" y="16" width="16" height="4" rx="2" fill="#378ADD"/>
+  <polyline points="16,12 12,16 20,16" fill="none" stroke="#378ADD" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

@@ -1,0 +1,6 @@
+<!-- bb-timeline-zoom-out-time.svg | 缩小时间线 | 缩小镜 + 水平箭头 -->
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <circle cx="12" cy="16" r="6" stroke="#378ADD" stroke-width="2.2" fill="none"/>
+  <line x1="16.5" y1="20.5" x2="22" y2="26" stroke="#378ADD" stroke-width="2.2" stroke-linecap="round"/>
+  <line x1="24" y1="16" x2="30" y2="16" stroke="#378ADD" stroke-width="2.2" stroke-linecap="round"/>
+</svg>
