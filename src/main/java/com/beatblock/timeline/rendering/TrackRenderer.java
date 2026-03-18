@@ -4,16 +4,14 @@ import imgui.ImGui;
 import imgui.flag.ImGuiCol;
 import imgui.flag.ImGuiInputTextFlags;
 
+import com.beatblock.ui.icons.Icons;
+
 /**
 	 * 绘制轨道列表左侧：轨道名称（开头、可自定义）、子轨道缩进；可见(眼睛图标 U+F067)、锁定(锁图标 U+F095)；与右侧内容区有分界线。
  */
 public final class TrackRenderer {
 
 	private static final float CHILD_INDENT_PX = 14f;
-
-	/** 可见、锁定图标（与其他软件时间线一致） */
-	private static final String ICON_VISIBLE = "\uF067";
-	private static final String ICON_LOCK = "\uF095";
 
 	/**
 	 * 绘制一行：开头为轨道名称（可自定义，子轨道缩进），然后 [眼睛][锁]。
@@ -70,7 +68,7 @@ public final class TrackRenderer {
 			ImGui.sameLine();
 			boolean vis = listState.isVisible(rowIndex);
 			ImGui.pushStyleColor(ImGuiCol.Text, vis ? 0.9f : 0.45f, vis ? 0.9f : 0.45f, vis ? 0.9f : 0.45f, 1f);
-			if (ImGui.checkbox(ICON_VISIBLE + "##vis" + rowIndex, vis)) {
+			if (ImGui.checkbox(Icons.EYE + "##vis" + rowIndex, vis)) {
 				listState.toggleVisible(rowIndex);
 			}
 			ImGui.popStyleColor();
@@ -80,7 +78,7 @@ public final class TrackRenderer {
 			ImGui.sameLine();
 			boolean lock = listState.isLocked(rowIndex);
 			ImGui.pushStyleColor(ImGuiCol.Text, lock ? 0.95f : 0.5f, lock ? 0.6f : 0.5f, lock ? 0.6f : 0.5f, 1f);
-			if (ImGui.checkbox(ICON_LOCK + "##lock" + rowIndex, lock)) {
+			if (ImGui.checkbox(Icons.LOCK + "##lock" + rowIndex, lock)) {
 				listState.toggleLocked(rowIndex);
 			}
 			ImGui.popStyleColor();
