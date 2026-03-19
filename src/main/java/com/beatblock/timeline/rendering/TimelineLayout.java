@@ -89,21 +89,35 @@ public final class TimelineLayout {
 	public void build(boolean trackAreaOnly, float trackHeaderWidthPx, TimelineTrackListState trackListState) {
 		this.trackAreaOnly = trackAreaOnly;
 		float headerW = trackHeaderWidthPx > 0 ? trackHeaderWidthPx : TRACK_LABEL_WIDTH;
-		float winX = ImGui.getWindowPosX();
-		float scrollX = ImGui.getScrollX();
-		float scrollY = ImGui.getScrollY();
-		float winY = ImGui.getWindowPosY();
-		startY = ImGui.getCursorPosY();
+
+		// 用「内容区 (0,·) 的屏幕坐标」锚定，避免 winPos+scroll 与 ImGui 实际 padding/滚动不一致导致
+		// 主竖线、标尺起点、轨道内容区、分割线命中区错位。
+		float backupX = ImGui.getCursorPosX();
+		float backupY = ImGui.getCursorPosY();
+		startY = backupY;
 		float availX = ImGui.getContentRegionAvailX();
-		contentWidth = Math.max(200f, availX - headerW - 20f);
+		float rightPad = Math.max(8f, ImGui.getStyle().getScrollbarSize() * 0.5f + 4f);
+		contentWidth = Math.max(200f, availX - headerW - rightPad);
 
-		float rulerOffset = trackAreaOnly ? 0f : RULER_HEIGHT;
-		rulerLeft = winX + scrollX + headerW;
-		rulerTop = winY + scrollY + startY;
-		rulerWidth = contentWidth;
+		if (trackAreaOnly) {
+			ImGui.setCursorPos(0f, startY);
+			trackHeaderLeft = ImGui.getCursorScreenPosX();
+			trackHeaderTop = ImGui.getCursorScreenPosY();
+			rulerLeft = trackHeaderLeft + headerW;
+			rulerTop = trackHeaderTop;
+			rulerWidth = contentWidth;
+		} else {
+			ImGui.setCursorPos(0f, startY);
+			rulerTop = ImGui.getCursorScreenPosY();
+			ImGui.setCursorPos(0f, startY + RULER_HEIGHT);
+			trackHeaderLeft = ImGui.getCursorScreenPosX();
+			trackHeaderTop = ImGui.getCursorScreenPosY();
+			rulerLeft = trackHeaderLeft + headerW;
+			rulerWidth = contentWidth;
+		}
 
-		trackHeaderLeft = winX + scrollX;
-		trackHeaderTop = winY + scrollY + startY + (trackAreaOnly ? 0f : RULER_HEIGHT);
+		ImGui.setCursorPos(backupX, backupY);
+
 		trackHeaderWidth = headerW;
 		rowHeight = ROW_HEIGHT;
 
