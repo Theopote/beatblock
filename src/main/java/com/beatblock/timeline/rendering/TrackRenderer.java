@@ -20,16 +20,18 @@ public final class TrackRenderer {
 	public float drawTrackLabel(float rowY, int rowIndex, String displayName, boolean isGroup, TimelineTrackListState listState) {
 		ImGui.setCursorPosY(rowY);
 		float nameStartX = 4f;
-		// 组轨道：左侧折叠/展开箭头，点击可折叠子轨道
+		// 组轨道：左侧折叠/展开 — demo.html: icon-bb-track-expand U+F079, icon-bb-track-collapse U+F07C
+		// 与 IcoMoon 命名一致：glyph 表示「当前展开/折叠态」的视觉，不是「点击后将执行的动作」
 		if (isGroup && listState != null) {
 			boolean collapsed = listState.isGroupCollapsed(rowIndex);
 			ImGui.setCursorPosX(4f);
-			ImGui.text(collapsed ? "\u25B6" : "\u25BC"); // ▶ / ▼
+			ImGui.text(collapsed ? Icons.Timeline.TRACK_COLLAPSE : Icons.Timeline.TRACK_EXPAND);
 			if (ImGui.isItemClicked(0)) {
 				listState.toggleGroupCollapsed(rowIndex);
 			}
 			if (ImGui.isItemHovered()) {
-				ImGui.setTooltip(collapsed ? "展开子轨道" : "折叠子轨道");
+				// Tooltip 用英文，避免部分环境 CJK 未进 ImGui 图集时出现 “?”
+				ImGui.setTooltip(collapsed ? "Expand sub-tracks" : "Collapse sub-tracks");
 			}
 			ImGui.sameLine();
 			nameStartX = ImGui.getCursorPosX();

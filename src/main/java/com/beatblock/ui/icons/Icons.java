@@ -109,7 +109,9 @@ public final class Icons {
 		public static final String MARKER = "\uF083"; // marker
 		public static final String ZOOM_IN_TIME = "\uF04F"; // zoom-in-time
 		public static final String ZOOM_OUT_TIME = "\uF04C"; // zoom-out-time
+		/** demo: icon-bb-track-collapse — 树形「折叠态」侧向三角等 */
 		public static final String TRACK_COLLAPSE = "\uF07C"; // track-collapse
+		/** demo: icon-bb-track-expand — 树形「展开态」向下三角等 */
 		public static final String TRACK_EXPAND = "\uF079"; // track-expand
 		private Timeline() { throw new AssertionError("Cannot instantiate" ); }
 	}

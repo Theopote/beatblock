@@ -105,7 +105,16 @@ public final class ImGuiFontManager {
 			// 只补标点/假名等小块，不补整块 0x4E00-0x9FFF（已在 Common/Full 里，再补会重复且撑爆图集）
 			builder.addRanges(CJK_PUNCT_AND_KANA);
 			// 强制包含模组 UI 用字，避免漏字
-			builder.addText("工具时间线事件属性动画库导入音乐智能映射设置确定取消打开保存新建编辑删除复制粘贴撤销重做播放暂停频段低频中频高频");
+			// 注意：这里的字符会直接参与 ImGui 字形图集烘焙；缺字会在 UI 中显示为 '?'。
+			builder.addText(
+				"工具时间线事件属性动画库导入音乐智能映射设置确定取消打开保存新建编辑删除复制粘贴撤销重做播放暂停频段低频中频高频" +
+				// 时间线轨道折叠/展开提示（Tooltip/文案）
+				"展开子轨道折叠子轨道" +
+				// 兼容：如果 UI 实际文案是“子选项”而非“子轨道”
+				"展开子选项折叠子选项" +
+				// 音频解析面板：详情区折叠/展开（按钮 Tooltip）
+				"展开详情面板折叠详情展开详情"
+			);
 			tryAddRanges(builder, a, "getGlyphRangesJapanese");
 			tryAddRanges(builder, a, "getGlyphRangesKorean");
 			tryAddRanges(builder, a, "getGlyphRangesCyrillic");
