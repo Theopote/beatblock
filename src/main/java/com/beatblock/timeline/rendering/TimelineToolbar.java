@@ -5,6 +5,7 @@ import com.beatblock.automap.AutoMapConfig;
 import com.beatblock.automap.AutoMapGenerator;
 import com.beatblock.client.BeatBlockClientDriver;
 import com.beatblock.timeline.TimelineEditor;
+import com.beatblock.ui.icons.Icons;
 import imgui.ImGui;
 import imgui.type.ImInt;
 
@@ -42,13 +43,14 @@ public final class TimelineToolbar {
 		boolean hasMusic = BeatBlock.musicPlayer != null && BeatBlock.timeline != null && BeatBlock.timeline.getDurationSeconds() > 0;
 		boolean playing = hasMusic && BeatBlock.musicPlayer.isPlaying();
 
+		// 使用 BeatBlock.ttf（Icons），避免 ▶⏸■ 等未进 ImGui 图集显示为 ?
 		if (playing) {
-			if (ImGui.button("\u23F8 Pause")) {
+			if (ImGui.button(Icons.Play.PAUSE + "##tlPause")) {
 				if (BeatBlock.musicPlayer != null) BeatBlock.musicPlayer.pause();
 			}
 			if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_PAUSE);
 		} else {
-			if (ImGui.button("\u25B6 Play")) {
+			if (ImGui.button(Icons.Play.PLAY + "##tlPlay")) {
 				if (BeatBlock.musicPlayer != null) {
 					BeatBlock.musicPlayer.play();
 					// 启动驱动以便每帧推进时间，播放头随音乐移动
@@ -58,7 +60,7 @@ public final class TimelineToolbar {
 			if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_PLAY);
 		}
 		ImGui.sameLine();
-		if (ImGui.button("\u25A0 Stop")) {
+		if (ImGui.button(Icons.Play.STOP + "##tlStop")) {
 			if (BeatBlock.musicPlayer != null) BeatBlock.musicPlayer.stop();
 			editor.getClock().seek(0);
 		}
