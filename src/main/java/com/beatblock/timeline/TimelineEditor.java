@@ -114,14 +114,14 @@ public final class TimelineEditor {
 		}
 		TimelineLayout layout = new TimelineLayout();
 		layout.build(false, trackListState.getTrackHeaderWidth(), trackListState);
-		cachedDividerScreenX = layout.trackHeaderLeft + layout.trackHeaderWidth;
+		cachedDividerScreenX = layout.contentLeft;
 		cachedDividerTopScreenY = layout.rulerTop;
 		double duration = timeline.getDurationSeconds() > 0 ? timeline.getDurationSeconds() : 60.0;
 		TimelineViewState viewState = state.getViewState();
 		if (viewState.getViewEndTimeSeconds() >= 59 && viewState.getViewEndTimeSeconds() <= 61 && duration > 0 && layout.contentWidth > 0) {
 			viewState.fitToDuration(duration, layout.contentWidth);
 			layout.build(false, trackListState.getTrackHeaderWidth(), trackListState);
-			cachedDividerScreenX = layout.trackHeaderLeft + layout.trackHeaderWidth;
+			cachedDividerScreenX = layout.contentLeft;
 			cachedDividerTopScreenY = layout.rulerTop;
 		}
 		renderer.renderRulerRow(layout, viewState);
@@ -134,6 +134,7 @@ public final class TimelineEditor {
 		if (timeline == null) return;
 		TimelineLayout layout = new TimelineLayout();
 		layout.build(true, trackListState.getTrackHeaderWidth(), trackListState); // 在可滚动子窗口内，考虑折叠
+		cachedDividerScreenX = layout.contentLeft;
 		cachedDividerContentBottomScreenY = layout.contentTop + layout.contentHeight;
 		TimelineViewState viewState = state.getViewState();
 		renderer.renderTrackArea(

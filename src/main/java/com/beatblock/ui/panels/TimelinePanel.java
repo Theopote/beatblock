@@ -60,7 +60,7 @@ public class TimelinePanel {
 		if (editor != null) {
 			float divX = editor.getCachedDividerScreenX();
 			float y0 = editor.getCachedDividerTopScreenY();
-			float y1 = ImGui.getItemRectMaxY();
+			float y1 = editor.getCachedDividerContentBottomScreenY();
 			if (y1 > y0) {
 				ImGui.getWindowDrawList().addLine(divX, y0, divX, y1, TimelineRenderer.TIMELINE_DIVIDER_COLOR, 1f);
 			}

@@ -77,7 +77,7 @@ public final class TimelineRenderer {
 			float rowY = layout.getRowCursorY(i);
 			boolean isGroup = TimelineTrackMeta.isGroupRow(i);
 			String displayName = trackListState != null ? trackListState.getDisplayName(i) : TimelineTrackMeta.getDefaultName(i);
-			trackRenderer.drawTrackLabel(rowY, i, displayName, isGroup, trackListState, layout.trackHeaderWidth);
+			trackRenderer.drawTrackLabel(rowY, i, displayName, isGroup, trackListState, layout.trackHeaderLeft, layout.trackHeaderWidth);
 			drawRowContent(i, rowY, timeline, viewState, selectionState, layout);
 		}
 

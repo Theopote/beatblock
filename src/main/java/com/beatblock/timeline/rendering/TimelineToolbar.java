@@ -29,7 +29,7 @@ public final class TimelineToolbar {
 	/** Zoom 预设：显示名与对应的缩放倍数（相对基准 1x） */
 	private static final String[] ZOOM_PRESET_LABELS = { "0.25x", "0.5x", "1x", "2x", "3x", "4x" };
 	private static final float ZOOM_BASE = 10f; // 1x 对应的像素/秒
-	private static final float[] ZOOM_PRESET_VALUES = { 0.25f * ZOOM_BASE, 0.5f * ZOOM_BASE, 1f * ZOOM_BASE, 2f * ZOOM_BASE, 3f * ZOOM_BASE, 4f * ZOOM_BASE };
+	private static final float[] ZOOM_PRESET_VALUES = { 0.25f * ZOOM_BASE, 0.5f * ZOOM_BASE, ZOOM_BASE, 2f * ZOOM_BASE, 3f * ZOOM_BASE, 4f * ZOOM_BASE };
 
 	/** 上次 Auto Map 生成数量，用于提示 */
 	private int lastAutoMapCount = -1;
@@ -67,7 +67,7 @@ public final class TimelineToolbar {
 		if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_STOP);
 
 		ImGui.sameLine();
-		ImGui.separator();
+		//ImGui.separator();
 		ImGui.sameLine();
 
 		// ----- 2. 吸附与网格 -----
@@ -93,7 +93,7 @@ public final class TimelineToolbar {
 			if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_MAGNET);
 			ImGui.sameLine();
 
-			ImGui.separator();
+			//ImGui.separator();
 			ImGui.sameLine();
 
 			boolean loop = toolbarState.isLoop();
@@ -121,7 +121,7 @@ public final class TimelineToolbar {
 		}
 		if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_FIT);
 		ImGui.sameLine();
-		ImGui.separator();
+		//ImGui.separator();
 		ImGui.sameLine();
 
 		// ----- 4. Auto Map -----
