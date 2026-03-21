@@ -56,6 +56,8 @@ public final class TimelineToolbar {
 	private static final float[] ZOOM_PRESET_VALUES = { 0.25f * ZOOM_BASE, 0.5f * ZOOM_BASE, ZOOM_BASE, 2f * ZOOM_BASE, 3f * ZOOM_BASE, 4f * ZOOM_BASE };
 	private static final String[] SPEED_LABELS = { "0.5x", "0.75x", "1x", "1.25x", "1.5x", "2x" };
 	private static final double[] SPEED_VALUES = { 0.5, 0.75, 1.0, 1.25, 1.5, 2.0 };
+	private static final float TOOLBAR_ITEM_SPACING = 4f;
+	private static final float TOOLBAR_GROUP_SPACING = 8f;
 
 	/** 上次 Auto Map 生成数量，用于提示 */
 	private int lastAutoMapCount = -1;
@@ -74,27 +76,28 @@ public final class TimelineToolbar {
 
 		// 图标按钮：与轨道行同高、零内边距，字形尽量铺满并居中
 		final float tBtn = TimelineLayout.ROW_HEIGHT;
+		boolean compactToolbar = shouldUseCompactToolbar(tBtn);
 		IconButtonStyle.pushBeatBlockIconButton();
 		if (ImGui.button(Icons.Play.REWIND_START + "##tlToStart", tBtn, tBtn)) {
 			seekTo(editor, 0);
 		}
 		if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_TO_START);
-		ImGui.sameLine();
+		nextItemInGroup();
 		if (ImGui.button(Icons.Play.REWIND + "##tlBackBeat", tBtn, tBtn)) {
 			seekBy(editor, -seekStep);
 		}
 		if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_BACK_BEAT);
-		ImGui.sameLine();
-		if (ImGui.button("-5##tlBack5", tBtn + 8f, tBtn)) {
+		nextItemInGroup();
+		if (compactTextButton("-5", "##tlBack5", tBtn)) {
 			seekBy(editor, -5.0);
 		}
 		if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_BACK_5S);
-		ImGui.sameLine();
+		nextItemInGroup();
 		if (ImGui.button(Icons.Action.ARROW_LEFT + "##tlPrevEvt", tBtn, tBtn)) {
 			jumpToNearbyEvent(editor, false);
 		}
 		if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_PREV_EVENT);
-		ImGui.sameLine();
+		nextItemInGroup();
 		// 使用 BeatBlock.ttf（Icons），避免 ▶⏸■ 等未进 ImGui 图集显示为 ?
 		if (playing) {
 			if (ImGui.button(Icons.Play.PAUSE + "##tlPause", tBtn, tBtn)) {
@@ -111,42 +114,46 @@ public final class TimelineToolbar {
 			}
 			if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_PLAY);
 		}
-		ImGui.sameLine();
+		nextItemInGroup();
 		if (ImGui.button(Icons.Play.STOP + "##tlStop", tBtn, tBtn)) {
 			if (BeatBlock.musicPlayer != null) BeatBlock.musicPlayer.stop();
 			seekTo(editor, 0);
 		}
 		if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_STOP);
-		ImGui.sameLine();
+		nextItemInGroup();
 		if (ImGui.button(Icons.Play.FORWARD + "##tlFwdBeat", tBtn, tBtn)) {
 			seekBy(editor, seekStep);
 		}
 		if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_FWD_BEAT);
-		ImGui.sameLine();
-		if (ImGui.button("+5##tlFwd5", tBtn + 8f, tBtn)) {
+		nextItemInGroup();
+		if (compactTextButton("+5", "##tlFwd5", tBtn)) {
 			seekBy(editor, 5.0);
 		}
 		if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_FWD_5S);
-		ImGui.sameLine();
+		nextItemInGroup();
 		if (ImGui.button(Icons.Action.ARROW_RIGHT + "##tlNextEvt", tBtn, tBtn)) {
 			jumpToNearbyEvent(editor, true);
 		}
 		if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_NEXT_EVENT);
-		ImGui.sameLine();
+		nextItemInGroup();
 		if (ImGui.button(Icons.Play.FORWARD_END + "##tlToEnd", tBtn, tBtn)) {
 			seekTo(editor, getDuration(editor));
 		}
 		if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_TO_END);
-		ImGui.sameLine();
+		nextItemInGroup();
 		if (ImGui.button(Icons.Timeline.MARKER + "##tlAddMarker", tBtn, tBtn)) {
 			addMarkerAtCurrentTime(editor);
 		}
 		if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_ADD_MARKER);
 		IconButtonStyle.popBeatBlockIconButton();
 
-		ImGui.sameLine();
-		//ImGui.separator();
-		ImGui.sameLine();
+		if (compactToolbar) {
+			nextGroup();
+			renderOverflowMenu(editor, toolbarState, seekStep);
+			return;
+		}
+
+		nextGroup();
 
 		// ----- 1.5 循环区（In/Out）与速度 -----
 		double now = editor.getClock().getCurrentTimeSeconds();
@@ -157,21 +164,22 @@ public final class TimelineToolbar {
 			}
 		}
 		if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_LOOP_IN);
-		ImGui.sameLine();
+		nextItemInGroup();
 		if (ImGui.button("Out")) {
 			double loopIn = toolbarState.getLoopInSeconds();
 			toolbarState.setLoopOutSeconds(Math.max(now, loopIn + Math.max(0.1, seekStep)));
 		}
 		if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_LOOP_OUT);
-		ImGui.sameLine();
+		nextItemInGroup();
 		if (ImGui.button("Clr")) {
 			toolbarState.clearLoopRange();
 		}
 		if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_LOOP_CLEAR);
-		ImGui.sameLine();
+		nextItemInGroup();
 
 		double currentSpeed = BeatBlock.musicPlayer != null ? BeatBlock.musicPlayer.getPlaybackSpeed() : editor.getClock().getPlaybackSpeed();
 		speedComboIndex.set(indexOfClosestSpeed(currentSpeed));
+		ImGui.setNextItemWidth(comboWidthForLabels(SPEED_LABELS));
 		if (ImGui.combo("Speed", speedComboIndex, SPEED_LABELS)) {
 			int sIdx = speedComboIndex.get();
 			if (sIdx >= 0 && sIdx < SPEED_VALUES.length) {
@@ -183,7 +191,7 @@ public final class TimelineToolbar {
 			}
 		}
 		if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_SPEED);
-		ImGui.sameLine();
+		nextGroup();
 
 		// ----- 2. 吸附与网格 -----
 		if (toolbarState != null) {
@@ -192,35 +200,33 @@ public final class TimelineToolbar {
 				toolbarState.setSnapToGrid(!snap);
 			}
 			if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_SNAP);
-			ImGui.sameLine();
+			nextItemInGroup();
 
 			boolean beatGrid = toolbarState.isBeatGridVisible();
 			if (ImGui.checkbox("Beat Grid", beatGrid)) {
 				toolbarState.setBeatGridVisible(!beatGrid);
 			}
 			if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_BEAT_GRID);
-			ImGui.sameLine();
+			nextItemInGroup();
 
 			boolean magnet = toolbarState.isMagnetSnap();
 			if (ImGui.checkbox("Magnet", magnet)) {
 				toolbarState.setMagnetSnap(!magnet);
 			}
 			if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_MAGNET);
-			ImGui.sameLine();
-
-			//ImGui.separator();
-			ImGui.sameLine();
+			nextGroup();
 
 			boolean loop = toolbarState.isLoop();
 			if (ImGui.checkbox("Loop", loop)) {
 				toolbarState.setLoop(!loop);
 			}
 			if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_LOOP);
-			ImGui.sameLine();
+			nextGroup();
 		}
 
 		// ----- 3. 视图：Zoom 下拉 + Fit -----
 		zoomComboIndex.set(indexOfClosestZoom(editor.getViewState().getZoom()));
+		ImGui.setNextItemWidth(comboWidthForLabels(ZOOM_PRESET_LABELS));
 		if (ImGui.combo("Zoom", zoomComboIndex, ZOOM_PRESET_LABELS)) {
 			int idx = zoomComboIndex.get();
 			if (idx >= 0 && idx < ZOOM_PRESET_VALUES.length) {
@@ -228,16 +234,14 @@ public final class TimelineToolbar {
 			}
 		}
 		if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_ZOOM);
-		ImGui.sameLine();
+		nextItemInGroup();
 		if (ImGui.button("Fit")) {
 			double dur = BeatBlock.timeline != null ? BeatBlock.timeline.getDurationSeconds() : 60;
 			float w = ImGui.getContentRegionAvailX() - 130f;
 			if (dur > 0 && w > 0) editor.getViewState().fitToDuration(dur, w);
 		}
 		if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_FIT);
-		ImGui.sameLine();
-		//ImGui.separator();
-		ImGui.sameLine();
+		nextGroup();
 
 		// ----- 4. Auto Map -----
 		if (ImGui.button("Auto Map")) {
@@ -251,9 +255,191 @@ public final class TimelineToolbar {
 		}
 		if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_AUTO_MAP);
 		if (lastAutoMapCount >= 0) {
+			nextItemInGroup();
+			ImGui.textDisabled("(" + lastAutoMapCount + " events)");
+		}
+	}
+
+	private void renderOverflowMenu(TimelineEditor editor, TimelineToolbarState toolbarState, double seekStep) {
+		if (ImGui.button("More##tlMore")) {
+			ImGui.openPopup("tlMorePopup");
+		}
+		if (!ImGui.beginPopup("tlMorePopup")) return;
+
+		double now = editor.getClock().getCurrentTimeSeconds();
+		ImGui.textDisabled("Loop & Speed");
+		if (ImGui.button("In##tlMoreIn")) {
+			toolbarState.setLoopInSeconds(now);
+			if (toolbarState.getLoopOutSeconds() > 0 && toolbarState.getLoopOutSeconds() <= now) {
+				toolbarState.setLoopOutSeconds(now + Math.max(0.1, seekStep));
+			}
+		}
+		if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_LOOP_IN);
+		ImGui.sameLine();
+		if (ImGui.button("Out##tlMoreOut")) {
+			double loopIn = toolbarState.getLoopInSeconds();
+			toolbarState.setLoopOutSeconds(Math.max(now, loopIn + Math.max(0.1, seekStep)));
+		}
+		if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_LOOP_OUT);
+		ImGui.sameLine();
+		if (ImGui.button("Clr##tlMoreClr")) {
+			toolbarState.clearLoopRange();
+		}
+		if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_LOOP_CLEAR);
+
+		double currentSpeed = BeatBlock.musicPlayer != null ? BeatBlock.musicPlayer.getPlaybackSpeed() : editor.getClock().getPlaybackSpeed();
+		speedComboIndex.set(indexOfClosestSpeed(currentSpeed));
+		ImGui.setNextItemWidth(comboWidthForLabels(SPEED_LABELS));
+		if (ImGui.combo("Speed##tlMoreSpeed", speedComboIndex, SPEED_LABELS)) {
+			int sIdx = speedComboIndex.get();
+			if (sIdx >= 0 && sIdx < SPEED_VALUES.length) {
+				double speed = SPEED_VALUES[sIdx];
+				editor.getClock().setPlaybackSpeed(speed);
+				if (BeatBlock.musicPlayer != null) {
+					BeatBlock.musicPlayer.setPlaybackSpeed(speed);
+				}
+			}
+		}
+		if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_SPEED);
+
+		ImGui.separator();
+		ImGui.textDisabled("Snap & Grid");
+		boolean snap = toolbarState.isSnapToGrid();
+		if (ImGui.checkbox("Snap##tlMoreSnap", snap)) {
+			toolbarState.setSnapToGrid(!snap);
+		}
+		if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_SNAP);
+
+		boolean beatGrid = toolbarState.isBeatGridVisible();
+		if (ImGui.checkbox("Beat Grid##tlMoreBeatGrid", beatGrid)) {
+			toolbarState.setBeatGridVisible(!beatGrid);
+		}
+		if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_BEAT_GRID);
+
+		boolean magnet = toolbarState.isMagnetSnap();
+		if (ImGui.checkbox("Magnet##tlMoreMagnet", magnet)) {
+			toolbarState.setMagnetSnap(!magnet);
+		}
+		if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_MAGNET);
+
+		boolean loop = toolbarState.isLoop();
+		if (ImGui.checkbox("Loop##tlMoreLoop", loop)) {
+			toolbarState.setLoop(!loop);
+		}
+		if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_LOOP);
+
+		ImGui.separator();
+		ImGui.textDisabled("View");
+		zoomComboIndex.set(indexOfClosestZoom(editor.getViewState().getZoom()));
+		ImGui.setNextItemWidth(comboWidthForLabels(ZOOM_PRESET_LABELS));
+		if (ImGui.combo("Zoom##tlMoreZoom", zoomComboIndex, ZOOM_PRESET_LABELS)) {
+			int idx = zoomComboIndex.get();
+			if (idx >= 0 && idx < ZOOM_PRESET_VALUES.length) {
+				editor.getViewState().setZoom(ZOOM_PRESET_VALUES[idx]);
+			}
+		}
+		if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_ZOOM);
+		if (ImGui.button("Fit##tlMoreFit")) {
+			double dur = BeatBlock.timeline != null ? BeatBlock.timeline.getDurationSeconds() : 60;
+			float w = ImGui.getContentRegionAvailX() - 16f;
+			if (dur > 0 && w > 0) editor.getViewState().fitToDuration(dur, w);
+		}
+		if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_FIT);
+
+		ImGui.separator();
+		ImGui.textDisabled("Tools");
+		if (ImGui.button("Auto Map##tlMoreAutoMap")) {
+			if (BeatBlock.timeline != null) {
+				AutoMapConfig config = AutoMapConfig.createDefault();
+				lastAutoMapCount = AutoMapGenerator.generate(BeatBlock.timeline, config, true);
+				editor.syncClockDuration();
+			} else {
+				lastAutoMapCount = -1;
+			}
+		}
+		if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_AUTO_MAP);
+		if (lastAutoMapCount >= 0) {
 			ImGui.sameLine();
 			ImGui.textDisabled("(" + lastAutoMapCount + " events)");
 		}
+
+		ImGui.endPopup();
+	}
+
+	private static boolean shouldUseCompactToolbar(float tBtn) {
+		float availableWidth = ImGui.getContentRegionAvailX();
+		float requiredWidth = estimateExpandedToolbarWidth(tBtn);
+		return availableWidth < requiredWidth;
+	}
+
+	private static float estimateExpandedToolbarWidth(float tBtn) {
+		float transportWidth = estimateTransportWidth(tBtn);
+		float loopAndSpeedWidth = buttonWidth("In") + TOOLBAR_ITEM_SPACING
+			+ buttonWidth("Out") + TOOLBAR_ITEM_SPACING
+			+ buttonWidth("Clr") + TOOLBAR_ITEM_SPACING
+			+ comboTotalWidth("Speed", SPEED_LABELS);
+
+		float snapGroupWidth = checkboxWidth("Snap") + TOOLBAR_ITEM_SPACING
+			+ checkboxWidth("Beat Grid") + TOOLBAR_ITEM_SPACING
+			+ checkboxWidth("Magnet") + TOOLBAR_GROUP_SPACING
+			+ checkboxWidth("Loop");
+
+		float viewGroupWidth = comboTotalWidth("Zoom", ZOOM_PRESET_LABELS) + TOOLBAR_ITEM_SPACING + buttonWidth("Fit");
+		float autoMapWidth = buttonWidth("Auto Map") + 70f;
+
+		return transportWidth
+			+ TOOLBAR_GROUP_SPACING
+			+ loopAndSpeedWidth
+			+ TOOLBAR_GROUP_SPACING
+			+ snapGroupWidth
+			+ TOOLBAR_GROUP_SPACING
+			+ viewGroupWidth
+			+ TOOLBAR_GROUP_SPACING
+			+ autoMapWidth;
+	}
+
+	private static float estimateTransportWidth(float tBtn) {
+		float stepTextWidth = Math.max(compactTextButtonWidth("-5"), compactTextButtonWidth("+5"));
+		float buttonSum = tBtn + tBtn + stepTextWidth + tBtn + tBtn + tBtn + tBtn + stepTextWidth + tBtn + tBtn + tBtn;
+		return buttonSum + TOOLBAR_ITEM_SPACING * 10f;
+	}
+
+	private static float compactTextButtonWidth(String label) {
+		return Math.max(TimelineLayout.ROW_HEIGHT, ImGui.calcTextSize(label).x + 14f);
+	}
+
+	private static float buttonWidth(String label) {
+		return ImGui.calcTextSize(label).x + 18f;
+	}
+
+	private static float checkboxWidth(String label) {
+		return ImGui.calcTextSize(label).x + 28f;
+	}
+
+	private static float comboTotalWidth(String label, String[] values) {
+		return comboWidthForLabels(values) + ImGui.calcTextSize(label).x + 10f;
+	}
+
+	private static void nextItemInGroup() {
+		ImGui.sameLine(0f, TOOLBAR_ITEM_SPACING);
+	}
+
+	private static void nextGroup() {
+		ImGui.sameLine(0f, TOOLBAR_GROUP_SPACING);
+	}
+
+	private static boolean compactTextButton(String label, String idSuffix, float minSize) {
+		float width = Math.max(minSize, ImGui.calcTextSize(label).x + 14f);
+		return ImGui.button(label + idSuffix, width, minSize);
+	}
+
+	private static float comboWidthForLabels(String[] labels) {
+		float maxText = 0f;
+		for (String label : labels) {
+			if (label == null) continue;
+			maxText = Math.max(maxText, ImGui.calcTextSize(label).x);
+		}
+		return maxText + 40f;
 	}
 
 	private static int indexOfClosestZoom(float zoom) {
