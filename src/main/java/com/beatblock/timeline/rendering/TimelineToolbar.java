@@ -20,6 +20,10 @@ public final class TimelineToolbar {
 	private static final String TOOLTIP_PLAY = "播放 (空格)";
 	private static final String TOOLTIP_PAUSE = "暂停";
 	private static final String TOOLTIP_STOP = "停止并回到起点";
+	private static final String TOOLTIP_TO_START = "回到开头";
+	private static final String TOOLTIP_TO_END = "跳到结尾";
+	private static final String TOOLTIP_BACK_BEAT = "后退 1 拍（无 BPM 时后退 1 秒）";
+	private static final String TOOLTIP_FWD_BEAT = "前进 1 拍（无 BPM 时前进 1 秒）";
 	private static final String TOOLTIP_SNAP = "拖拽事件时吸附到网格";
 	private static final String TOOLTIP_BEAT_GRID = "显示节拍网格线";
 	private static final String TOOLTIP_MAGNET = "吸附到其他事件/关键帧";
@@ -44,10 +48,22 @@ public final class TimelineToolbar {
 		// ----- 1. 播放控制 -----
 		boolean hasMusic = BeatBlock.musicPlayer != null && BeatBlock.timeline != null && BeatBlock.timeline.getDurationSeconds() > 0;
 		boolean playing = hasMusic && BeatBlock.musicPlayer.isPlaying();
+		double bpm = BeatBlock.timeline != null ? BeatBlock.timeline.getBpm() : 0;
+		double seekStep = bpm > 0 ? 60.0 / bpm : 1.0;
 
 		// 图标按钮：与轨道行同高、零内边距，字形尽量铺满并居中
 		final float tBtn = TimelineLayout.ROW_HEIGHT;
 		IconButtonStyle.pushBeatBlockIconButton();
+		if (ImGui.button(Icons.Play.REWIND_START + "##tlToStart", tBtn, tBtn)) {
+			seekTo(editor, 0);
+		}
+		if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_TO_START);
+		ImGui.sameLine();
+		if (ImGui.button(Icons.Play.REWIND + "##tlBackBeat", tBtn, tBtn)) {
+			seekBy(editor, -seekStep);
+		}
+		if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_BACK_BEAT);
+		ImGui.sameLine();
 		// 使用 BeatBlock.ttf（Icons），避免 ▶⏸■ 等未进 ImGui 图集显示为 ?
 		if (playing) {
 			if (ImGui.button(Icons.Play.PAUSE + "##tlPause", tBtn, tBtn)) {
@@ -67,9 +83,19 @@ public final class TimelineToolbar {
 		ImGui.sameLine();
 		if (ImGui.button(Icons.Play.STOP + "##tlStop", tBtn, tBtn)) {
 			if (BeatBlock.musicPlayer != null) BeatBlock.musicPlayer.stop();
-			editor.getClock().seek(0);
+			seekTo(editor, 0);
 		}
 		if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_STOP);
+		ImGui.sameLine();
+		if (ImGui.button(Icons.Play.FORWARD + "##tlFwdBeat", tBtn, tBtn)) {
+			seekBy(editor, seekStep);
+		}
+		if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_FWD_BEAT);
+		ImGui.sameLine();
+		if (ImGui.button(Icons.Play.FORWARD_END + "##tlToEnd", tBtn, tBtn)) {
+			seekTo(editor, getDuration(editor));
+		}
+		if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_TO_END);
 		IconButtonStyle.popBeatBlockIconButton();
 
 		ImGui.sameLine();
@@ -158,5 +184,31 @@ public final class TimelineToolbar {
 			}
 		}
 		return best;
+	}
+
+	private static void seekBy(TimelineEditor editor, double deltaSeconds) {
+		if (editor == null) return;
+		double current = editor.getClock().getCurrentTimeSeconds();
+		seekTo(editor, current + deltaSeconds);
+	}
+
+	private static void seekTo(TimelineEditor editor, double targetSeconds) {
+		if (editor == null) return;
+		double duration = getDuration(editor);
+		double t = Math.max(0, Math.min(targetSeconds, duration));
+		editor.getClock().seek(t);
+		if (BeatBlock.musicPlayer != null) {
+			BeatBlock.musicPlayer.setCurrentTimeSeconds(t);
+		}
+	}
+
+	private static double getDuration(TimelineEditor editor) {
+		double timelineDur = BeatBlock.timeline != null ? BeatBlock.timeline.getDurationSeconds() : 0;
+		if (timelineDur > 0) return timelineDur;
+		double playerDur = BeatBlock.musicPlayer != null ? BeatBlock.musicPlayer.getDurationSeconds() : 0;
+		if (playerDur > 0) return playerDur;
+		double clockDur = editor.getClock().getDurationSeconds();
+		if (clockDur > 0) return clockDur;
+		return 60.0;
 	}
 }
