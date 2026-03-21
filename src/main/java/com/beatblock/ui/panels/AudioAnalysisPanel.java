@@ -346,6 +346,16 @@ public final class AudioAnalysisPanel {
         ImGui.sameLine(0f, 6f);
         ImGui.textDisabled(String.format("%.0f%%", progress * 100f));
 
+        String statusText = asset.getProcessingStatusText();
+        if (statusText != null && !statusText.isBlank()) {
+            ImGui.spacing();
+            ImGui.pushStyleColor(ImGuiCol.Text,
+                COLOR_PROGRESS_FG.x, COLOR_PROGRESS_FG.y, COLOR_PROGRESS_FG.z, COLOR_PROGRESS_FG.w);
+            ImGui.textWrapped("正在处理：" + statusText);
+            ImGui.popStyleColor();
+            return;
+        }
+
         // 步骤逐行显示
         ImGui.spacing();
         for (AudioAnalysisStep step : AudioAnalysisStep.values()) {
@@ -563,6 +573,16 @@ public final class AudioAnalysisPanel {
         ImGui.progressBar(progress, ImGui.getContentRegionAvailX(), 8f,
                 String.format("%.0f%%", progress * 100f));
         ImGui.popStyleColor(2);
+
+        String statusText = asset.getProcessingStatusText();
+        if (statusText != null && !statusText.isBlank()) {
+            ImGui.spacing();
+            ImGui.pushStyleColor(ImGuiCol.Text,
+                COLOR_PROGRESS_FG.x, COLOR_PROGRESS_FG.y, COLOR_PROGRESS_FG.z, COLOR_PROGRESS_FG.w);
+            ImGui.textWrapped("正在处理：" + statusText);
+            ImGui.popStyleColor();
+            return;
+        }
 
         ImGui.spacing();
         for (AudioAnalysisStep step : AudioAnalysisStep.values()) {

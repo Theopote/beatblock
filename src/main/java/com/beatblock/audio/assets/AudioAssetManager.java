@@ -98,6 +98,7 @@ public final class AudioAssetManager {
 		if (path == null) return;
 		asset.setStatus(AudioAssetStatus.ANALYZING);
 		asset.setAnalysisProgressPercent(0);
+		asset.setProcessingStatusText(null);
 		asset.getFinishedSteps().clear();
 		asset.setErrorMessage(null);
 
@@ -128,6 +129,7 @@ public final class AudioAssetManager {
 			(Beatmap beatmap) -> {
 				asset.setBeatmap(beatmap);
 				asset.setAnalysisProgressPercent(100);
+				asset.setProcessingStatusText(null);
 				BeatmapMeta meta = beatmap.meta;
 				asset.setDurationSeconds(meta.durationMs() / 1000.0);
 				asset.setSampleRate(meta.sampleRate());
@@ -151,6 +153,7 @@ public final class AudioAssetManager {
 				LOGGER.warn("BeatBlock AudioAssetManager: 外部解析失败: {}", err);
 				asset.setStatus(AudioAssetStatus.FAILED);
 				asset.setAnalysisProgressPercent(0);
+				asset.setProcessingStatusText(null);
 				asset.setErrorMessage(normalizeErrorMessage(path, err));
 			}
 		);

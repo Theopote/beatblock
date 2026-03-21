@@ -75,16 +75,20 @@ public class BeatBlock implements ModInitializer {
 		AudioAssetManager.getInstance().setConversionRequestHandler((asset, targetFormat) -> {
 			if (asset == null || asset.getPath() == null) return;
 			asset.setStatus(com.beatblock.audio.assets.AudioAssetStatus.ANALYZING);
-			asset.setErrorMessage("正在转换为 MP3...");
+			asset.setAnalysisProgressPercent(3);
+			asset.setProcessingStatusText("FFmpeg 转换中（目标格式：MP3）");
+			asset.setErrorMessage(null);
 			audioConversionService.convertToMp3Async(
 				asset.getPath(),
 				convertedPath -> {
 					asset.setPath(convertedPath);
+					asset.setProcessingStatusText("转换完成，开始解析...");
 					asset.setErrorMessage(null);
 					AudioAssetManager.getInstance().startAnalysis(asset);
 				},
 				err -> {
 					asset.setStatus(com.beatblock.audio.assets.AudioAssetStatus.FAILED);
+					asset.setProcessingStatusText(null);
 					asset.setErrorMessage(err);
 				}
 			);
