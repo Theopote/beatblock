@@ -109,7 +109,8 @@ public final class TimelineLayout {
 			trackHeaderLeft = ImGui.getCursorScreenPosX();
 			trackHeaderTop = ImGui.getCursorScreenPosY();
 			rulerLeft = trackHeaderLeft + headerW;
-			rulerTop = trackHeaderTop;
+			// 轨道子窗口不包含固定标尺，标尺命中区域位于子窗口上方。
+			rulerTop = trackHeaderTop - RULER_HEIGHT;
 			rulerWidth = contentWidth;
 		} else {
 			ImGui.setCursorPos(0f, startY);

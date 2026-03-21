@@ -25,6 +25,7 @@ public final class TimelineEditor {
 	private final TimelineUiStateStore uiStateStore = new TimelineUiStateStore();
 	private final TimelineLayout frameLayout = new TimelineLayout();
 	private boolean frameLayoutBuilt;
+	private boolean frameLayoutTrackAreaOnly;
 	private final IAudioPlayer audioPlayer;
 
 	/** 供 TimelinePanel 绘制贯通竖线：屏幕 X、标尺顶 Y、轨道内容区底 Y（每帧由 render 更新） */
@@ -104,10 +105,11 @@ public final class TimelineEditor {
 		return trackListState;
 	}
 
-	private TimelineLayout getOrBuildFrameLayout() {
-		if (!frameLayoutBuilt) {
-			frameLayout.build(false, trackListState.getTrackHeaderWidth(), trackListState);
+	private TimelineLayout getOrBuildFrameLayout(boolean trackAreaOnly) {
+		if (!frameLayoutBuilt || frameLayoutTrackAreaOnly != trackAreaOnly) {
+			frameLayout.build(trackAreaOnly, trackListState.getTrackHeaderWidth(), trackListState);
 			frameLayoutBuilt = true;
+			frameLayoutTrackAreaOnly = trackAreaOnly;
 		}
 		return frameLayout;
 	}
@@ -117,8 +119,25 @@ public final class TimelineEditor {
 	 */
 	public void tryBeginTimelineDividerDragOnRuler() {
 		if (timeline == null) return;
-		TimelineLayout l = getOrBuildFrameLayout();
+		TimelineLayout l = getOrBuildFrameLayout(false);
 		interactionSystem.tryBeginDividerDragOnRuler(trackListState, getInteractionState(), l);
+	}
+
+	/** 在主窗口标尺上下文处理交互（Scrub / Loop Handle / Marker / 右键等）。 */
+	public void handleRulerInteraction() {
+		if (timeline == null) return;
+		TimelineLayout layout = getOrBuildFrameLayout(false);
+		interactionSystem.update(
+			timeline,
+			state.getViewState(),
+			state.getInteractionState(),
+			state.getSelectionState(),
+			state.getClock(),
+			state.getSelectionBox(),
+			trackListState,
+			layout,
+			toolbarState
+		);
 	}
 
 	/** 同步时钟时长与 Timeline 一致 */
@@ -157,7 +176,7 @@ public final class TimelineEditor {
 				state.getClock().setCurrentTimeSeconds(t);
 			}
 		}
-		TimelineLayout layout = frameLayout;
+		TimelineLayout layout = getOrBuildFrameLayout(false);
 		cachedDividerScreenX = layout.contentLeft;
 		cachedDividerTopScreenY = layout.rulerTop;
 		double duration = timeline.getDurationSeconds() > 0 ? timeline.getDurationSeconds() : 60.0;
@@ -165,9 +184,6 @@ public final class TimelineEditor {
 		if (viewState.getViewEndTimeSeconds() >= 59 && viewState.getViewEndTimeSeconds() <= 61 && duration > 0 && layout.contentWidth > 0) {
 			viewState.fitToDuration(duration, layout.contentWidth);
 		}
-		layout = getOrBuildFrameLayout();
-		cachedDividerScreenX = layout.contentLeft;
-		cachedDividerTopScreenY = layout.rulerTop;
 		renderer.renderRulerRow(layout, viewState, timeline.getBpm(), toolbarState, timeline);
 	}
 
@@ -176,7 +192,7 @@ public final class TimelineEditor {
 	 */
 	public void renderTrackArea() {
 		if (timeline == null) return;
-		TimelineLayout layout = getOrBuildFrameLayout();
+		TimelineLayout layout = getOrBuildFrameLayout(true);
 		cachedDividerScreenX = layout.contentLeft;
 		cachedDividerContentBottomScreenY = layout.contentTop + layout.contentHeight;
 		TimelineViewState viewState = state.getViewState();

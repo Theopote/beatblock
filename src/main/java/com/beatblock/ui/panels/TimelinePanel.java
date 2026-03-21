@@ -48,6 +48,7 @@ public class TimelinePanel {
 		ImGui.separator();
 		if (editor != null) {
 			editor.renderRulerOnly();
+			editor.handleRulerInteraction();
 			editor.tryBeginTimelineDividerDragOnRuler();
 		}
 
