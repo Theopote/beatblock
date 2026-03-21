@@ -1,9 +1,12 @@
 package com.beatblock.ui.panels;
 
 import com.beatblock.BeatBlock;
+import com.beatblock.timeline.project.OscProjectStore;
 import imgui.ImGui;
 import imgui.flag.ImGuiWindowFlags;
 import imgui.type.ImString;
+
+import java.nio.file.Path;
 
 /**
  * 顶部通栏菜单栏：文件、编辑、视图、演出、帮助。
@@ -17,8 +20,13 @@ public class MenuBarPanel {
 	private final Runnable onOpenSmartAutoMap;
 	private boolean animationLibraryVisible;
 	private boolean showImportDialog;
+	private boolean showOpenProjectDialog;
+	private boolean showSaveProjectDialog;
 	private boolean showAboutDialog;
 	private final ImString importPath = new ImString(IMPORT_PATH_CAPACITY);
+	private final ImString openProjectPath = new ImString(IMPORT_PATH_CAPACITY);
+	private final ImString saveProjectPath = new ImString(IMPORT_PATH_CAPACITY);
+	private String projectDialogMessage = "";
 
 	public MenuBarPanel(Runnable onCloseRequest, Runnable onToggleAnimationLibrary, Runnable onOpenSmartAutoMap) {
 		this.onCloseRequest = onCloseRequest;
@@ -39,6 +47,18 @@ public class MenuBarPanel {
 		try {
 			// 文件
 			if (ImGui.beginMenu("文件")) {
+				if (ImGui.menuItem("打开工程(.osc)", "Ctrl+Shift+O")) {
+					showOpenProjectDialog = true;
+					projectDialogMessage = "";
+					openProjectPath.set("");
+				}
+				if (ImGui.menuItem("保存工程(.osc)", "Ctrl+S")) {
+					showSaveProjectDialog = true;
+					projectDialogMessage = "";
+					Object p = BeatBlock.timeline != null ? BeatBlock.timeline.getMetadata("projectPath") : null;
+					saveProjectPath.set(p == null ? "" : String.valueOf(p));
+				}
+				ImGui.separator();
 				if (ImGui.menuItem("导入音乐", "Ctrl+O")) {
 					showImportDialog = true;
 					importPath.set("");
@@ -90,6 +110,8 @@ public class MenuBarPanel {
 			ImGui.endMainMenuBar();
 		}
 		renderImportDialog();
+		renderOpenProjectDialog();
+		renderSaveProjectDialog();
 		renderAboutDialog();
 	}
 
@@ -110,6 +132,90 @@ public class MenuBarPanel {
 			ImGui.sameLine();
 			if (ImGui.button("取消")) {
 				showImportDialog = false;
+			}
+		}
+		ImGui.end();
+	}
+
+	private void renderOpenProjectDialog() {
+		if (!showOpenProjectDialog) return;
+		ImGui.setNextWindowSize(460, 0);
+		if (ImGui.begin("打开工程 (.osc)", ImGuiWindowFlags.AlwaysAutoResize)) {
+			ImGui.text("工程文件路径（.osc）：");
+			ImGui.setNextItemWidth(-1);
+			ImGui.inputText("##openOscPath", openProjectPath);
+			if (ImGui.button("打开")) {
+				String p = openProjectPath.get().trim();
+				if (p.isEmpty()) {
+					projectDialogMessage = "路径不能为空";
+				} else if (BeatBlock.timeline == null) {
+					projectDialogMessage = "Timeline 不可用";
+				} else {
+					try {
+						OscProjectStore.LoadedProject loaded = OscProjectStore.load(Path.of(p));
+						if (!loaded.getTimelineName().isBlank()) {
+							BeatBlock.timeline.setName(loaded.getTimelineName());
+						}
+						BeatBlock.timeline.setMetadata("projectId", loaded.getProjectId());
+						BeatBlock.timeline.setMetadata("projectPath", loaded.getProjectPath());
+						if (!loaded.getAudioPath().isBlank()) {
+							BeatBlock.timeline.setMetadata("audioPath", loaded.getAudioPath());
+						}
+						if (!loaded.getAudioPath().isBlank() && BeatBlock.audioLoader != null) {
+							BeatBlock.audioLoader.load(loaded.getAudioPath());
+						}
+						if (BeatBlock.timelineEditor != null) {
+							BeatBlock.timelineEditor.syncClockDuration();
+						}
+						projectDialogMessage = "工程已打开";
+						showOpenProjectDialog = false;
+					} catch (Exception e) {
+						projectDialogMessage = "打开失败: " + e.getMessage();
+					}
+				}
+			}
+			ImGui.sameLine();
+			if (ImGui.button("取消##openOsc")) {
+				showOpenProjectDialog = false;
+			}
+			if (!projectDialogMessage.isBlank()) {
+				ImGui.spacing();
+				ImGui.textWrapped(projectDialogMessage);
+			}
+		}
+		ImGui.end();
+	}
+
+	private void renderSaveProjectDialog() {
+		if (!showSaveProjectDialog) return;
+		ImGui.setNextWindowSize(460, 0);
+		if (ImGui.begin("保存工程 (.osc)", ImGuiWindowFlags.AlwaysAutoResize)) {
+			ImGui.text("保存路径（.osc）：");
+			ImGui.setNextItemWidth(-1);
+			ImGui.inputText("##saveOscPath", saveProjectPath);
+			if (ImGui.button("保存")) {
+				String p = saveProjectPath.get().trim();
+				if (p.isEmpty()) {
+					projectDialogMessage = "路径不能为空";
+				} else if (BeatBlock.timeline == null) {
+					projectDialogMessage = "Timeline 不可用";
+				} else {
+					try {
+						OscProjectStore.save(Path.of(p), BeatBlock.timeline);
+						projectDialogMessage = "工程已保存";
+						showSaveProjectDialog = false;
+					} catch (Exception e) {
+						projectDialogMessage = "保存失败: " + e.getMessage();
+					}
+				}
+			}
+			ImGui.sameLine();
+			if (ImGui.button("取消##saveOsc")) {
+				showSaveProjectDialog = false;
+			}
+			if (!projectDialogMessage.isBlank()) {
+				ImGui.spacing();
+				ImGui.textWrapped(projectDialogMessage);
 			}
 		}
 		ImGui.end();
