@@ -11,6 +11,7 @@ public class InteractionState {
 	private String activeEventId;
 	private String activeClipId;
 	private String activeTrackId;
+	private String activeMarkerId;
 	private boolean resizeLeft; // RESIZE_CLIP 时 true=左边缘
 	private float resizeStartHeaderWidth; // RESIZE_HEADER 时按下时的轨道头宽度
 
@@ -35,6 +36,8 @@ public class InteractionState {
 	public void setActiveClipId(String id) { activeClipId = id; }
 	public String getActiveTrackId() { return activeTrackId; }
 	public void setActiveTrackId(String id) { activeTrackId = id; }
+	public String getActiveMarkerId() { return activeMarkerId; }
+	public void setActiveMarkerId(String id) { activeMarkerId = id; }
 
 	public boolean isResizeLeft() { return resizeLeft; }
 	public void setResizeLeft(boolean left) { resizeLeft = left; }
@@ -46,5 +49,6 @@ public class InteractionState {
 		activeEventId = null;
 		activeClipId = null;
 		activeTrackId = null;
+		activeMarkerId = null;
 	}
 }

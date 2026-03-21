@@ -11,6 +11,7 @@ public enum InteractionMode {
 	PAN_VIEW,
 	BOX_SELECT,
 	SCRUB_TIME,
+	MARKER_DRAG,
 	LOOP_IN_DRAG,
 	LOOP_OUT_DRAG,
 	/** 拖动轨道头与内容区之间的分割线 */
