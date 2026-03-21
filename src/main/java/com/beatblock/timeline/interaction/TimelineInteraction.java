@@ -1,7 +1,10 @@
 package com.beatblock.timeline.interaction;
 
 import com.beatblock.BeatBlock;
+import com.beatblock.timeline.Clip;
 import com.beatblock.timeline.Timeline;
+import com.beatblock.timeline.TimelineEvent;
+import com.beatblock.timeline.Track;
 import com.beatblock.timeline.editor.*;
 import com.beatblock.timeline.rendering.TimelineLayout;
 import com.beatblock.timeline.rendering.TimelineToolbarState;
@@ -78,7 +81,30 @@ public final class TimelineInteraction {
 					selectionState.selectEvent(interactionState.getActiveEventId());
 				}
 			}
-			if (interactionState.getMode() == InteractionMode.BOX_SELECT) {}
+			if (interactionState.getMode() == InteractionMode.BOX_SELECT
+					&& selectionBox != null && selectionBox.isActive()) {
+				float boxMinX = selectionBox.getMinX();
+				float boxMaxX = selectionBox.getMaxX();
+				float boxMinY = selectionBox.getMinY();
+				float boxMaxY = selectionBox.getMaxY();
+				for (int i = 0; i < layout.getInteractiveRowCount() && i < INTERACTIVE_TRACK_IDS.length; i++) {
+					int logicalRow = TimelineLayout.INTERACTIVE_ROW_INDICES[i];
+					if (!layout.isRowVisible(logicalRow)) continue;
+					float rowTopY = layout.getRowScreenY(logicalRow);
+					float rowBotY = rowTopY + TimelineLayout.ROW_HEIGHT;
+					if (rowBotY < boxMinY || rowTopY > boxMaxY) continue;
+					Track track = timeline.getTrack(INTERACTIVE_TRACK_IDS[i]);
+					if (track == null) continue;
+					for (Clip clip : track.getClips()) {
+						for (TimelineEvent e : clip.getEvents()) {
+							float screenX = layout.contentLeft + viewState.timeToScreen(e.getTimeSeconds());
+							if (screenX >= boxMinX && screenX <= boxMaxX) {
+								selectionState.selectEvent(e.getId());
+							}
+						}
+					}
+				}
+			}
 			interactionState.setMode(InteractionMode.NONE);
 			interactionState.clearActive();
 			if (selectionBox != null) selectionBox.setActive(false);
