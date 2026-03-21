@@ -4,6 +4,7 @@ import com.beatblock.timeline.Clip;
 import com.beatblock.timeline.IAudioPlayer;
 import com.beatblock.timeline.Timeline;
 import com.beatblock.timeline.TimelineEvent;
+import com.beatblock.timeline.TimelineMarker;
 import com.beatblock.timeline.TimelineOperations;
 import com.beatblock.timeline.Track;
 import com.beatblock.timeline.editor.*;
@@ -38,8 +39,10 @@ public final class TimelineInteraction {
 	private static final float DIVIDER_HIT_PX = 5f;
 	private static final String POPUP_EVENT_CONTEXT = "##TimelineEventContextPopup";
 	private static final String POPUP_EVENT_PROPERTIES = "##TimelineEventPropertiesPopup";
+	private static final String POPUP_MARKER_CONTEXT = "##TimelineMarkerContextPopup";
 	private static final int TIME_INPUT_BUFFER_SIZE = 64;
 	private static final int PARAM_INPUT_BUFFER_SIZE = 256;
+	private static final int MARKER_NAME_BUFFER_SIZE = 128;
 	private static final class ClipboardEvent {
 		final String trackId;
 		final String clipId;
@@ -85,6 +88,8 @@ public final class TimelineInteraction {
 	private final ImString propertiesNewParamValue = new ImString(PARAM_INPUT_BUFFER_SIZE);
 	private boolean propertiesNewParamAsNumber;
 	private String propertiesError;
+	private int contextMarkerIndex = -1;
+	private final ImString markerNameBuffer = new ImString(MARKER_NAME_BUFFER_SIZE);
 
 	public void setAudioPlayer(IAudioPlayer audioPlayer) {
 		this.audioPlayer = audioPlayer;
@@ -211,6 +216,16 @@ public final class TimelineInteraction {
 			toolbarState.setLoopOutSeconds(Math.max(t, loopIn + 0.1));
 			return;
 		}
+		if (!alt && layout.rulerContains(mx, my) && ImGui.isMouseClicked(1)) {
+			int markerIndex = findMarkerIndexAtMouse(timeline, viewState, layout, mx, my);
+			if (markerIndex >= 0) {
+				contextMarkerIndex = markerIndex;
+				TimelineMarker marker = timeline.getMarkers().get(markerIndex);
+				markerNameBuffer.set(marker.getName());
+				ImGui.openPopup(POPUP_MARKER_CONTEXT);
+				return;
+			}
+		}
 
 		if (ImGui.isMouseClicked(1) && layout.contentContains(mx, my)) {
 			contextTimeSeconds = viewState.screenToTime(Math.max(0, Math.min(mx - layout.contentLeft, layout.contentWidth)));
@@ -224,6 +239,7 @@ public final class TimelineInteraction {
 		}
 		renderContextMenu(timeline, selectionState);
 		renderPropertiesPopup(timeline);
+		renderMarkerContextPopup(timeline, clock);
 
 		if (ImGui.isMouseReleased(0)) {
 			if (interactionState.getMode() == InteractionMode.DRAG_EVENT && interactionState.getActiveEventId() != null) {
@@ -296,6 +312,11 @@ public final class TimelineInteraction {
 				if (toolbarState != null && isMouseOverLoopOutHandle(mx, my, layout, viewState, toolbarState)) {
 					interactionState.setMode(InteractionMode.LOOP_OUT_DRAG);
 					interactionState.setMouseStart(mx, my);
+					return;
+				}
+				int markerIndex = findMarkerIndexAtMouse(timeline, viewState, layout, mx, my);
+				if (!alt && markerIndex >= 0 && clock != null) {
+					seekClockAndMusic(clock, timeline.getMarkers().get(markerIndex).getTimeSeconds());
 					return;
 				}
 				if (alt && toolbarState != null) {
@@ -386,6 +407,24 @@ public final class TimelineInteraction {
 		return layout.rulerContains(mx, my) && Math.abs(mx - x) <= LOOP_HANDLE_HIT_PX;
 	}
 
+	private static int findMarkerIndexAtMouse(
+		Timeline timeline,
+		TimelineViewState viewState,
+		TimelineLayout layout,
+		float mx,
+		float my
+	) {
+		if (timeline == null || viewState == null || layout == null || !layout.rulerContains(mx, my)) return -1;
+		List<TimelineMarker> markers = timeline.getMarkers();
+		for (int i = 0; i < markers.size(); i++) {
+			TimelineMarker marker = markers.get(i);
+			if (marker == null) continue;
+			float x = layout.rulerLeft + viewState.timeToScreen(marker.getTimeSeconds());
+			if (Math.abs(mx - x) <= LOOP_HANDLE_HIT_PX) return i;
+		}
+		return -1;
+	}
+
 	private void renderContextMenu(Timeline timeline, SelectionState selectionState) {
 		if (!ImGui.beginPopup(POPUP_EVENT_CONTEXT)) return;
 		boolean hasSelection = selectionState != null && !selectionState.getSelectedEvents().isEmpty();
@@ -404,6 +443,46 @@ public final class TimelineInteraction {
 		if (ImGui.menuItem("Properties", null, false, canOpenProperties)) {
 			openPropertiesPopup(timeline, selectionState);
 		}
+		ImGui.endPopup();
+	}
+
+	private void renderMarkerContextPopup(Timeline timeline, TimelineClock clock) {
+		if (!ImGui.beginPopup(POPUP_MARKER_CONTEXT)) return;
+		if (timeline == null || contextMarkerIndex < 0 || contextMarkerIndex >= timeline.getMarkers().size()) {
+			ImGui.textDisabled("Marker no longer exists.");
+			if (ImGui.button("Close##markerPopupClose")) ImGui.closeCurrentPopup();
+			ImGui.endPopup();
+			return;
+		}
+
+		TimelineMarker marker = timeline.getMarkers().get(contextMarkerIndex);
+		ImGui.text("Marker");
+		ImGui.textDisabled(String.format(java.util.Locale.ROOT, "%.3fs", marker.getTimeSeconds()));
+		ImGui.setNextItemWidth(180f);
+		ImGui.inputText("Name##markerRename", markerNameBuffer);
+
+		if (ImGui.button("Jump##markerJump")) {
+			if (clock != null) seekClockAndMusic(clock, marker.getTimeSeconds());
+		}
+		ImGui.sameLine();
+		if (ImGui.button("Rename##markerApply")) {
+			String newName = markerNameBuffer.get() == null ? "" : markerNameBuffer.get().trim();
+			timeline.updateMarker(contextMarkerIndex, marker.getTimeSeconds(), newName);
+			contextMarkerIndex = -1;
+			ImGui.closeCurrentPopup();
+		}
+		ImGui.sameLine();
+		if (ImGui.button("Delete##markerDelete")) {
+			timeline.removeMarker(contextMarkerIndex);
+			contextMarkerIndex = -1;
+			ImGui.closeCurrentPopup();
+		}
+		ImGui.sameLine();
+		if (ImGui.button("Close##markerClose")) {
+			contextMarkerIndex = -1;
+			ImGui.closeCurrentPopup();
+		}
+
 		ImGui.endPopup();
 	}
 

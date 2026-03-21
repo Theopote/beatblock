@@ -85,15 +85,39 @@ public class Timeline {
 		}
 	}
 
+	public int findMarkerIndexById(String markerId) {
+		if (markerId == null || markerId.isBlank()) return -1;
+		for (int i = 0; i < markers.size(); i++) {
+			TimelineMarker marker = markers.get(i);
+			if (markerId.equals(marker.getId())) return i;
+		}
+		return -1;
+	}
+
 	public boolean removeMarker(int index) {
 		if (index < 0 || index >= markers.size()) return false;
 		markers.remove(index);
 		return true;
 	}
 
+	public boolean removeMarker(String markerId) {
+		int index = findMarkerIndexById(markerId);
+		return removeMarker(index);
+	}
+
 	public boolean updateMarker(int index, double timeSeconds, String name) {
 		if (index < 0 || index >= markers.size()) return false;
-		markers.set(index, new TimelineMarker(timeSeconds, name));
+		TimelineMarker prev = markers.get(index);
+		markers.set(index, new TimelineMarker(prev.getId(), timeSeconds, name));
+		markers.sort(Comparator.comparingDouble(TimelineMarker::getTimeSeconds));
+		return true;
+	}
+
+	public boolean updateMarker(String markerId, double timeSeconds, String name) {
+		int index = findMarkerIndexById(markerId);
+		if (index < 0) return false;
+		TimelineMarker prev = markers.get(index);
+		markers.set(index, new TimelineMarker(prev.getId(), timeSeconds, name));
 		markers.sort(Comparator.comparingDouble(TimelineMarker::getTimeSeconds));
 		return true;
 	}

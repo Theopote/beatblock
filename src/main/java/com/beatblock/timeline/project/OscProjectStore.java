@@ -54,6 +54,7 @@ public final class OscProjectStore {
 		for (TimelineMarker marker : timeline.getMarkers()) {
 			if (marker == null) continue;
 			JsonObject markerObj = new JsonObject();
+			markerObj.addProperty("id", marker.getId());
 			markerObj.addProperty("timeSeconds", marker.getTimeSeconds());
 			markerObj.addProperty("name", marker.getName());
 			markers.add(markerObj);
@@ -98,9 +99,10 @@ public final class OscProjectStore {
 			JsonArray arr = root.getAsJsonArray("markers");
 			for (int i = 0; i < arr.size(); i++) {
 				JsonObject obj = arr.get(i).getAsJsonObject();
+				String id = getString(obj, "id", "");
 				double timeSeconds = obj.has("timeSeconds") ? obj.get("timeSeconds").getAsDouble() : 0;
 				String name = getString(obj, "name", "");
-				markers.add(new TimelineMarker(timeSeconds, name));
+				markers.add(new TimelineMarker(id, timeSeconds, name));
 			}
 		} catch (Exception ignored) {}
 		markers.sort(java.util.Comparator.comparingDouble(TimelineMarker::getTimeSeconds));
