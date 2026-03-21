@@ -143,7 +143,7 @@ public final class AudioConversionService {
 				pct = Math.max(5, Math.min(98, pct));
 				onProgress.accept("FFmpeg 转换中", pct);
 			} else {
-				onProgress.accept("FFmpeg 转换中", 10);
+				onProgress.accept("FFmpeg 转换中（无法估时）", 10);
 			}
 		}
 	}

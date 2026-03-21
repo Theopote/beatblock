@@ -393,6 +393,11 @@ public final class AudioAnalysisPanel {
         ImGui.text(asset.getBeatCount() + " 踩点");
         ImGui.popStyleColor();
 
+        if (asset.getInfoMessage() != null && !asset.getInfoMessage().isBlank()) {
+            ImGui.spacing();
+            ImGui.textDisabled(asset.getInfoMessage());
+        }
+
         // 拖拽提示文字（也是拖拽源的触发区域）
         ImGui.spacing();
         ImGui.textDisabled(Icons.MENU + " 拖动到时间线音频轨道");
@@ -532,6 +537,11 @@ public final class AudioAnalysisPanel {
         detailRowColored("中频（旋律）", asset.getMidCount()  + " 个", COLOR_MID);
         detailRowColored("高频（打击）", asset.getHighCount() + " 个", COLOR_HIGH);
 
+        if (asset.getInfoMessage() != null && !asset.getInfoMessage().isBlank()) {
+            ImGui.spacing();
+            ImGui.textDisabled(asset.getInfoMessage());
+        }
+
         // 简易频段占比条
         ImGui.spacing();
         renderBandBar(asset);
@@ -624,6 +634,10 @@ public final class AudioAnalysisPanel {
                 ? asset.getErrorMessage()
                 : "未知错误");
         ImGui.popStyleColor();
+        if (asset.getInfoMessage() != null && !asset.getInfoMessage().isBlank()) {
+            ImGui.spacing();
+            ImGui.textDisabled(asset.getInfoMessage());
+        }
         ImGui.spacing();
         ImGui.textDisabled("支持格式：MP3 · WAV · OGG · FLAC");
         ImGui.spacing();

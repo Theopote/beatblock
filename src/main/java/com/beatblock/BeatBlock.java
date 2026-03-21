@@ -87,6 +87,10 @@ public class BeatBlock implements ModInitializer {
 				},
 				convertedPath -> {
 					asset.setPath(convertedPath);
+					String outName = convertedPath.getFileName() != null
+						? convertedPath.getFileName().toString()
+						: convertedPath.toString();
+					asset.setInfoMessage("已转换为: " + outName);
 					asset.setProcessingStatusText("转换完成，开始解析...");
 					asset.setErrorMessage(null);
 					AudioAssetManager.getInstance().startAnalysis(asset);
@@ -94,6 +98,7 @@ public class BeatBlock implements ModInitializer {
 				err -> {
 					asset.setStatus(com.beatblock.audio.assets.AudioAssetStatus.FAILED);
 					asset.setProcessingStatusText(null);
+					asset.setInfoMessage(null);
 					asset.setErrorMessage(err);
 				}
 			);

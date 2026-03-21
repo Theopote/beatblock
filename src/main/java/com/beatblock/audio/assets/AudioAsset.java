@@ -31,6 +31,7 @@ public final class AudioAsset {
 	private String processingStatusText;
 	private final EnumSet<AudioAnalysisStep> finishedSteps = EnumSet.noneOf(AudioAnalysisStep.class);
 	private String errorMessage;
+	private String infoMessage;
 
 	private AudioFeatureTimeline featureTimeline;
 	private Beatmap beatmap;
@@ -93,6 +94,9 @@ public final class AudioAsset {
 
 	public String getErrorMessage() { return errorMessage; }
 	public void setErrorMessage(String errorMessage) { this.errorMessage = errorMessage; }
+
+	public String getInfoMessage() { return infoMessage; }
+	public void setInfoMessage(String infoMessage) { this.infoMessage = infoMessage; }
 
 	public AudioFeatureTimeline getFeatureTimeline() { return featureTimeline; }
 	public void setFeatureTimeline(AudioFeatureTimeline featureTimeline) { this.featureTimeline = featureTimeline; }
