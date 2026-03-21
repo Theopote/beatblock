@@ -91,6 +91,8 @@ public class BeatBlock implements ModInitializer {
 						? convertedPath.getFileName().toString()
 						: convertedPath.toString();
 					asset.setInfoMessage("已转换为: " + outName);
+					asset.setStatus(com.beatblock.audio.assets.AudioAssetStatus.PENDING);
+					asset.setAnalysisProgressPercent(0);
 					asset.setProcessingStatusText("转换完成，开始解析...");
 					asset.setErrorMessage(null);
 					AudioAssetManager.getInstance().startAnalysis(asset);

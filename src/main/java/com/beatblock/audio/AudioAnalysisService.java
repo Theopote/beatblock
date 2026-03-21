@@ -417,8 +417,9 @@ public final class AudioAnalysisService {
 		if (Files.exists(custom)) {
 			try {
 				String txt = Files.readString(custom).trim();
-				if (!txt.isEmpty() && isUsablePythonForAnalyzer(txt)) {
-					return txt;
+				String customExe = normalizePythonCandidate(txt);
+				if (!customExe.isEmpty() && isUsablePythonForAnalyzer(customExe)) {
+					return customExe;
 				}
 			} catch (IOException ignored) {}
 		}
@@ -436,8 +437,10 @@ public final class AudioAnalysisService {
 		candidates.addAll(List.of("python", "python3"));
 
 		for (String cand : candidates) {
-			if (!isUsablePythonForAnalyzer(cand)) continue;
-			return cand;
+			String exe = normalizePythonCandidate(cand);
+			if (exe.isEmpty()) continue;
+			if (!isUsablePythonForAnalyzer(exe)) continue;
+			return exe;
 		}
 
 		return null;
@@ -470,30 +473,69 @@ public final class AudioAnalysisService {
 	}
 
 	private PythonProbeInfo getPythonProbeInfo(String pythonExe) {
-		if (pythonExe == null || pythonExe.isBlank()) {
+		String normalizedExe = normalizePythonCandidate(pythonExe);
+		if (normalizedExe.isEmpty()) {
 			return PythonProbeInfo.failed("Python 路径为空");
 		}
 
 		long now = System.currentTimeMillis();
-		PythonProbeInfo cached = pythonProbeCache.get(pythonExe);
+		PythonProbeInfo cached = pythonProbeCache.get(normalizedExe);
 		if (cached != null && (now - cached.checkedAtMs) <= PYTHON_PROBE_CACHE_TTL_MS) {
 			return cached;
 		}
 
-		PythonProbeInfo fresh = probePythonInfoOnce(pythonExe);
-		pythonProbeCache.put(pythonExe, fresh);
+		PythonProbeInfo fresh = probePythonInfoOnce(normalizedExe);
+		pythonProbeCache.put(normalizedExe, fresh);
 		return fresh;
+	}
+
+	private String normalizePythonCandidate(String raw) {
+		if (raw == null) return "";
+		String s = raw.trim();
+		if (s.isEmpty()) return "";
+
+		if ((s.startsWith("\"") && s.endsWith("\"")) || (s.startsWith("'") && s.endsWith("'"))) {
+			s = s.substring(1, s.length() - 1).trim();
+		}
+
+		if (s.contains("%")) {
+			s = expandWindowsEnv(s);
+		}
+
+		return s;
+	}
+
+	private String expandWindowsEnv(String text) {
+		String out = text;
+		int start = out.indexOf('%');
+		while (start >= 0) {
+			int end = out.indexOf('%', start + 1);
+			if (end <= start + 1) break;
+			String name = out.substring(start + 1, end);
+			String value = System.getenv(name);
+			if (value == null) value = "";
+			out = out.substring(0, start) + value + out.substring(end + 1);
+			start = out.indexOf('%', start + value.length());
+		}
+		return out;
 	}
 
 	private PythonProbeInfo probePythonInfoOnce(String pythonExe) {
 		try {
+			String probeScript = String.join("\n",
+				"import sys",
+				"try:",
+				"    import pip",
+				"    has_pip = 1",
+				"except Exception:",
+				"    has_pip = 0",
+				"print(f'{sys.version_info.major}|{sys.version_info.minor}|{sys.version_info.micro}|{has_pip}|{sys.executable}')"
+			);
+
 			Process p = new ProcessBuilder(
 				pythonExe,
 				"-c",
-				"import sys; "
-					+ "try:\n import pip\n has_pip=1\n"
-					+ "except Exception:\n has_pip=0\n"
-					+ "print(f'{sys.version_info.major}|{sys.version_info.minor}|{sys.version_info.micro}|{has_pip}|{sys.executable}')"
+				probeScript
 			).redirectErrorStream(true).start();
 
 			boolean finished = p.waitFor(PYTHON_PROBE_TIMEOUT_MS, TimeUnit.MILLISECONDS);

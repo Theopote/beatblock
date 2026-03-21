@@ -288,7 +288,7 @@ public final class AudioAssetManager {
 		if (asset == null) return;
 		Path path = asset.getPath();
 		if (path == null) return;
-		if (asset.getStatus() == AudioAssetStatus.ANALYZING || asset.getStatus() == AudioAssetStatus.QUEUED) {
+		if (asset.getStatus() == AudioAssetStatus.QUEUED || analysisTasks.containsKey(asset.getId())) {
 			return;
 		}
 		asset.setStatus(AudioAssetStatus.QUEUED);
