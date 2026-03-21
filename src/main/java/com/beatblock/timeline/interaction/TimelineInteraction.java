@@ -73,8 +73,11 @@ public final class TimelineInteraction {
 	private double contextTimeSeconds;
 	private String propertiesEventId;
 	private final ImString propertiesTimeBuffer = new ImString(TIME_INPUT_BUFFER_SIZE);
+	private String propertiesOriginalTime = "0";
 	private final Map<String, ImString> propertiesParamBuffers = new HashMap<>();
 	private final Map<String, Boolean> propertiesParamAsNumber = new HashMap<>();
+	private final Map<String, String> propertiesOriginalParamValues = new HashMap<>();
+	private final Map<String, Boolean> propertiesOriginalParamAsNumber = new HashMap<>();
 	private String propertiesError;
 
 	public void setAudioPlayer(IAudioPlayer audioPlayer) {
@@ -331,15 +334,33 @@ public final class TimelineInteraction {
 	private void loadPropertiesParameterBuffers(TimelineEvent event) {
 		propertiesParamBuffers.clear();
 		propertiesParamAsNumber.clear();
+		propertiesOriginalParamValues.clear();
+		propertiesOriginalParamAsNumber.clear();
 		if (event == null) return;
+		propertiesOriginalTime = String.format(java.util.Locale.ROOT, "%.6f", event.getTimeSeconds());
+		propertiesTimeBuffer.set(propertiesOriginalTime);
 		for (Map.Entry<String, Object> entry : event.getParameters().entrySet()) {
 			String key = entry.getKey();
 			Object value = entry.getValue();
+			String text = value == null ? "" : String.valueOf(value);
+			boolean asNumber = value instanceof Number;
 			ImString buf = new ImString(256);
-			buf.set(value == null ? "" : String.valueOf(value));
+			buf.set(text);
 			propertiesParamBuffers.put(key, buf);
-			propertiesParamAsNumber.put(key, value instanceof Number);
+			propertiesParamAsNumber.put(key, asNumber);
+			propertiesOriginalParamValues.put(key, text);
+			propertiesOriginalParamAsNumber.put(key, asNumber);
 		}
+	}
+
+	private void resetPropertiesBuffers() {
+		propertiesTimeBuffer.set(propertiesOriginalTime != null ? propertiesOriginalTime : "0");
+		for (Map.Entry<String, ImString> entry : propertiesParamBuffers.entrySet()) {
+			String key = entry.getKey();
+			entry.getValue().set(propertiesOriginalParamValues.getOrDefault(key, ""));
+			propertiesParamAsNumber.put(key, propertiesOriginalParamAsNumber.getOrDefault(key, false));
+		}
+		propertiesError = null;
 	}
 
 	private void renderPropertiesPopup(Timeline timeline) {
@@ -399,10 +420,20 @@ public final class TimelineInteraction {
 					}
 				}
 				timeline.markAnimationEventsDirty(ref.track.getId());
+				propertiesOriginalTime = String.format(java.util.Locale.ROOT, "%.6f", ref.event.getTimeSeconds());
+				for (Map.Entry<String, ImString> entry : propertiesParamBuffers.entrySet()) {
+					String key = entry.getKey();
+					propertiesOriginalParamValues.put(key, entry.getValue().get());
+					propertiesOriginalParamAsNumber.put(key, propertiesParamAsNumber.getOrDefault(key, false));
+				}
 				propertiesError = null;
 			} catch (Exception ex) {
 				propertiesError = "Invalid number in time/parameter";
 			}
+		}
+		ImGui.sameLine();
+		if (ImGui.button("Reset")) {
+			resetPropertiesBuffers();
 		}
 		ImGui.sameLine();
 		if (ImGui.button("Close")) {
