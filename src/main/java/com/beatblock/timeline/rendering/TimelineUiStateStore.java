@@ -1,5 +1,6 @@
 package com.beatblock.timeline.rendering;
 
+import com.beatblock.timeline.Timeline;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import net.fabricmc.loader.api.FabricLoader;
@@ -26,11 +27,13 @@ public final class TimelineUiStateStore {
 	private static final Logger LOGGER = LoggerFactory.getLogger("beatblock-timeline-ui-state");
 	private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 	private static final long SAVE_DEBOUNCE_MS = 350L;
+	private static final String PROJECT_KEY_DEFAULT = "default";
 
 	private final Path filePath;
 	private int lastStateHash = Integer.MIN_VALUE;
 	private long lastChangeAtMs = 0L;
 	private boolean dirty;
+	private String currentProjectKey = PROJECT_KEY_DEFAULT;
 
 	public TimelineUiStateStore() {
 		Path configRoot = FabricLoader.getInstance().getConfigDir();
@@ -38,8 +41,9 @@ public final class TimelineUiStateStore {
 	}
 
 	/** 初始化时读取并恢复状态。 */
-	public void loadTrackListState(TimelineTrackListState state) {
+	public void loadTrackListState(Timeline timeline, TimelineTrackListState state) {
 		if (state == null) return;
+		currentProjectKey = resolveProjectKey(timeline);
 		if (!Files.exists(filePath)) {
 			lastStateHash = hashState(state);
 			return;
@@ -48,8 +52,17 @@ public final class TimelineUiStateStore {
 		try {
 			String json = Files.readString(filePath, StandardCharsets.UTF_8);
 			UiConfig cfg = GSON.fromJson(json, UiConfig.class);
-			if (cfg != null && cfg.timelineTrackList != null) {
-				TrackListData d = cfg.timelineTrackList;
+			if (cfg == null) cfg = new UiConfig();
+
+			// 兼容旧版：如果旧字段存在，迁移到 default 桶
+			if (cfg.timelineTrackList != null) {
+				cfg.projects.putIfAbsent(PROJECT_KEY_DEFAULT, cfg.timelineTrackList);
+				cfg.timelineTrackList = null;
+			}
+
+			TrackListData d = cfg.projects.get(currentProjectKey);
+			if (d == null) d = cfg.projects.get(PROJECT_KEY_DEFAULT);
+			if (d != null) {
 				state.applyPersistedState(
 					d.trackHeaderWidthPx,
 					d.visible,
@@ -69,8 +82,14 @@ public final class TimelineUiStateStore {
 	/**
 	 * 每帧调用：检测状态变化并在防抖窗口后写盘。
 	 */
-	public void syncAndFlush(TimelineTrackListState state) {
+	public void syncAndFlush(Timeline timeline, TimelineTrackListState state) {
 		if (state == null) return;
+		String key = resolveProjectKey(timeline);
+		if (!key.equals(currentProjectKey)) {
+			currentProjectKey = key;
+			lastStateHash = Integer.MIN_VALUE;
+			dirty = true;
+		}
 		int hash = hashState(state);
 		long now = System.currentTimeMillis();
 		if (hash != lastStateHash) {
@@ -88,13 +107,55 @@ public final class TimelineUiStateStore {
 		try {
 			Path parent = filePath.getParent();
 			if (parent != null) Files.createDirectories(parent);
-			UiConfig cfg = new UiConfig();
-			cfg.timelineTrackList = TrackListData.fromState(state);
+
+			UiConfig cfg;
+			if (Files.exists(filePath)) {
+				String oldJson = Files.readString(filePath, StandardCharsets.UTF_8);
+				cfg = GSON.fromJson(oldJson, UiConfig.class);
+				if (cfg == null) cfg = new UiConfig();
+			} else {
+				cfg = new UiConfig();
+			}
+
+			// 兼容旧版：旧字段迁入 default
+			if (cfg.timelineTrackList != null) {
+				cfg.projects.putIfAbsent(PROJECT_KEY_DEFAULT, cfg.timelineTrackList);
+				cfg.timelineTrackList = null;
+			}
+
+			cfg.projects.put(currentProjectKey, TrackListData.fromState(state));
 			String json = GSON.toJson(cfg);
 			Files.writeString(filePath, json, StandardCharsets.UTF_8);
 		} catch (IOException e) {
 			LOGGER.warn("写入 timeline UI 状态失败: {}", filePath, e);
 		}
+	}
+
+	/**
+	 * 项目标识优先级：
+	 * 1) metadata["projectPath"]
+	 * 2) metadata["projectId"]
+	 * 3) timeline.name
+	 * 4) default
+	 */
+	private static String resolveProjectKey(Timeline timeline) {
+		if (timeline == null) return PROJECT_KEY_DEFAULT;
+		Object path = timeline.getMetadata("projectPath");
+		if (path != null) {
+			String s = String.valueOf(path).trim();
+			if (!s.isEmpty()) return "path:" + s;
+		}
+		Object id = timeline.getMetadata("projectId");
+		if (id != null) {
+			String s = String.valueOf(id).trim();
+			if (!s.isEmpty()) return "id:" + s;
+		}
+		String name = timeline.getName();
+		if (name != null) {
+			String s = name.trim();
+			if (!s.isEmpty()) return "name:" + s;
+		}
+		return PROJECT_KEY_DEFAULT;
 	}
 
 	private static int hashState(TimelineTrackListState state) {
@@ -107,7 +168,9 @@ public final class TimelineUiStateStore {
 	}
 
 	private static final class UiConfig {
-		TrackListData timelineTrackList = new TrackListData();
+		// 旧版字段：保留仅用于迁移，不再写入。
+		TrackListData timelineTrackList;
+		Map<String, TrackListData> projects = new HashMap<>();
 	}
 
 	private static final class TrackListData {

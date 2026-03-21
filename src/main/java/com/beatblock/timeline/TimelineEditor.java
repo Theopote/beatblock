@@ -52,7 +52,7 @@ public final class TimelineEditor {
 		this.interactionSystem = new TimelineInteraction();
 		this.interactionSystem.setAudioPlayer(audioPlayer);
 		this.commandManager = new CommandManager();
-		this.uiStateStore.loadTrackListState(trackListState);
+		this.uiStateStore.loadTrackListState(timeline, trackListState);
 	}
 
 	/** 无音频源时使用（可独立运行和测试）。 */
@@ -186,6 +186,6 @@ public final class TimelineEditor {
 			layout,
 			toolbarState
 		);
-		uiStateStore.syncAndFlush(trackListState);
+		uiStateStore.syncAndFlush(timeline, trackListState);
 	}
 }
