@@ -97,7 +97,7 @@ public final class AudioAnalysisPanel {
             renderDetailPanel(selectedAsset);
             ImGui.endChild();
         } else {
-            if (ImGui.button(Icons.Action.ARROW_RIGHT + "##expand")) {
+            if (ImGui.button(Icons.Layout.RIGHT_EXPAND + "##expand")) {
                 detailExpanded = true;
             }
             if (ImGui.isItemHovered()) ImGui.setTooltip("展开详情面板");
@@ -123,7 +123,7 @@ public final class AudioAnalysisPanel {
         ImGui.sameLine();
 
         // 折叠/展开详情（BeatBlock 图标字体，避免 ◀▶ 未进图集显示为 ?）
-        if (ImGui.button((detailExpanded ? Icons.Action.ARROW_LEFT : Icons.Action.ARROW_RIGHT) + "##detail")) {
+        if (ImGui.button((detailExpanded ? Icons.Layout.LEFT_COLLAPSE : Icons.Layout.RIGHT_EXPAND) + "##detail")) {
             detailExpanded = !detailExpanded;
         }
         if (ImGui.isItemHovered()) ImGui.setTooltip(detailExpanded ? "折叠详情" : "展开详情");
@@ -458,7 +458,7 @@ public final class AudioAnalysisPanel {
 
     private void renderDetailPanel(AudioAsset asset) {
         // 折叠按钮（自定义图标，与工具栏一致）
-        if (ImGui.button(Icons.Action.ARROW_RIGHT + "##collapse")) {
+        if (ImGui.button(Icons.Layout.LEFT_COLLAPSE + "##collapse")) {
             detailExpanded = false;
         }
         if (ImGui.isItemHovered()) ImGui.setTooltip("折叠详情");

@@ -11,8 +11,8 @@ public final class Icons {
 		throw new AssertionError("Cannot instantiate Icons");
 	}
 
-	// 以下 codepoint 来自 demo.html 的 glyph 列表（BeatBlock.ttf / IcoMoon 生成）。
-	// demo.html 内的 icon-bb-* -> 对应 U+Fxxx。
+	// 以下 codepoint 来自 IcoMoon 导出（与 Desktop/untitled-project (2)/font/demo.html 一致，264 glyphs）。
+	// 新增：icon-bb-right-expand U+F106、icon-bb-left-collapse U+F107（见 untitled-project.icomoon.json / demo.html 列表顶部）。
 	public static final String VISIBLE = "\uF067";      // icon-bb-visible
 	public static final String LOCK = "\uF095";         // icon-bb-lock
 	public static final String CHECK = "\uF054";        // icon-bb-check
@@ -237,6 +237,10 @@ public final class Icons {
 	}
 
 	public static final class Layout {
+		/** icon-bb-right-expand — 侧栏/详情向右展开 */
+		public static final String RIGHT_EXPAND = "\uF106"; // right-expand
+		/** icon-bb-left-collapse — 侧栏/详情向左收起 */
+		public static final String LEFT_COLLAPSE = "\uF107"; // left-collapse
 		public static final String PANEL_LEFT = "\uF03A"; // panel-left
 		public static final String PANEL_RIGHT = "\uF038"; // panel-right
 		public static final String PANEL_BOTTOM = "\uF03C"; // panel-bottom

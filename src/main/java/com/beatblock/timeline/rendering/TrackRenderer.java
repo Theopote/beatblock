@@ -94,7 +94,8 @@ public final class TrackRenderer {
 			ImGui.pushStyleVar(ImGuiStyleVar.FramePadding, 2f, 2f);
 			ImGui.setCursorScreenPos(btnX, btnY);
 			boolean collapsed = listState.isGroupCollapsed(rowIndex);
-			if (ImGui.button((collapsed ? Icons.Timeline.TRACK_COLLAPSE : Icons.Timeline.TRACK_EXPAND) + "##fold" + rowIndex, FOLD_BTN, FOLD_BTN)) {
+			// 折叠态：track-collapse（侧向）与字体一致；展开态：track-expand 在当前字体内易错配，改用通用 collapse（向下收起）
+			if (ImGui.button((collapsed ? Icons.Timeline.TRACK_COLLAPSE : Icons.Action.COLLAPSE) + "##fold" + rowIndex, FOLD_BTN, FOLD_BTN)) {
 				listState.toggleGroupCollapsed(rowIndex);
 			}
 			ImGui.popStyleVar();
