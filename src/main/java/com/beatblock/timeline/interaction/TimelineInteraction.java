@@ -54,6 +54,9 @@ public final class TimelineInteraction {
 		float my = ImGui.getMousePosY();
 		double duration = timeline.getDurationSeconds();
 		if (duration <= 0) duration = 60.0;
+		if (layout.contentWidth > 0) {
+			viewState.setViewEndTimeSeconds(viewState.screenToTime(layout.contentWidth));
+		}
 
 		// 分割线拖动：允许在拖动手势中移出子窗口，仍继续调整宽度
 		if (trackListState != null) {
@@ -69,6 +72,20 @@ public final class TimelineInteraction {
 		}
 
 		if (!ImGui.isWindowHovered()) return;
+
+		float wheel = ImGui.getIO().getMouseWheel();
+		if (ImGui.getIO().getKeyCtrl() && wheel != 0
+				&& (layout.contentContains(mx, my) || layout.rulerContains(mx, my))) {
+			float anchorX = mx - layout.contentLeft;
+			anchorX = Math.max(0, Math.min(anchorX, layout.contentWidth));
+			double anchorTime = viewState.screenToTime(anchorX);
+			float zoomFactor = (float) Math.pow(1.15, wheel);
+			float newZoom = viewState.getZoom() * zoomFactor;
+			viewState.zoomAt(anchorTime, anchorX, newZoom);
+			if (layout.contentWidth > 0) {
+				viewState.setViewEndTimeSeconds(viewState.screenToTime(layout.contentWidth));
+			}
+		}
 
 		// 轨道子窗口内：分割线悬停光标
 		if (trackListState != null) {
