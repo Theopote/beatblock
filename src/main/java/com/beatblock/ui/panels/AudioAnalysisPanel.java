@@ -26,7 +26,10 @@ import java.awt.Frame;
 import javax.swing.JFileChooser;
 import javax.swing.SwingUtilities;
 import javax.swing.filechooser.FileNameExtensionFilter;
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.IOException;
+import java.io.InputStreamReader;
 import java.util.List;
 
 /**
@@ -1067,6 +1070,21 @@ public final class AudioAnalysisPanel {
                     return swingPath;
                 }
             } catch (Throwable swingErr) {
+                try {
+                    String psPath = openWindowsPowerShellFileDialog();
+                    if (psPath != null && !psPath.isBlank()) {
+                        return psPath;
+                    }
+                } catch (Throwable psErr) {
+                    setPanelHint("打开文件选择器失败: "
+                            + describeThrowable(nativeErr)
+                            + " | 备用方案失败: "
+                            + describeThrowable(swingErr)
+                            + " | PowerShell 方案失败: "
+                            + describeThrowable(psErr), true);
+                    return null;
+                }
+
                 setPanelHint("打开文件选择器失败: "
                         + describeThrowable(nativeErr)
                         + " | 备用方案失败: "
@@ -1153,6 +1171,49 @@ public final class AudioAnalysisPanel {
         }
 
         return selected[0];
+    }
+
+    private String openWindowsPowerShellFileDialog() throws Exception {
+        String os = System.getProperty("os.name", "").toLowerCase();
+        if (!os.contains("win")) {
+            throw new UnsupportedOperationException("当前系统不是 Windows");
+        }
+
+        String script = String.join("; ",
+                "Add-Type -AssemblyName System.Windows.Forms",
+                "$dlg = New-Object System.Windows.Forms.OpenFileDialog",
+                "$dlg.Title = '选择音频文件'",
+                "$dlg.Filter = '音频文件 (*.mp3;*.wav;*.ogg;*.flac)|*.mp3;*.wav;*.ogg;*.flac'",
+                "$dlg.Multiselect = $false",
+                "$seed = $env:BB_AUDIO_PICKER_SEED",
+                "if (-not [string]::IsNullOrWhiteSpace($seed)) { try { $dir=[System.IO.Path]::GetDirectoryName($seed); if (-not [string]::IsNullOrWhiteSpace($dir)) { $dlg.InitialDirectory = $dir } } catch {} }",
+                "if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { [Console]::Out.Write($dlg.FileName) }"
+        );
+
+        ProcessBuilder pb = new ProcessBuilder("powershell.exe", "-NoProfile", "-Sta", "-Command", script)
+                .redirectErrorStream(true);
+        String current = importPath.get().trim();
+        if (!current.isEmpty()) {
+            pb.environment().put("BB_AUDIO_PICKER_SEED", current);
+        }
+
+        Process process = pb.start();
+        String output;
+        try (BufferedReader br = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+            StringBuilder sb = new StringBuilder();
+            String line;
+            while ((line = br.readLine()) != null) {
+                sb.append(line);
+            }
+            output = sb.toString().trim();
+        }
+
+        int exit = process.waitFor();
+        if (exit != 0) {
+            throw new IOException("PowerShell 退出码=" + exit + (output.isEmpty() ? "" : ("; " + output)));
+        }
+
+        return output.isEmpty() ? null : output;
     }
 
     private static String describeThrowable(Throwable t) {
