@@ -36,6 +36,10 @@ public final class TimelineToolbar {
 	private static final String TOOLTIP_FWD_5S = "前进 5 秒";
 	private static final String TOOLTIP_PREV_EVENT = "跳到上一事件点";
 	private static final String TOOLTIP_NEXT_EVENT = "跳到下一事件点";
+	private static final String TOOLTIP_LOOP_IN = "将当前时间设为循环起点";
+	private static final String TOOLTIP_LOOP_OUT = "将当前时间设为循环终点";
+	private static final String TOOLTIP_LOOP_CLEAR = "清除循环区间（保留 Loop 开关）";
+	private static final String TOOLTIP_SPEED = "播放速度";
 	private static final String TOOLTIP_SNAP = "拖拽事件时吸附到网格";
 	private static final String TOOLTIP_BEAT_GRID = "显示节拍网格线";
 	private static final String TOOLTIP_MAGNET = "吸附到其他事件/关键帧";
@@ -48,11 +52,14 @@ public final class TimelineToolbar {
 	private static final String[] ZOOM_PRESET_LABELS = { "0.25x", "0.5x", "1x", "2x", "3x", "4x" };
 	private static final float ZOOM_BASE = 10f; // 1x 对应的像素/秒
 	private static final float[] ZOOM_PRESET_VALUES = { 0.25f * ZOOM_BASE, 0.5f * ZOOM_BASE, ZOOM_BASE, 2f * ZOOM_BASE, 3f * ZOOM_BASE, 4f * ZOOM_BASE };
+	private static final String[] SPEED_LABELS = { "0.5x", "0.75x", "1x", "1.25x", "1.5x", "2x" };
+	private static final double[] SPEED_VALUES = { 0.5, 0.75, 1.0, 1.25, 1.5, 2.0 };
 
 	/** 上次 Auto Map 生成数量，用于提示 */
 	private int lastAutoMapCount = -1;
 	/** Zoom 下拉当前选中索引（由 Combo 更新） */
 	private final ImInt zoomComboIndex = new ImInt(2); // 默认 1x
+	private final ImInt speedComboIndex = new ImInt(2); // 默认 1x
 
 	public void render(TimelineEditor editor, TimelineToolbarState toolbarState) {
 		if (editor == null) return;
@@ -134,6 +141,43 @@ public final class TimelineToolbar {
 		//ImGui.separator();
 		ImGui.sameLine();
 
+		// ----- 1.5 循环区（In/Out）与速度 -----
+		double now = editor.getClock().getCurrentTimeSeconds();
+		if (ImGui.button("In")) {
+			toolbarState.setLoopInSeconds(now);
+			if (toolbarState.getLoopOutSeconds() > 0 && toolbarState.getLoopOutSeconds() <= now) {
+				toolbarState.setLoopOutSeconds(now + Math.max(0.1, seekStep));
+			}
+		}
+		if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_LOOP_IN);
+		ImGui.sameLine();
+		if (ImGui.button("Out")) {
+			double loopIn = toolbarState.getLoopInSeconds();
+			toolbarState.setLoopOutSeconds(Math.max(now, loopIn + Math.max(0.1, seekStep)));
+		}
+		if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_LOOP_OUT);
+		ImGui.sameLine();
+		if (ImGui.button("Clr")) {
+			toolbarState.clearLoopRange();
+		}
+		if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_LOOP_CLEAR);
+		ImGui.sameLine();
+
+		double currentSpeed = BeatBlock.musicPlayer != null ? BeatBlock.musicPlayer.getPlaybackSpeed() : editor.getClock().getPlaybackSpeed();
+		speedComboIndex.set(indexOfClosestSpeed(currentSpeed));
+		if (ImGui.combo("Speed", speedComboIndex, SPEED_LABELS)) {
+			int sIdx = speedComboIndex.get();
+			if (sIdx >= 0 && sIdx < SPEED_VALUES.length) {
+				double speed = SPEED_VALUES[sIdx];
+				editor.getClock().setPlaybackSpeed(speed);
+				if (BeatBlock.musicPlayer != null) {
+					BeatBlock.musicPlayer.setPlaybackSpeed(speed);
+				}
+			}
+		}
+		if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_SPEED);
+		ImGui.sameLine();
+
 		// ----- 2. 吸附与网格 -----
 		if (toolbarState != null) {
 			boolean snap = toolbarState.isSnapToGrid();
@@ -210,6 +254,19 @@ public final class TimelineToolbar {
 		float bestDiff = Math.abs(zoom - ZOOM_PRESET_VALUES[0]);
 		for (int i = 1; i < ZOOM_PRESET_VALUES.length; i++) {
 			float d = Math.abs(zoom - ZOOM_PRESET_VALUES[i]);
+			if (d < bestDiff) {
+				bestDiff = d;
+				best = i;
+			}
+		}
+		return best;
+	}
+
+	private static int indexOfClosestSpeed(double speed) {
+		int best = 0;
+		double bestDiff = Math.abs(speed - SPEED_VALUES[0]);
+		for (int i = 1; i < SPEED_VALUES.length; i++) {
+			double d = Math.abs(speed - SPEED_VALUES[i]);
 			if (d < bestDiff) {
 				bestDiff = d;
 				best = i;

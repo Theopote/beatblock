@@ -10,6 +10,7 @@ public class MusicPlayer implements IAudioPlayer {
 	private boolean playing;
 	private double currentTimeSeconds;
 	private double durationSeconds;
+	private double playbackSpeed = 1.0;
 
 	public MusicPlayer() {
 		this.playing = false;
@@ -54,12 +55,20 @@ public class MusicPlayer implements IAudioPlayer {
 		this.durationSeconds = Math.max(0, durationSeconds);
 	}
 
+	public double getPlaybackSpeed() {
+		return playbackSpeed;
+	}
+
+	public void setPlaybackSpeed(double playbackSpeed) {
+		this.playbackSpeed = Math.max(0.25, Math.min(4.0, playbackSpeed));
+	}
+
 	/**
 	 * 每帧调用，推进播放进度（仅当 playing 时）。
 	 */
 	public void tick(double deltaSeconds) {
 		if (playing && durationSeconds > 0) {
-			currentTimeSeconds = Math.min(currentTimeSeconds + deltaSeconds, durationSeconds);
+			currentTimeSeconds = Math.min(currentTimeSeconds + deltaSeconds * playbackSpeed, durationSeconds);
 			if (currentTimeSeconds >= durationSeconds) {
 				playing = false;
 			}

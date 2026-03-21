@@ -136,9 +136,23 @@ public final class TimelineEditor {
 		if (audioPlayer != null && audioPlayer.isPlaying()) {
 			double t = audioPlayer.getCurrentTimeSeconds();
 			double dur = timeline.getDurationSeconds();
-			if (toolbarState.isLoop() && dur > 0 && t >= dur) {
-				audioPlayer.setCurrentTimeSeconds(0);
-				state.getClock().seek(0);
+			if (toolbarState.isLoop()) {
+				double loopIn = Math.max(0, toolbarState.getLoopInSeconds());
+				double loopOut = toolbarState.hasLoopRange() ? toolbarState.getLoopOutSeconds() : dur;
+				if (loopOut <= loopIn) loopOut = dur;
+				if (loopOut > 0) {
+					if (t >= loopOut) {
+						audioPlayer.setCurrentTimeSeconds(loopIn);
+						state.getClock().seek(loopIn);
+					} else if (t < loopIn) {
+						audioPlayer.setCurrentTimeSeconds(loopIn);
+						state.getClock().seek(loopIn);
+					} else {
+						state.getClock().setCurrentTimeSeconds(t);
+					}
+				} else {
+					state.getClock().setCurrentTimeSeconds(t);
+				}
 			} else {
 				state.getClock().setCurrentTimeSeconds(t);
 			}
