@@ -39,8 +39,14 @@ public final class AudioAnalysisService {
 		t.setDaemon(true);
 		return t;
 	});
+	private final ExecutorService summaryExecutor = Executors.newSingleThreadExecutor(r -> {
+		Thread t = new Thread(r, "beatblock-python-summary");
+		t.setDaemon(true);
+		return t;
+	});
 	private volatile String cachedPythonSummary = "Python: 检测中...";
 	private volatile long nextPythonSummaryRefreshAtMs;
+	private volatile boolean pythonSummaryRefreshInFlight;
 	private static final long PYTHON_PROBE_CACHE_TTL_MS = 5 * 60 * 1000L;
 	private static final long PYTHON_PROBE_TIMEOUT_MS = 3000L;
 	private final Map<String, PythonProbeInfo> pythonProbeCache = new ConcurrentHashMap<>();
@@ -82,6 +88,7 @@ public final class AudioAnalysisService {
 
 	public void shutdown() {
 		executor.shutdownNow();
+		summaryExecutor.shutdownNow();
 	}
 
 	/**
@@ -89,21 +96,40 @@ public final class AudioAnalysisService {
 	 */
 	public String getPythonRuntimeSummary() {
 		long now = System.currentTimeMillis();
-		if (now < nextPythonSummaryRefreshAtMs && cachedPythonSummary != null) {
-			return cachedPythonSummary;
+		if (cachedPythonSummary == null || cachedPythonSummary.isBlank()) {
+			cachedPythonSummary = "Python: 检测中...";
 		}
+
+		if (now >= nextPythonSummaryRefreshAtMs) {
+			triggerPythonSummaryRefreshAsync();
+		}
+
+		return cachedPythonSummary;
+	}
+
+	private void triggerPythonSummaryRefreshAsync() {
+		if (pythonSummaryRefreshInFlight) return;
 
 		synchronized (this) {
-			now = System.currentTimeMillis();
-			if (now < nextPythonSummaryRefreshAtMs && cachedPythonSummary != null) {
-				return cachedPythonSummary;
-			}
-
-			String summary = probePythonRuntimeSummary();
-			cachedPythonSummary = summary;
-			nextPythonSummaryRefreshAtMs = now + 5000L;
-			return summary;
+			if (pythonSummaryRefreshInFlight) return;
+			pythonSummaryRefreshInFlight = true;
 		}
+
+		summaryExecutor.submit(() -> {
+			try {
+				String summary = probePythonRuntimeSummary();
+				if (summary != null && !summary.isBlank()) {
+					cachedPythonSummary = summary;
+				}
+			} catch (Exception e) {
+				if (cachedPythonSummary == null || cachedPythonSummary.isBlank()) {
+					cachedPythonSummary = "Python: 检测失败（" + e.getClass().getSimpleName() + "）";
+				}
+			} finally {
+				nextPythonSummaryRefreshAtMs = System.currentTimeMillis() + 5000L;
+				pythonSummaryRefreshInFlight = false;
+			}
+		});
 	}
 
 	// ── 内部分析流程 ──────────────────────────────────────────────────────────
