@@ -4,6 +4,7 @@ import com.beatblock.BeatBlock;
 import com.beatblock.timeline.Timeline;
 import com.beatblock.timeline.editor.*;
 import com.beatblock.timeline.rendering.TimelineLayout;
+import com.beatblock.timeline.rendering.TimelineToolbarState;
 import com.beatblock.timeline.rendering.TimelineTrackListState;
 import imgui.ImGui;
 import imgui.flag.ImGuiMouseCursor;
@@ -35,7 +36,8 @@ public final class TimelineInteraction {
 		TimelineClock clock,
 		SelectionBox selectionBox,
 		TimelineTrackListState trackListState,
-		TimelineLayout layout
+		TimelineLayout layout,
+		TimelineToolbarState toolbarState
 	) {
 		if (timeline == null || viewState == null || interactionState == null || selectionState == null || layout == null) return;
 
@@ -92,7 +94,7 @@ public final class TimelineInteraction {
 			if (interactionState.getMode() == InteractionMode.DRAG_EVENT && interactionState.getActiveEventId() != null
 				&& interactionState.getActiveTrackId() != null && interactionState.getActiveClipId() != null) {
 				double t = viewState.screenToTime(mx - layout.contentLeft);
-				DragController.dragEvent(timeline, interactionState.getActiveTrackId(), interactionState.getActiveClipId(), interactionState.getActiveEventId(), t, duration);
+				DragController.dragEvent(timeline, interactionState.getActiveTrackId(), interactionState.getActiveClipId(), interactionState.getActiveEventId(), t, duration, toolbarState, viewState);
 				return;
 			}
 			return;

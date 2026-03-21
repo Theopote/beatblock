@@ -162,7 +162,8 @@ public final class TimelineEditor {
 			state.getClock(),
 			state.getSelectionBox(),
 			trackListState,
-			layout
+			layout,
+			toolbarState
 		);
 	}
 }

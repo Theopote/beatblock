@@ -42,6 +42,12 @@ public class Timeline {
 	public Map<String, Object> getMetadata() { return Collections.unmodifiableMap(metadata); }
 	public void setMetadata(String key, Object value) { if (key != null) metadata.put(key, value); }
 	public Object getMetadata(String key) { return metadata.get(key); }
+	/** BPM（由音频分析填入 metadata["bpm"]），未设置时返回 0。 */
+	public double getBpm() {
+		Object v = metadata.get("bpm");
+		if (v instanceof Number) return ((Number) v).doubleValue();
+		return 0;
+	}
 
 	// ----- 便捷 API（兼容原 TimelineModel 读写） -----
 
