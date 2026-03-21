@@ -124,6 +124,39 @@ public class ToolPanel {
 			timeline.removeMarker(selectedMarkerId);
 			selectedMarkerId = null;
 		}
+
+		ImGui.spacing();
+		ImGui.textDisabled("循环区");
+		if (ImGui.button("Set In##toolMarkerSetIn")) {
+			setLoopIn(marker.getTimeSeconds());
+		}
+		if (ImGui.isItemHovered()) {
+			ImGui.setTooltip("将当前 Marker 设为循环起点");
+		}
+		ImGui.sameLine();
+		if (ImGui.button("Set Out##toolMarkerSetOut")) {
+			setLoopOut(marker.getTimeSeconds());
+		}
+		if (ImGui.isItemHovered()) {
+			ImGui.setTooltip("将当前 Marker 设为循环终点");
+		}
+
+		TimelineMarker prevMarker = markerIndex > 0 ? timeline.getMarkers().get(markerIndex - 1) : null;
+		TimelineMarker nextMarker = markerIndex + 1 < timeline.getMarkers().size() ? timeline.getMarkers().get(markerIndex + 1) : null;
+
+		if (ImGui.button("Prev->This##toolMarkerLoopPrev", 0, 0)) {
+			applyLoopRange(prevMarker, marker);
+		}
+		if (ImGui.isItemHovered()) {
+			ImGui.setTooltip(prevMarker != null ? "将上一个 Marker 到当前 Marker 设为循环区" : "没有上一个 Marker");
+		}
+		ImGui.sameLine();
+		if (ImGui.button("This->Next##toolMarkerLoopNext", 0, 0)) {
+			applyLoopRange(marker, nextMarker);
+		}
+		if (ImGui.isItemHovered()) {
+			ImGui.setTooltip(nextMarker != null ? "将当前 Marker 到下一个 Marker 设为循环区" : "没有下一个 Marker");
+		}
 	}
 
 	private void jumpToMarker(TimelineMarker marker) {
@@ -154,6 +187,39 @@ public class ToolPanel {
 			TimelineMarker updated = timeline.getMarkers().get(newIndex);
 			markerNameBuffer.set(updated.getName());
 			markerTimeBuffer.set(String.format(Locale.ROOT, "%.3f", updated.getTimeSeconds()));
+		}
+	}
+
+	private void setLoopIn(double timeSeconds) {
+		if (BeatBlock.timelineEditor == null) return;
+		var toolbarState = BeatBlock.timelineEditor.getToolbarState();
+		toolbarState.setLoopInSeconds(timeSeconds);
+		if (toolbarState.getLoopOutSeconds() > 0 && toolbarState.getLoopOutSeconds() <= timeSeconds) {
+			toolbarState.setLoopOutSeconds(timeSeconds + 0.1);
+		}
+		toolbarState.setLoop(true);
+	}
+
+	private void setLoopOut(double timeSeconds) {
+		if (BeatBlock.timelineEditor == null) return;
+		var toolbarState = BeatBlock.timelineEditor.getToolbarState();
+		double loopIn = toolbarState.getLoopInSeconds();
+		toolbarState.setLoopOutSeconds(Math.max(timeSeconds, loopIn + 0.1));
+		toolbarState.setLoop(true);
+	}
+
+	private void applyLoopRange(TimelineMarker startMarker, TimelineMarker endMarker) {
+		if (startMarker == null || endMarker == null || BeatBlock.timelineEditor == null) return;
+		double start = Math.min(startMarker.getTimeSeconds(), endMarker.getTimeSeconds());
+		double end = Math.max(startMarker.getTimeSeconds(), endMarker.getTimeSeconds());
+		if (end <= start) return;
+		var toolbarState = BeatBlock.timelineEditor.getToolbarState();
+		toolbarState.setLoopInSeconds(start);
+		toolbarState.setLoopOutSeconds(end);
+		toolbarState.setLoop(true);
+		BeatBlock.timelineEditor.getClock().seek(start);
+		if (BeatBlock.musicPlayer != null) {
+			BeatBlock.musicPlayer.setCurrentTimeSeconds(start);
 		}
 	}
 }
