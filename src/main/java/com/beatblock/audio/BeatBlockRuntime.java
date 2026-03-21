@@ -6,6 +6,7 @@ import com.beatblock.audio.beatmap.BeatmapReader;
 import com.beatblock.audio.scheduler.AnimationScheduler;
 import com.beatblock.audio.scheduler.AnimationScheduler.ScheduledEvent;
 import com.beatblock.audio.scheduler.BeatClock;
+import com.beatblock.beat.BeatEvent;
 
 import java.nio.file.Path;
 
@@ -77,14 +78,19 @@ public final class BeatBlockRuntime {
 	}
 
 	private void onBeatEvent(ScheduledEvent se) {
-		// TODO: 将事件转发到 BlockAnimationEngine
-		if (se.needsLookahead()) {
-			System.out.printf("[Scheduler] ARRIVE band=%s energy=%.2f remain=%dms%n",
-				se.event().band(), se.event().energy(), se.timeUntilAnchorMs());
-		} else {
-			System.out.printf("[Scheduler] DEPART band=%s energy=%.2f t=%dms%n",
-				se.event().band(), se.event().energy(), se.event().timeMs());
-		}
+		if (BeatBlock.animationManager == null) return;
+
+		BeatEvent.Type type = switch (se.event().band()) {
+			case LOW -> BeatEvent.Type.KICK;
+			case MID -> BeatEvent.Type.SNARE;
+			case HIGH -> BeatEvent.Type.HIHAT;
+		};
+		float intensity = Math.max(0f, Math.min(1f, se.event().energy()));
+		double timestampSec = se.event().timeMs() / 1000.0;
+		int lane = se.event().band().ordinal();
+
+		BeatEvent event = new BeatEvent(timestampSec, type, intensity, lane);
+		BeatBlock.animationManager.handleBeatEvent(event);
 	}
 
 	private static final class MusicPlayerAdapter implements BeatClock.IAudioPlayer {

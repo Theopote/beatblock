@@ -32,6 +32,7 @@ public final class AudioAssetManager {
 
 	private final List<AudioAsset> assets = new ArrayList<>();
 	private AudioAsset currentDragAsset;
+	private ConversionRequestHandler conversionRequestHandler;
 
 	private AudioAssetManager() {
 	}
@@ -55,6 +56,20 @@ public final class AudioAssetManager {
 			if (id.equals(asset.getId())) return asset;
 		}
 		return null;
+	}
+
+	public void setConversionRequestHandler(ConversionRequestHandler conversionRequestHandler) {
+		this.conversionRequestHandler = conversionRequestHandler;
+	}
+
+	public boolean requestConvertToMp3(AudioAsset asset) {
+		if (asset == null || asset.getPath() == null) return false;
+		if (conversionRequestHandler == null) {
+			LOGGER.info("BeatBlock AudioAssetManager: 转换请求已记录（尚未接入转换器） file={}", asset.getPath());
+			return false;
+		}
+		conversionRequestHandler.requestConversion(asset, "mp3");
+		return true;
 	}
 
 	public AudioAsset addFromPath(String pathStr) {
@@ -163,6 +178,11 @@ public final class AudioAssetManager {
 			return "当前格式可能不受支持。建议先转换为 MP3 或 WAV，再重新解析。";
 		}
 		return safe;
+	}
+
+	@FunctionalInterface
+	public interface ConversionRequestHandler {
+		void requestConversion(AudioAsset asset, String targetFormat);
 	}
 }
 

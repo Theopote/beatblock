@@ -8,8 +8,8 @@ import com.beatblock.audio.AudioLoader;
 import com.beatblock.audio.BeatmapGenerator;
 import com.beatblock.audio.MusicPlayer;
 import com.beatblock.audio.AudioAnalysisService;
-import com.beatblock.audio.AnalyzerInstaller;
-import com.beatblock.beat.BeatEvent;
+import com.beatblock.audio.AudioConversionService;
+import com.beatblock.audio.assets.AudioAssetManager;
 import com.beatblock.beat.BeatScheduler;
 import com.beatblock.stage.StageManager;
 import com.beatblock.timeline.Timeline;
@@ -51,6 +51,7 @@ public class BeatBlock implements ModInitializer {
 	public static BlockAnimationEngine blockAnimationEngine;
 	public static AudioAnalysisEngine audioAnalysisEngine;
 	public static AudioAnalysisService externalAudioAnalyzer;
+	public static AudioConversionService audioConversionService;
 
 	@Override
 	public void onInitialize() {
@@ -70,6 +71,24 @@ public class BeatBlock implements ModInitializer {
 		audioAnalysisEngine = new AudioAnalysisEngine();
 		// 外部 Python 音频分析器（librosa），脚本由 AnalyzerInstaller 从资源解压到 config 目录
 		externalAudioAnalyzer = new AudioAnalysisService();
+		audioConversionService = new AudioConversionService();
+		AudioAssetManager.getInstance().setConversionRequestHandler((asset, targetFormat) -> {
+			if (asset == null || asset.getPath() == null) return;
+			asset.setStatus(com.beatblock.audio.assets.AudioAssetStatus.ANALYZING);
+			asset.setErrorMessage("正在转换为 MP3...");
+			audioConversionService.convertToMp3Async(
+				asset.getPath(),
+				convertedPath -> {
+					asset.setPath(convertedPath);
+					asset.setErrorMessage(null);
+					AudioAssetManager.getInstance().startAnalysis(asset);
+				},
+				err -> {
+					asset.setStatus(com.beatblock.audio.assets.AudioAssetStatus.FAILED);
+					asset.setErrorMessage(err);
+				}
+			);
+		});
 
 		// 注册默认动画模板
 		animationRegistry.register(new AnimationTemplate("bounce", 0.5, AnimationTemplate.Easing.EASE_OUT, AnimationTemplate.TransformType.SCALE));

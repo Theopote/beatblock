@@ -13,8 +13,8 @@ import java.util.UUID;
 public final class AudioAsset {
 
 	private final String id;
-	private final Path path;
-	private final String fileName;
+	private Path path;
+	private String fileName;
 
 	private double durationSeconds;
 	private int sampleRate;
@@ -44,6 +44,11 @@ public final class AudioAsset {
 	public String getId() { return id; }
 	public Path getPath() { return path; }
 	public String getFileName() { return fileName; }
+	public void setPath(Path path) {
+		this.path = path;
+		String name = path != null ? path.getFileName().toString() : "";
+		this.fileName = name != null ? name : "";
+	}
 
 	public double getDurationSeconds() { return durationSeconds; }
 	public void setDurationSeconds(double durationSeconds) { this.durationSeconds = Math.max(0, durationSeconds); }

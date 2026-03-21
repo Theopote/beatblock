@@ -416,6 +416,13 @@ public final class AudioAnalysisPanel {
             AudioAssetManager.getInstance().startAnalysis(asset);
         }
         ImGui.sameLine();
+        if (ImGui.button("转换为MP3##convert_" + asset.getId())) {
+            boolean accepted = AudioAssetManager.getInstance().requestConvertToMp3(asset);
+            if (!accepted) {
+                asset.setErrorMessage("已记录转换请求。当前版本暂未接入自动转换器，请先手动转为 MP3/WAV 后重试。");
+            }
+        }
+        ImGui.sameLine();
         if (ImGui.button("移除##remove_failed_" + asset.getId())) {
             AudioAssetManager.getInstance().remove(asset.getId());
             if (asset == selectedAsset) selectedAsset = null;
@@ -599,6 +606,13 @@ public final class AudioAnalysisPanel {
         ImGui.popStyleColor();
         ImGui.spacing();
         ImGui.textDisabled("支持格式：MP3 · WAV · OGG · FLAC");
+        ImGui.spacing();
+        if (ImGui.button("一键转换为 MP3##detailConvert", ImGui.getContentRegionAvailX(), 26f)) {
+            boolean accepted = AudioAssetManager.getInstance().requestConvertToMp3(asset);
+            if (!accepted) {
+                asset.setErrorMessage("已记录转换请求。当前版本暂未接入自动转换器，请先手动转为 MP3/WAV 后重试。");
+            }
+        }
         ImGui.spacing();
         if (ImGui.button("重试##detailRetry", ImGui.getContentRegionAvailX(), 26f)) {
             AudioAssetManager.getInstance().startAnalysis(asset);

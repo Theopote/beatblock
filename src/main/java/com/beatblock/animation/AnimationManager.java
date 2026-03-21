@@ -37,6 +37,13 @@ public class AnimationManager {
 		}
 	}
 
+	/**
+	 * 供外部调度器（如 BeatBlockRuntime）直接投递节拍事件。
+	 */
+	public void handleBeatEvent(BeatEvent event) {
+		onBeatEvent(event);
+	}
+
 	public void addInstance(AnimationInstance instance) {
 		if (instance != null) {
 			activeInstances.add(instance);
