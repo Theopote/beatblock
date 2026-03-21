@@ -30,6 +30,8 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 import java.util.List;
 
 /**
@@ -1187,7 +1189,11 @@ public final class AudioAnalysisPanel {
                 "$dlg.Multiselect = $false",
                 "$seed = $env:BB_AUDIO_PICKER_SEED",
                 "if (-not [string]::IsNullOrWhiteSpace($seed)) { try { $dir=[System.IO.Path]::GetDirectoryName($seed); if (-not [string]::IsNullOrWhiteSpace($dir)) { $dlg.InitialDirectory = $dir } } catch {} }",
-                "if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { [Console]::Out.Write($dlg.FileName) }"
+            "if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {",
+            "$bytes = [System.Text.Encoding]::UTF8.GetBytes($dlg.FileName)",
+            "$b64 = [Convert]::ToBase64String($bytes)",
+            "[Console]::Out.Write('B64:' + $b64)",
+            "}"
         );
 
         ProcessBuilder pb = new ProcessBuilder("powershell.exe", "-NoProfile", "-Sta", "-Command", script)
@@ -1213,7 +1219,14 @@ public final class AudioAnalysisPanel {
             throw new IOException("PowerShell 退出码=" + exit + (output.isEmpty() ? "" : ("; " + output)));
         }
 
-        return output.isEmpty() ? null : output;
+        if (output.isEmpty()) return null;
+        if (output.startsWith("B64:")) {
+            String b64 = output.substring(4).trim();
+            if (b64.isEmpty()) return null;
+            byte[] bytes = Base64.getDecoder().decode(b64);
+            return new String(bytes, StandardCharsets.UTF_8);
+        }
+        return output;
     }
 
     private static String describeThrowable(Throwable t) {
