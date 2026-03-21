@@ -29,14 +29,23 @@ public final class TimelineRenderer {
 	private final EventRenderer eventRenderer = new EventRenderer();
 	private final WaveformRenderer waveformRenderer = new WaveformRenderer();
 
-	/** 固定区域：只绘制时间刻度行（左侧「时间」标签 + 标尺），分界线与轨道区对齐，并占位。 */
-	public void renderRulerRow(TimelineLayout layout, TimelineViewState viewState) {
+	/**
+	 * 固定区域：只绘制时间刻度行（左侧「时间」标签 + 标尺），分界线与轨道区对齐，并占位。
+	 *
+	 * @param bpm 来自 Timeline.getBpm()；传 0 表示无 BPM 信息
+	 */
+	public void renderRulerRow(TimelineLayout layout, TimelineViewState viewState, double bpm) {
 		if (viewState == null || layout == null) return;
 		ImGui.setCursorPosX(4);
 		ImGui.textDisabled("时间");
-		gridRenderer.renderRuler(layout.startY, viewState, layout);
+		gridRenderer.renderRuler(layout.startY, viewState, layout, bpm);
 		// 竖向分割线在 TimelinePanel 中自标尺顶贯通画到子窗口底，避免与滚动区重复/断层
 		ImGui.setCursorPosY(layout.startY + TimelineLayout.RULER_HEIGHT);
+	}
+
+	/** 兼容旧调用（无 BPM）。 */
+	public void renderRulerRow(TimelineLayout layout, TimelineViewState viewState) {
+		renderRulerRow(layout, viewState, 0);
 	}
 
 	/** 可滚动区域：轨道区（左侧轨道列表 + 竖线分隔 + 网格 + 一行一行轨道 + 播放头 + 框选）。 */

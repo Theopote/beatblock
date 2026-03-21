@@ -151,7 +151,7 @@ public final class TimelineEditor {
 		layout = getOrBuildFrameLayout();
 		cachedDividerScreenX = layout.contentLeft;
 		cachedDividerTopScreenY = layout.rulerTop;
-		renderer.renderRulerRow(layout, viewState);
+		renderer.renderRulerRow(layout, viewState, timeline.getBpm());
 	}
 
 	/**

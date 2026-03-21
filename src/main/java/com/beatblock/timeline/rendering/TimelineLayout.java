@@ -21,7 +21,7 @@ public final class TimelineLayout {
 	public static final float ROW_GAP = 3f;
 	/** 单行占位总高 = ROW_HEIGHT + ROW_GAP */
 	public static final float ROW_STRIDE = ROW_HEIGHT + ROW_GAP;
-	public static final float RULER_HEIGHT = 20f;
+	public static final float RULER_HEIGHT = 28f;
 
 	/** 内容区行数（不含标尺）：音频组+波形+低中高频+动画组+方块/自动+摄像机+全局 */
 	public static final int CONTENT_ROW_COUNT = 10;

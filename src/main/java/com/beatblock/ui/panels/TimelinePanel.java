@@ -5,6 +5,7 @@ import com.beatblock.ui.layout.BeatBlockDockSpaceLayoutBuilder;
 import com.beatblock.timeline.TimelineEditor;
 import com.beatblock.timeline.rendering.TimelineRenderer;
 import com.beatblock.timeline.rendering.TimelineToolbar;
+import com.beatblock.timeline.util.MusicTimeFormatter;
 import imgui.ImGui;
 import imgui.flag.ImGuiWindowFlags;
 
@@ -38,8 +39,10 @@ public class TimelinePanel {
 			? BeatBlock.timeline.getDurationSeconds()
 			: (BeatBlock.musicPlayer != null && BeatBlock.musicPlayer.getDurationSeconds() > 0 ? BeatBlock.musicPlayer.getDurationSeconds() : 60.0);
 		double currentTime = editor != null ? editor.getClock().getCurrentTimeSeconds() : 0;
-		ImGui.sameLine(ImGui.getWindowWidth() - 100);
-		ImGui.textDisabled(String.format("%.1fs / %.1fs", currentTime, duration));
+		double bpm = BeatBlock.timeline != null ? BeatBlock.timeline.getBpm() : 0;
+		String timeDisplay = MusicTimeFormatter.formatPositionDisplay(currentTime, duration, bpm);
+		ImGui.sameLine(ImGui.getWindowWidth() - 240);
+		ImGui.textDisabled(timeDisplay);
 
 		// ----- 固定区域：时间刻度（标尺），紧接工具栏下方 -----
 		ImGui.separator();
