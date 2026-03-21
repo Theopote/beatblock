@@ -2,6 +2,8 @@ package com.beatblock.ui.panels;
 
 import com.beatblock.timeline.rendering.TimelineLayout;
 import com.beatblock.ui.icons.Icons;
+import com.beatblock.client.imgui.ImGuiFontManager;
+import com.beatblock.client.imgui.ImGuiRenderer;
 import com.beatblock.ui.imgui.IconButtonStyle;
 import com.beatblock.audio.assets.AudioAnalysisStep;
 import com.beatblock.audio.assets.AudioAsset;
@@ -68,6 +70,9 @@ public final class AudioAnalysisPanel {
     private final ImString importPath = new ImString(512);
     private AudioAsset selectedAsset;
     private boolean detailExpanded = true;
+	private String panelHintText;
+	private boolean panelHintError;
+	private long panelHintExpireAtMs;
 
     // ── 公共入口 ─────────────────────────────────────────────────────────────
 
@@ -122,7 +127,7 @@ public final class AudioAnalysisPanel {
     private void renderToolbar() {
         // 与轨道同高的方形槽 + BeatBlock 大字重：添加用 icon-bb-add，避免 ASCII “+” 仍走 16px 主字体显小
         IconButtonStyle.pushBeatBlockIconButton();
-        if (ImGui.button(Icons.Action.ADD + "##AddAudio", ICON_BTN, ICON_BTN)) {
+        if (ImGui.button(iconLabel(Icons.Action.ADD, "+") + "##AddAudio", ICON_BTN, ICON_BTN)) {
             importPath.set("");
             ImGui.openPopup("##AddAudioPopup");
         }
@@ -130,7 +135,9 @@ public final class AudioAnalysisPanel {
 
         ImGui.sameLine();
 
-        if (ImGui.button((detailExpanded ? Icons.Layout.LEFT_COLLAPSE : Icons.Layout.RIGHT_EXPAND) + "##detail", ICON_BTN, ICON_BTN)) {
+        String detailIcon = detailExpanded ? Icons.Layout.LEFT_COLLAPSE : Icons.Layout.RIGHT_EXPAND;
+        String detailFallback = detailExpanded ? "<" : ">";
+        if (ImGui.button(iconLabel(detailIcon, detailFallback) + "##detail", ICON_BTN, ICON_BTN)) {
             detailExpanded = !detailExpanded;
         }
         IconButtonStyle.popBeatBlockIconButton();
@@ -162,11 +169,7 @@ public final class AudioAnalysisPanel {
         if (add) {
             String path = importPath.get().trim();
             if (!path.isEmpty()) {
-                AudioAsset asset = AudioAssetManager.getInstance().addFromPath(path);
-                if (asset != null) {
-                    selectedAsset = asset;
-                    AudioAssetManager.getInstance().startAnalysis(asset);
-                }
+                handleIncomingAudioPath(path);
             }
             ImGui.closeCurrentPopup();
         }
@@ -207,15 +210,14 @@ public final class AudioAnalysisPanel {
             byte[] raw = ImGui.acceptDragDropPayload("BB_OS_FILE_PATH");
             if (raw != null) {
                 String filePath = new String(raw).trim();
-                if (!filePath.isEmpty()) {
-                    AudioAsset asset = AudioAssetManager.getInstance().addFromPath(filePath);
-                    if (asset != null) {
-                        selectedAsset = asset;
-                        AudioAssetManager.getInstance().startAnalysis(asset);
-                    }
-                }
+                handleIncomingAudioPath(filePath);
             }
             ImGui.endDragDropTarget();
+        }
+
+        String osDropped;
+        while ((osDropped = ImGuiRenderer.getInstance().pollDroppedFilePath()) != null) {
+            handleIncomingAudioPath(osDropped);
         }
 
         ImGui.endChild();
@@ -448,6 +450,7 @@ public final class AudioAnalysisPanel {
 
     private void renderFooter(List<AudioAsset> assets) {
         float btnW = 110f;
+		prunePanelHint();
 
         // 全部解析（跳过已完成和正在进行的）
         if (ImGui.button("全部解析##analyzeAll", btnW, 22f)) {
@@ -476,6 +479,17 @@ public final class AudioAnalysisPanel {
         }
         if (ImGui.isItemHovered()) ImGui.setTooltip("从列表中移除所有已解析完成的项目（不删除 beatmap 文件）");
 
+        if (panelHintText != null && !panelHintText.isBlank()) {
+            ImGui.sameLine();
+            if (panelHintError) {
+                ImGui.pushStyleColor(ImGuiCol.Text, 0.92f, 0.36f, 0.36f, 1f);
+                ImGui.text(panelHintText);
+                ImGui.popStyleColor();
+            } else {
+                ImGui.textDisabled(panelHintText);
+            }
+        }
+
         // 右对齐：资产统计
         long doneCount = assets.stream()
                 .filter(a -> a.getStatus() == AudioAssetStatus.COMPLETED).count();
@@ -490,7 +504,7 @@ public final class AudioAnalysisPanel {
     private void renderDetailPanel(AudioAsset asset) {
         // 折叠按钮（自定义图标，与工具栏一致）
         IconButtonStyle.pushBeatBlockIconButton();
-        if (ImGui.button(Icons.Layout.LEFT_COLLAPSE + "##collapse", ICON_BTN, ICON_BTN)) {
+        if (ImGui.button(iconLabel(Icons.Layout.LEFT_COLLAPSE, "<") + "##collapse", ICON_BTN, ICON_BTN)) {
             detailExpanded = false;
         }
         IconButtonStyle.popBeatBlockIconButton();
@@ -785,6 +799,45 @@ public final class AudioAnalysisPanel {
             case SECTION_DETECTION-> "段落识别";
             case WRITE_BEATMAP    -> "写入 Beatmap";
         };
+    }
+
+    private boolean handleIncomingAudioPath(String path) {
+        if (path == null || path.isBlank()) return false;
+        AudioAssetManager manager = AudioAssetManager.getInstance();
+        if (!manager.isSupportedAudioPath(path)) {
+            setPanelHint("仅支持 " + manager.getSupportedAudioExtensionsLabel(), true);
+            return false;
+        }
+        AudioAsset asset = AudioAssetManager.getInstance().addFromPath(path);
+        if (asset != null) {
+            selectedAsset = asset;
+            AudioAssetManager.getInstance().startAnalysis(asset);
+            setPanelHint("已添加并开始解析: " + asset.getFileName(), false);
+            return true;
+        }
+        setPanelHint("路径无效或文件不存在", true);
+        return false;
+    }
+
+    private void setPanelHint(String text, boolean isError) {
+        this.panelHintText = text;
+        this.panelHintError = isError;
+        this.panelHintExpireAtMs = System.currentTimeMillis() + 5000L;
+    }
+
+    private void prunePanelHint() {
+        if (panelHintText == null) return;
+        if (System.currentTimeMillis() >= panelHintExpireAtMs) {
+            panelHintText = null;
+            panelHintError = false;
+        }
+    }
+
+    private static String iconLabel(String icon, String fallback) {
+        if (ImGuiFontManager.getIconButtonFont() == null) {
+            return fallback;
+        }
+        return icon;
     }
 }
 

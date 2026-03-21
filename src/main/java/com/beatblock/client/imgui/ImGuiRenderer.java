@@ -9,6 +9,9 @@ import imgui.gl3.ImGuiImplGl3;
 import imgui.glfw.ImGuiImplGlfw;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.util.Window;
+import org.lwjgl.glfw.GLFW;
+import org.lwjgl.glfw.GLFWDropCallback;
+import org.lwjgl.glfw.GLFWDropCallbackI;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL12;
 import org.lwjgl.opengl.GL15;
@@ -17,6 +20,9 @@ import org.lwjgl.opengl.GL21;
 import org.lwjgl.opengl.GL30;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.Queue;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 /**
  * BeatBlock ImGui 渲染器：初始化、帧生命周期、最终绘制。
@@ -32,6 +38,9 @@ public class ImGuiRenderer {
 	private boolean initialized;
 	private boolean frameInProgress;
 	private boolean drawDataReady;
+	private GLFWDropCallbackI chainedDropCallback;
+	private GLFWDropCallbackI beatblockDropCallback;
+	private final Queue<String> droppedFileQueue = new ConcurrentLinkedQueue<>();
 
 	private ImGuiRenderer() {}
 
@@ -69,6 +78,7 @@ public class ImGuiRenderer {
 		}
 		imGuiGl3 = new ImGuiImplGl3();
 		imGuiGl3.init(glsl);
+		installDropCallback();
 
 		// 参考 ChronoBlocks：首帧前必须设置显示尺寸，否则坐标/裁剪错误导致“全黑无内容”
 		updateDisplaySize();
@@ -122,6 +132,7 @@ public class ImGuiRenderer {
 				imGuiGlfw.dispose();
 				imGuiGlfw = new ImGuiImplGlfw();
 				imGuiGlfw.init(windowHandle, true);
+				installDropCallback();
 			}
 		}
 		int w = Math.max(1, window.getWidth());
@@ -198,10 +209,37 @@ public class ImGuiRenderer {
 	public void dispose() {
 		if (!initialized) return;
 		if (frameInProgress) endFrame();
+		if (windowHandle != 0 && chainedDropCallback != null) {
+			GLFW.glfwSetDropCallback(windowHandle, chainedDropCallback);
+		}
+		chainedDropCallback = null;
+		beatblockDropCallback = null;
+		droppedFileQueue.clear();
 		if (imGuiGl3 != null) { imGuiGl3.dispose(); imGuiGl3 = null; }
 		if (imGuiGlfw != null) { imGuiGlfw.dispose(); imGuiGlfw = null; }
 		ImGui.destroyContext();
 		initialized = false;
 		LOGGER.info("BeatBlock ImGui disposed");
+	}
+
+	public String pollDroppedFilePath() {
+		return droppedFileQueue.poll();
+	}
+
+	private void installDropCallback() {
+		if (windowHandle == 0) return;
+		chainedDropCallback = GLFW.glfwSetDropCallback(windowHandle, null);
+		beatblockDropCallback = (window, count, names) -> {
+			for (int i = 0; i < count; i++) {
+				String path = GLFWDropCallback.getName(names, i);
+				if (path != null && !path.isBlank()) {
+					droppedFileQueue.offer(path);
+				}
+			}
+			if (chainedDropCallback != null) {
+				chainedDropCallback.invoke(window, count, names);
+			}
+		};
+		GLFW.glfwSetDropCallback(windowHandle, beatblockDropCallback);
 	}
 }

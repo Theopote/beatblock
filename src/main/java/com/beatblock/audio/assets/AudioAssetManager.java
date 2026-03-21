@@ -6,14 +6,17 @@ import com.beatblock.audio.beatmap.Beatmap;
 import com.beatblock.audio.beatmap.BeatEvent;
 import com.beatblock.audio.beatmap.BeatmapMeta;
 import com.beatblock.audio.beatmap.FrequencyBand;
+import net.fabricmc.loader.api.FabricLoader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Locale;
 import java.util.List;
 
 /**
@@ -33,6 +36,7 @@ public final class AudioAssetManager {
 	private final List<AudioAsset> assets = new ArrayList<>();
 	private AudioAsset currentDragAsset;
 	private ConversionRequestHandler conversionRequestHandler;
+	private static final String[] SUPPORTED_AUDIO_EXTENSIONS = {"mp3", "wav", "ogg", "flac"};
 
 	private AudioAssetManager() {
 	}
@@ -74,7 +78,15 @@ public final class AudioAssetManager {
 
 	public AudioAsset addFromPath(String pathStr) {
 		if (pathStr == null || pathStr.isEmpty()) return null;
-		Path path = Paths.get(pathStr);
+		Path path = normalizeAudioPath(pathStr);
+		if (path == null) {
+			LOGGER.warn("BeatBlock AudioAssetManager: 无法解析路径: {}", pathStr);
+			return null;
+		}
+		if (!isSupportedAudioFile(path)) {
+			LOGGER.warn("BeatBlock AudioAssetManager: 不支持的音频格式: {}", path);
+			return null;
+		}
 		if (!Files.isRegularFile(path)) {
 			LOGGER.warn("BeatBlock AudioAssetManager: 非文件或不存在: {}", pathStr);
 			return null;
@@ -82,6 +94,58 @@ public final class AudioAssetManager {
 		AudioAsset asset = new AudioAsset(path);
 		assets.add(asset);
 		return asset;
+	}
+
+	public boolean isSupportedAudioPath(String rawPath) {
+		Path path = normalizeAudioPath(rawPath);
+		return path != null && isSupportedAudioFile(path);
+	}
+
+	public String getSupportedAudioExtensionsLabel() {
+		return "MP3/WAV/OGG/FLAC";
+	}
+
+	private Path normalizeAudioPath(String raw) {
+		if (raw == null) return null;
+		String v = raw.trim();
+		if (v.isEmpty()) return null;
+
+		if ((v.startsWith("\"") && v.endsWith("\"")) || (v.startsWith("'") && v.endsWith("'"))) {
+			v = v.substring(1, v.length() - 1).trim();
+		}
+
+		try {
+			if (v.startsWith("file:/")) {
+				Path p = Paths.get(URI.create(v));
+				return p.toAbsolutePath().normalize();
+			}
+		} catch (Exception e) {
+			LOGGER.debug("BeatBlock AudioAssetManager: URI 路径解析失败: {}", e.getMessage());
+		}
+
+		try {
+			Path p = Paths.get(v);
+			if (!p.isAbsolute()) {
+				Path gameDir = FabricLoader.getInstance().getGameDir();
+				p = gameDir.resolve(p);
+			}
+			return p.toAbsolutePath().normalize();
+		} catch (Exception e) {
+			LOGGER.debug("BeatBlock AudioAssetManager: 普通路径解析失败: {}", e.getMessage());
+			return null;
+		}
+	}
+
+	private boolean isSupportedAudioFile(Path path) {
+		if (path == null || path.getFileName() == null) return false;
+		String name = path.getFileName().toString();
+		int idx = name.lastIndexOf('.');
+		if (idx < 0 || idx == name.length() - 1) return false;
+		String ext = name.substring(idx + 1).toLowerCase(Locale.ROOT);
+		for (String e : SUPPORTED_AUDIO_EXTENSIONS) {
+			if (e.equals(ext)) return true;
+		}
+		return false;
 	}
 
 	public void remove(String id) {
