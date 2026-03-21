@@ -45,6 +45,8 @@ public final class GridRenderer {
 	private static final int LOOP_IN_COLOR    = 0xEE_FF_BB_44;
 	private static final int LOOP_OUT_COLOR   = 0xEE_FF_88_66;
 	private static final int MARKER_COLOR     = 0xEE_FF_D4_66;
+	private static final float MARKER_LABEL_GAP = 6f;
+	private static final int MARKER_LABEL_ROWS = 3;
 
 	// ── 刻度高度比例（占 rulerHeight） ──
 	private static final float MAJOR_TICK_FRAC = 0.55f;
@@ -326,6 +328,7 @@ public final class GridRenderer {
 		if (view == null || layout == null || timeline == null || timeline.getMarkers().isEmpty()) return;
 		float clipLeft = rLeft;
 		float clipRight = rLeft + layout.rulerWidth;
+		float[] rowRightEdges = new float[MARKER_LABEL_ROWS];
 		for (TimelineMarker marker : timeline.getMarkers()) {
 			if (marker == null) continue;
 			float x = rLeft + view.timeToScreen(marker.getTimeSeconds());
@@ -339,7 +342,23 @@ public final class GridRenderer {
 			);
 			String name = marker.getName();
 			if (name != null && !name.isBlank()) {
-				ImGui.getWindowDrawList().addText(x + 4, rTop + 2, MARKER_COLOR, name);
+				float labelX = x + 4;
+				float labelWidth = ImGui.calcTextSize(name).x;
+				float labelRight = labelX + labelWidth;
+				if (labelX < clipRight) {
+					int rowIndex = -1;
+					for (int i = 0; i < MARKER_LABEL_ROWS; i++) {
+						if (labelX >= rowRightEdges[i] + MARKER_LABEL_GAP) {
+							rowIndex = i;
+							break;
+						}
+					}
+					if (rowIndex >= 0) {
+						float textY = rTop + 2 + rowIndex * 8f;
+						ImGui.getWindowDrawList().addText(labelX, textY, MARKER_COLOR, name);
+						rowRightEdges[rowIndex] = Math.min(labelRight, clipRight);
+					}
+				}
 			}
 		}
 	}
