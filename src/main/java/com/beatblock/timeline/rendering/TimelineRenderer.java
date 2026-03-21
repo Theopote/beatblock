@@ -34,22 +34,22 @@ public final class TimelineRenderer {
 	 *
 	 * @param bpm 来自 Timeline.getBpm()；传 0 表示无 BPM 信息
 	 */
-	public void renderRulerRow(TimelineLayout layout, TimelineViewState viewState, double bpm, TimelineToolbarState toolbarState) {
+	public void renderRulerRow(TimelineLayout layout, TimelineViewState viewState, double bpm, TimelineToolbarState toolbarState, Timeline timeline) {
 		if (viewState == null || layout == null) return;
 		ImGui.setCursorPosX(4);
 		ImGui.textDisabled("时间");
-		gridRenderer.renderRuler(layout.startY, viewState, layout, bpm, toolbarState);
+		gridRenderer.renderRuler(layout.startY, viewState, layout, bpm, toolbarState, timeline);
 		// 竖向分割线在 TimelinePanel 中自标尺顶贯通画到子窗口底，避免与滚动区重复/断层
 		ImGui.setCursorPosY(layout.startY + TimelineLayout.RULER_HEIGHT);
 	}
 
 	public void renderRulerRow(TimelineLayout layout, TimelineViewState viewState, double bpm) {
-		renderRulerRow(layout, viewState, bpm, null);
+		renderRulerRow(layout, viewState, bpm, null, null);
 	}
 
 	/** 兼容旧调用（无 BPM）。 */
 	public void renderRulerRow(TimelineLayout layout, TimelineViewState viewState) {
-		renderRulerRow(layout, viewState, 0, null);
+		renderRulerRow(layout, viewState, 0, null, null);
 	}
 
 	/** 可滚动区域：轨道区（左侧轨道列表 + 竖线分隔 + 网格 + 一行一行轨道 + 播放头 + 框选）。 */

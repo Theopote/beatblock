@@ -9,6 +9,7 @@ import com.beatblock.timeline.IAudioPlayer;
 import com.beatblock.timeline.Timeline;
 import com.beatblock.timeline.TimelineEditor;
 import com.beatblock.timeline.TimelineEvent;
+import com.beatblock.timeline.TimelineMarker;
 import com.beatblock.timeline.Track;
 import com.beatblock.ui.icons.Icons;
 import com.beatblock.ui.imgui.IconButtonStyle;
@@ -36,6 +37,7 @@ public final class TimelineToolbar {
 	private static final String TOOLTIP_FWD_5S = "前进 5 秒";
 	private static final String TOOLTIP_PREV_EVENT = "跳到上一事件点";
 	private static final String TOOLTIP_NEXT_EVENT = "跳到下一事件点";
+	private static final String TOOLTIP_ADD_MARKER = "在当前时间创建 Marker";
 	private static final String TOOLTIP_LOOP_IN = "将当前时间设为循环起点；也可 Alt+左键点击标尺";
 	private static final String TOOLTIP_LOOP_OUT = "将当前时间设为循环终点；也可 Alt+右键点击标尺";
 	private static final String TOOLTIP_LOOP_CLEAR = "清除循环区间（保留 Loop 开关）";
@@ -135,6 +137,11 @@ public final class TimelineToolbar {
 			seekTo(editor, getDuration(editor));
 		}
 		if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_TO_END);
+		ImGui.sameLine();
+		if (ImGui.button(Icons.Timeline.MARKER + "##tlAddMarker", tBtn, tBtn)) {
+			addMarkerAtCurrentTime(editor);
+		}
+		if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_ADD_MARKER);
 		IconButtonStyle.popBeatBlockIconButton();
 
 		ImGui.sameLine();
@@ -303,7 +310,7 @@ public final class TimelineToolbar {
 
 	private static void jumpToNearbyEvent(TimelineEditor editor, boolean forward) {
 		if (editor == null || BeatBlock.timeline == null) return;
-		List<Double> marks = collectEventTimes(BeatBlock.timeline);
+		List<Double> marks = collectNavigationTimes(BeatBlock.timeline);
 		if (marks.isEmpty()) return;
 
 		double current = editor.getClock().getCurrentTimeSeconds();
@@ -326,6 +333,26 @@ public final class TimelineToolbar {
 			}
 		}
 		seekTo(editor, target);
+	}
+
+	private static void addMarkerAtCurrentTime(TimelineEditor editor) {
+		if (editor == null || BeatBlock.timeline == null) return;
+		double t = editor.getClock().getCurrentTimeSeconds();
+		int markerIndex = BeatBlock.timeline.getMarkers().size() + 1;
+		BeatBlock.timeline.addMarker(new TimelineMarker(t, "Marker " + markerIndex));
+	}
+
+	private static List<Double> collectNavigationTimes(Timeline timeline) {
+		if (timeline == null) return List.of();
+		if (!timeline.getMarkers().isEmpty()) {
+			List<Double> out = new ArrayList<>();
+			for (TimelineMarker marker : timeline.getMarkers()) {
+				if (marker != null) out.add(marker.getTimeSeconds());
+			}
+			Collections.sort(out);
+			return out;
+		}
+		return collectEventTimes(timeline);
 	}
 
 	private static List<Double> collectEventTimes(Timeline timeline) {

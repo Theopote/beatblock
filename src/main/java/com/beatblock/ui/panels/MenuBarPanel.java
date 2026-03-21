@@ -161,6 +161,7 @@ public class MenuBarPanel {
 						if (!loaded.getAudioPath().isBlank()) {
 							BeatBlock.timeline.setMetadata("audioPath", loaded.getAudioPath());
 						}
+						BeatBlock.timeline.setMarkers(loaded.getMarkers());
 						if (!loaded.getAudioPath().isBlank() && BeatBlock.audioLoader != null) {
 							BeatBlock.audioLoader.load(loaded.getAudioPath());
 						}

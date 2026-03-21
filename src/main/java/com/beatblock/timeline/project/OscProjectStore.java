@@ -1,8 +1,10 @@
 package com.beatblock.timeline.project;
 
 import com.beatblock.timeline.Timeline;
+import com.beatblock.timeline.TimelineMarker;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
@@ -10,6 +12,8 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -46,6 +50,15 @@ public final class OscProjectStore {
 		root.addProperty("projectPath", abs.toString());
 		root.addProperty("timelineName", timelineName);
 		root.addProperty("audioPath", audioPath);
+		JsonArray markers = new JsonArray();
+		for (TimelineMarker marker : timeline.getMarkers()) {
+			if (marker == null) continue;
+			JsonObject markerObj = new JsonObject();
+			markerObj.addProperty("timeSeconds", marker.getTimeSeconds());
+			markerObj.addProperty("name", marker.getName());
+			markers.add(markerObj);
+		}
+		root.add("markers", markers);
 
 		Files.writeString(abs, GSON.toJson(root), StandardCharsets.UTF_8);
 
@@ -73,8 +86,25 @@ public final class OscProjectStore {
 		String projectPath = getString(root, "projectPath", abs.toString());
 		String timelineName = getString(root, "timelineName", "");
 		String audioPath = getString(root, "audioPath", "");
+		List<TimelineMarker> markers = parseMarkers(root);
 
-		return new LoadedProject(projectId, projectPath, timelineName, audioPath);
+		return new LoadedProject(projectId, projectPath, timelineName, audioPath, markers);
+	}
+
+	private static List<TimelineMarker> parseMarkers(JsonObject root) {
+		List<TimelineMarker> markers = new ArrayList<>();
+		if (root == null || !root.has("markers") || root.get("markers").isJsonNull()) return markers;
+		try {
+			JsonArray arr = root.getAsJsonArray("markers");
+			for (int i = 0; i < arr.size(); i++) {
+				JsonObject obj = arr.get(i).getAsJsonObject();
+				double timeSeconds = obj.has("timeSeconds") ? obj.get("timeSeconds").getAsDouble() : 0;
+				String name = getString(obj, "name", "");
+				markers.add(new TimelineMarker(timeSeconds, name));
+			}
+		} catch (Exception ignored) {}
+		markers.sort(java.util.Comparator.comparingDouble(TimelineMarker::getTimeSeconds));
+		return markers;
 	}
 
 	private static int getInt(JsonObject obj, String key, int def) {
@@ -107,17 +137,20 @@ public final class OscProjectStore {
 		private final String projectPath;
 		private final String timelineName;
 		private final String audioPath;
+		private final List<TimelineMarker> markers;
 
-		public LoadedProject(String projectId, String projectPath, String timelineName, String audioPath) {
+		public LoadedProject(String projectId, String projectPath, String timelineName, String audioPath, List<TimelineMarker> markers) {
 			this.projectId = projectId == null ? "" : projectId;
 			this.projectPath = projectPath == null ? "" : projectPath;
 			this.timelineName = timelineName == null ? "" : timelineName;
 			this.audioPath = audioPath == null ? "" : audioPath;
+			this.markers = markers != null ? List.copyOf(markers) : List.of();
 		}
 
 		public String getProjectId() { return projectId; }
 		public String getProjectPath() { return projectPath; }
 		public String getTimelineName() { return timelineName; }
 		public String getAudioPath() { return audioPath; }
+		public List<TimelineMarker> getMarkers() { return markers; }
 	}
 }

@@ -23,6 +23,8 @@ public class Timeline {
 	private double durationSeconds = 0;
 	private final List<Track> tracks = new ArrayList<>();
 	private final Map<String, Object> metadata = new ConcurrentHashMap<>();
+	private final List<TimelineMarker> markers = new ArrayList<>();
+	private final List<TimelineMarker> markerView = Collections.unmodifiableList(markers);
 	private final List<TimelineAnimationEvent> blockAnimationCache = new ArrayList<>();
 	private final List<TimelineAnimationEvent> autoAnimationCache = new ArrayList<>();
 	private final List<TimelineAnimationEvent> blockAnimationCacheView = Collections.unmodifiableList(blockAnimationCache);
@@ -57,11 +59,30 @@ public class Timeline {
 	public Map<String, Object> getMetadata() { return Collections.unmodifiableMap(metadata); }
 	public void setMetadata(String key, Object value) { if (key != null) metadata.put(key, value); }
 	public Object getMetadata(String key) { return metadata.get(key); }
+	public List<TimelineMarker> getMarkers() { return markerView; }
 	/** BPM（由音频分析填入 metadata["bpm"]），未设置时返回 0。 */
 	public double getBpm() {
 		Object v = metadata.get("bpm");
 		if (v instanceof Number) return ((Number) v).doubleValue();
 		return 0;
+	}
+
+	public void addMarker(TimelineMarker marker) {
+		if (marker == null) return;
+		markers.add(marker);
+		markers.sort(Comparator.comparingDouble(TimelineMarker::getTimeSeconds));
+	}
+
+	public void clearMarkers() {
+		markers.clear();
+	}
+
+	public void setMarkers(List<TimelineMarker> newMarkers) {
+		markers.clear();
+		if (newMarkers != null) {
+			markers.addAll(newMarkers);
+			markers.sort(Comparator.comparingDouble(TimelineMarker::getTimeSeconds));
+		}
 	}
 
 	// ----- 便捷 API（兼容原 TimelineModel 读写） -----

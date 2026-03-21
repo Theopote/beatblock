@@ -1,5 +1,7 @@
 package com.beatblock.timeline.rendering;
 
+import com.beatblock.timeline.Timeline;
+import com.beatblock.timeline.TimelineMarker;
 import com.beatblock.timeline.editor.TimelineViewState;
 import com.beatblock.timeline.util.MusicTimeFormatter;
 import com.beatblock.timeline.util.TimeUtils;
@@ -42,6 +44,7 @@ public final class GridRenderer {
 	private static final int LOOP_RANGE_FILL  = 0x33_FF_D0_66;
 	private static final int LOOP_IN_COLOR    = 0xEE_FF_BB_44;
 	private static final int LOOP_OUT_COLOR   = 0xEE_FF_88_66;
+	private static final int MARKER_COLOR     = 0xEE_FF_D4_66;
 
 	// ── 刻度高度比例（占 rulerHeight） ──
 	private static final float MAJOR_TICK_FRAC = 0.55f;
@@ -60,7 +63,7 @@ public final class GridRenderer {
 	 * @param layout 布局（提供标尺区坐标）
 	 * @param bpm    来自 Timeline.getBpm()；≤ 0 表示无 BPM 信息，只显示 mm:ss
 	 */
-	public void renderRuler(float startY, TimelineViewState view, TimelineLayout layout, double bpm, TimelineToolbarState toolbarState) {
+	public void renderRuler(float startY, TimelineViewState view, TimelineLayout layout, double bpm, TimelineToolbarState toolbarState, Timeline timeline) {
 		if (view == null || layout == null) return;
 
 		float rTop   = layout.rulerTop;
@@ -87,6 +90,7 @@ public final class GridRenderer {
 					rTop, rBot, rLeft);
 		}
 
+		renderMarkers(view, layout, timeline, rTop, rBot, rLeft);
 		renderLoopOverlay(view, layout, toolbarState, rTop, rBot, rLeft);
 
 		// 3. 底部分隔线
@@ -94,12 +98,12 @@ public final class GridRenderer {
 	}
 
 	public void renderRuler(float startY, TimelineViewState view, TimelineLayout layout, double bpm) {
-		renderRuler(startY, view, layout, bpm, null);
+		renderRuler(startY, view, layout, bpm, null, null);
 	}
 
 	/** 兼容旧调用（无 BPM）。 */
 	public void renderRuler(float startY, TimelineViewState view, TimelineLayout layout) {
-		renderRuler(startY, view, layout, 0, null);
+		renderRuler(startY, view, layout, 0, null, null);
 	}
 
 	/**
@@ -308,6 +312,35 @@ public final class GridRenderer {
 		if (xOut >= clipLeft - 2 && xOut <= clipRight + 2) {
 			ImGui.getWindowDrawList().addLine(xOut, rTop, xOut, rBot, LOOP_OUT_COLOR, 2f);
 			ImGui.getWindowDrawList().addText(xOut + 3, rTop + 12, LABEL_LOOP_COLOR, "OUT");
+		}
+	}
+
+	private void renderMarkers(
+		TimelineViewState view,
+		TimelineLayout layout,
+		Timeline timeline,
+		float rTop,
+		float rBot,
+		float rLeft
+	) {
+		if (view == null || layout == null || timeline == null || timeline.getMarkers().isEmpty()) return;
+		float clipLeft = rLeft;
+		float clipRight = rLeft + layout.rulerWidth;
+		for (TimelineMarker marker : timeline.getMarkers()) {
+			if (marker == null) continue;
+			float x = rLeft + view.timeToScreen(marker.getTimeSeconds());
+			if (x < clipLeft - 6 || x > clipRight + 6) continue;
+			ImGui.getWindowDrawList().addLine(x, rTop + 2, x, rBot - 2, MARKER_COLOR, 1.5f);
+			ImGui.getWindowDrawList().addTriangleFilled(
+				x - 4, rTop + 2,
+				x + 4, rTop + 2,
+				x, rTop + 8,
+				MARKER_COLOR
+			);
+			String name = marker.getName();
+			if (name != null && !name.isBlank()) {
+				ImGui.getWindowDrawList().addText(x + 4, rTop + 2, MARKER_COLOR, name);
+			}
 		}
 	}
 }
