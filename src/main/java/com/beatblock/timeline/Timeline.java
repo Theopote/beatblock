@@ -63,6 +63,7 @@ public class Timeline {
 	public List<FrequencyEvent> getFrequencyEvents() {
 		AudioTrackData ad = getAudioTrackData();
 		if (ad == null) return List.of();
+		// 三个子列表内部已有序，合并后再排一次即可（调用频率低，无性能压力）
 		List<FrequencyEvent> out = new ArrayList<>();
 		out.addAll(ad.getLowBand());
 		out.addAll(ad.getMidBand());
@@ -73,13 +74,12 @@ public class Timeline {
 	public List<FrequencyEvent> getFrequencyEventsByBand(FrequencyBand band) {
 		AudioTrackData ad = getAudioTrackData();
 		if (ad == null) return List.of();
-		List<FrequencyEvent> out = switch (band) {
-			case LOW -> new ArrayList<>(ad.getLowBand());
-			case MID -> new ArrayList<>(ad.getMidBand());
-			case HIGH -> new ArrayList<>(ad.getHighBand());
+		// 列表内部已按 timeSeconds 有序保序，直接返回无需拷贝或排序
+		return switch (band) {
+			case LOW -> ad.getLowBand();
+			case MID -> ad.getMidBand();
+			case HIGH -> ad.getHighBand();
 		};
-		out.sort(Comparator.comparingDouble(FrequencyEvent::getTimeSeconds));
-		return out;
 	}
 	public void addFrequencyEvent(FrequencyEvent e) {
 		AudioTrackData ad = getAudioTrackData();
