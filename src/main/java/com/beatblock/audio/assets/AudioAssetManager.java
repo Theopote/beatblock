@@ -320,6 +320,10 @@ public final class AudioAssetManager {
 						asset.markStepFinished(AudioAnalysisStep.BAND_SPLIT);
 					}
 					case "SECTION_DETECTION" -> asset.markStepFinished(AudioAnalysisStep.SECTION_DETECTION);
+					case "DEMUCS_SEPARATE" -> {
+						// Demucs 模型分离中，不单独计入已完成步骤
+					}
+					case "STEM_ANALYSIS" -> asset.markStepFinished(AudioAnalysisStep.STEM_SEPARATION);
 					case "WRITE_BEATMAP" -> asset.markStepFinished(AudioAnalysisStep.WRITE_BEATMAP);
 					default -> {
 					}

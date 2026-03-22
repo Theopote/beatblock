@@ -96,7 +96,8 @@ public final class TimelineToolbar {
 		// 使用 BeatBlock.ttf（Icons），避免 ▶⏸■ 等未进 ImGui 图集显示为 ?
 		if (playing) {
 			if (ImGui.button(Icons.Play.PAUSE + "##tlPause", tBtn, tBtn)) {
-				if (BeatBlock.musicPlayer != null) BeatBlock.musicPlayer.pause();
+				com.beatblock.timeline.IAudioPlayer ap = BeatBlock.getActiveAudioPlayer();
+				if (ap != null) ap.pause();
 				// 同时暂停时间线时钟
 				if (BeatBlock.timelineEditor != null) {
 					BeatBlock.timelineEditor.getClock().pause();
@@ -106,8 +107,9 @@ public final class TimelineToolbar {
 		} else {
 			if (ImGui.button(Icons.Play.PLAY + "##tlPlay", tBtn, tBtn)) {
 				ensureMusicDurationForPlayback(editor);
-				if (BeatBlock.musicPlayer != null) {
-					BeatBlock.musicPlayer.play();
+				com.beatblock.timeline.IAudioPlayer ap = BeatBlock.getActiveAudioPlayer();
+				if (ap != null) {
+					ap.play();
 					// 启动驱动以便每帧推进时间，播放头随音乐移动
 					if (!BeatBlockClientDriver.isDriving()) BeatBlockClientDriver.startDriving();
 				}
@@ -120,7 +122,8 @@ public final class TimelineToolbar {
 		}
 		nextItemInGroup();
 		if (ImGui.button(Icons.Play.STOP + "##tlStop", tBtn, tBtn)) {
-			if (BeatBlock.musicPlayer != null) BeatBlock.musicPlayer.stop();
+			com.beatblock.timeline.IAudioPlayer ap = BeatBlock.getActiveAudioPlayer();
+			if (ap != null) ap.stop();
 			// 同时暂停和重置时间线时钟
 			if (BeatBlock.timelineEditor != null) {
 				BeatBlock.timelineEditor.getClock().pause();

@@ -96,13 +96,15 @@ public final class BeatBlockRuntime {
 	private static final class MusicPlayerAdapter implements BeatClock.IAudioPlayer {
 		@Override
 		public long getPlaybackPositionMs() {
-			if (BeatBlock.musicPlayer == null) return 0;
-			return Math.round(BeatBlock.musicPlayer.getCurrentTimeSeconds() * 1000.0);
+			com.beatblock.timeline.IAudioPlayer player = BeatBlock.getActiveAudioPlayer();
+			if (player == null) return 0;
+			return Math.round(player.getCurrentTimeSeconds() * 1000.0);
 		}
 		@Override
 		public void seekTo(long ms) {
-			if (BeatBlock.musicPlayer == null) return;
-			BeatBlock.musicPlayer.setCurrentTimeSeconds(ms / 1000.0);
+			com.beatblock.timeline.IAudioPlayer player = BeatBlock.getActiveAudioPlayer();
+			if (player == null) return;
+			player.setCurrentTimeSeconds(ms / 1000.0);
 		}
 	}
 }

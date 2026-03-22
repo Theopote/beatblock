@@ -71,6 +71,8 @@ public final class TimelineRenderer {
 
 	/** 当前帧音频组是否有拖拽悬停高亮（任意 row 0~4 悬停且有 audio payload 时置 true） */
 	private boolean audioGroupDropHighlight;
+	/** 已注册静音回调的 TrackListState 对象（避免重复注册）。 */
+	private TimelineTrackListState registeredMuteListenerFor;
 
 	/**
 	 * 固定区域：只绘制时间刻度行（左侧「时间」标签 + 标尺），分界线与轨道区对齐，并占位。
@@ -101,6 +103,12 @@ public final class TimelineRenderer {
 		TimelineLayout layout
 	) {
 		if (timeline == null || viewState == null || layout == null) return;
+
+		// 首次（或 trackListState 更换后）注册静音/独奏变更回调
+		if (registeredMuteListenerFor != trackListState) {
+			registeredMuteListenerFor = trackListState;
+			trackListState.setMuteChangeListener(() -> syncStemMuteState(trackListState));
+		}
 
 		applyPendingDenseUpdates(timeline);
 
@@ -310,6 +318,8 @@ public final class TimelineRenderer {
 						BeatBlock.audioAnalysisEngine.fillTimelineFromBeatmap(timeline, asset.getBeatmap());
 						requestDenseFeatureEnrichment(timeline, asset);
 						BeatBlockRuntime.getInstance().loadBeatmap(asset.getBeatmap());
+						// 若是 Demucs 模式，加载茎音频到 StemMixer
+						bindStemAudioIfDemucs(asset.getBeatmap());
 					} else if (asset.getFeatureTimeline() != null) {
 						BeatBlock.audioAnalysisEngine.fillTimelineFromFeature(timeline, asset.getFeatureTimeline(), asset.getSampleRate());
 					} else {
@@ -401,8 +411,61 @@ public final class TimelineRenderer {
 
 	private record DenseApplyPayload(AudioAsset asset, AudioFeatureTimeline feature) {}
 
+	/**
+	 * 将 trackListState 的茎轨道静音/独奏状态同步到 {@link BeatBlock#stemMixer}。
+	 * 仅影响 key 为 "stem_wf_*" 的音频子轨对应的茎。
+	 */
+	private void syncStemMuteState(TimelineTrackListState trackListState) {
+		if (BeatBlock.stemMixer == null || !BeatBlock.stemMixer.hasStems()) return;
+		for (int slot = 0; slot < currentAudioSubTracks.size(); slot++) {
+			TrackDefinition td = currentAudioSubTracks.get(slot);
+			String key = td.getKey();
+			if (key == null || !key.startsWith("stem_wf_")) continue;
+			String stemName = key.substring("stem_wf_".length()); // e.g. "drums"
+			int rowIndex = TimelineTrackMeta.ROW_AUDIO_SUBS_START + slot;
+			boolean effectivelyMuted = trackListState.isEffectivelyMuted(rowIndex);
+			BeatBlock.stemMixer.setStemMuted(stemName, effectivelyMuted);
+		}
+	}
+
+	/**
+	 * 若 beatmap 为 Demucs 茎分离模式，将各茎 WAV 加载进 {@link BeatBlock#stemMixer}，
+	 * 同时停止 musicPlayer（避免双轨输出）。若非 Demucs 模式则清空 stemMixer。
+	 */
+	private void bindStemAudioIfDemucs(com.beatblock.audio.beatmap.Beatmap beatmap) {
+		if (BeatBlock.stemMixer == null) return;
+		BeatBlock.stemMixer.clearStems();
+
+		if (beatmap == null || beatmap.meta == null || !beatmap.meta.hasStemSeparation()) return;
+		if (beatmap.beatmapFilePath == null || beatmap.meta.stems() == null) return;
+
+		java.nio.file.Path beatmapDir = beatmap.beatmapFilePath.getParent();
+		if (beatmapDir == null) return;
+
+		boolean anyLoaded = false;
+		for (java.util.Map.Entry<String, String> entry : beatmap.meta.stems().entrySet()) {
+			String stemKey = entry.getKey();
+			String relativePath = entry.getValue();
+			if (relativePath == null || relativePath.isBlank()) continue;
+			java.nio.file.Path stemPath = beatmapDir.resolve(relativePath).normalize();
+			if (java.nio.file.Files.isRegularFile(stemPath)) {
+				BeatBlock.stemMixer.loadStem(stemKey, stemPath);
+				anyLoaded = true;
+			} else {
+				LOGGER.warn("BeatBlock TimelineRenderer: stem WAV not found key={} path={}", stemKey, stemPath);
+			}
+		}
+
+		if (anyLoaded) {
+			// 停止 MusicPlayer 以避免与 StemMixer 重叠输出
+			if (BeatBlock.musicPlayer != null) {
+				BeatBlock.musicPlayer.stop();
+			}
+			LOGGER.info("BeatBlock TimelineRenderer: StemMixer loaded {} stems", beatmap.meta.stems().size());
+		}
+	}
+
 	private void bindDroppedAudioToPlayback(Timeline timeline, AudioAsset asset) {
-		if (timeline == null || asset == null || asset.getPath() == null) return;
 		String audioPath = asset.getPath().toAbsolutePath().normalize().toString();
 		timeline.setMetadata("audioPath", audioPath);
 		if (asset.getDurationSeconds() > 0) {

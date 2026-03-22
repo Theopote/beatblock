@@ -70,17 +70,28 @@ public final class TimelineTrackListState {
 
 	// ── 静音 / 独奏 ────────────────────────────────────────────────────────
 
+	/** 静音或独奏状态变更后调用的回调（可用于通知 StemMixer）。 */
+	private Runnable muteChangeListener;
+
+	public void setMuteChangeListener(Runnable listener) {
+		this.muteChangeListener = listener;
+	}
+
+	private void fireMuteChanged() {
+		if (muteChangeListener != null) muteChangeListener.run();
+	}
+
 	public boolean isMuted(int rowIndex) {
 		if (rowIndex < 0 || rowIndex >= muted.length) return false;
 		return muted[rowIndex];
 	}
 
 	public void setMuted(int rowIndex, boolean v) {
-		if (rowIndex >= 0 && rowIndex < muted.length) muted[rowIndex] = v;
+		if (rowIndex >= 0 && rowIndex < muted.length) { muted[rowIndex] = v; fireMuteChanged(); }
 	}
 
 	public void toggleMuted(int rowIndex) {
-		if (rowIndex >= 0 && rowIndex < muted.length) muted[rowIndex] = !muted[rowIndex];
+		if (rowIndex >= 0 && rowIndex < muted.length) { muted[rowIndex] = !muted[rowIndex]; fireMuteChanged(); }
 	}
 
 	public boolean isSoloed(int rowIndex) {
@@ -89,11 +100,11 @@ public final class TimelineTrackListState {
 	}
 
 	public void setSoloed(int rowIndex, boolean v) {
-		if (rowIndex >= 0 && rowIndex < soloed.length) soloed[rowIndex] = v;
+		if (rowIndex >= 0 && rowIndex < soloed.length) { soloed[rowIndex] = v; fireMuteChanged(); }
 	}
 
 	public void toggleSoloed(int rowIndex) {
-		if (rowIndex >= 0 && rowIndex < soloed.length) soloed[rowIndex] = !soloed[rowIndex];
+		if (rowIndex >= 0 && rowIndex < soloed.length) { soloed[rowIndex] = !soloed[rowIndex]; fireMuteChanged(); }
 	}
 
 	/** 是否存在任何一条轨道处于 Solo 状态。 */

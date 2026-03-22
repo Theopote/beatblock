@@ -46,7 +46,9 @@ public final class BeatmapReader {
 	public static Beatmap read(Path path)
 		throws IOException, BeatmapParseException, BeatmapVersionException {
 		String json = Files.readString(path, StandardCharsets.UTF_8);
-		return parse(json);
+		Beatmap beatmap = parse(json);
+		beatmap.beatmapFilePath = path.toAbsolutePath().normalize();
+		return beatmap;
 	}
 
 	/**

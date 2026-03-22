@@ -10,6 +10,7 @@ import com.beatblock.audio.assets.AudioAnalysisStep;
 import com.beatblock.audio.assets.AudioAsset;
 import com.beatblock.audio.assets.AudioAssetManager;
 import com.beatblock.audio.assets.AudioAssetStatus;
+import com.beatblock.audio.beatmap.Beatmap;
 import imgui.ImGui;
 import imgui.ImVec2;
 import imgui.ImVec4;
@@ -198,6 +199,20 @@ public final class AudioAnalysisPanel {
         }
         IconButtonStyle.popBeatBlockIconButton();
         if (ImGui.isItemHovered()) ImGui.setTooltip(detailExpanded ? "折叠详情" : "展开详情");
+
+        // Demucs 茎分离开关
+        if (BeatBlock.externalAudioAnalyzer != null) {
+            ImGui.sameLine();
+            ImGui.spacing();
+            ImGui.sameLine();
+            boolean[] demucsRef = { BeatBlock.externalAudioAnalyzer.isUseDemucs() };
+            if (ImGui.checkbox("Demucs##demucsToggle", demucsRef)) {
+                BeatBlock.externalAudioAnalyzer.setUseDemucs(demucsRef[0]);
+            }
+            if (ImGui.isItemHovered()) {
+                ImGui.setTooltip("启用 Demucs 高质量茎分离\n将音频拆分为鼓/贝斯/人声/其他四个独立轨道\n需要额外安装 demucs + torch，分析耗时更长");
+            }
+        }
 
         // 添加路径弹窗
         renderAddPopup();
@@ -547,6 +562,18 @@ public final class AudioAnalysisPanel {
         ImGui.text(asset.getBeatCount() + " 踩点");
         ImGui.popStyleColor();
 
+        // Demucs 茎分离标识
+        Beatmap bm = asset.getBeatmap();
+        if (bm != null && bm.meta != null && bm.meta.hasStemSeparation()) {
+            ImGui.sameLine();
+            ImGui.textDisabled("·");
+            ImGui.sameLine();
+            ImGui.pushStyleColor(ImGuiCol.Text, 0.22f, 0.78f, 0.82f, 1f);
+            int stemCount = bm.meta.stems() != null ? bm.meta.stems().size() : 4;
+            ImGui.text(stemCount + "茎");
+            ImGui.popStyleColor();
+        }
+
         // 拖拽提示文字（也是拖拽源的触发区域）
         ImGui.spacing();
         ImGui.textDisabled(Icons.MENU + " 拖动到时间线音频轨道");
@@ -779,6 +806,26 @@ public final class AudioAnalysisPanel {
         ImGui.spacing();
         renderBandBar(asset);
 
+        // ── Demucs 茎分离详情 ─────────────────────────────────────────────
+        Beatmap detailBm = asset.getBeatmap();
+        if (detailBm != null && detailBm.meta != null && detailBm.meta.hasStemSeparation()) {
+            ImGui.spacing();
+            sectionHeader("茎分离 (Demucs)");
+            detailRowColored("分离模式", detailBm.meta.separationMode(), new ImVec4(0.22f, 0.78f, 0.82f, 1f));
+            if (detailBm.meta.stems() != null && !detailBm.meta.stems().isEmpty()) {
+                detailRow("茎数量", detailBm.meta.stems().size() + " 条");
+                ImGui.spacing();
+                ImGui.textDisabled("茎文件路径：");
+                for (var entry : detailBm.meta.stems().entrySet()) {
+                    ImGui.pushStyleColor(ImGuiCol.Text, 0.22f, 0.78f, 0.82f, 0.85f);
+                    ImGui.text("  " + entry.getKey());
+                    ImGui.popStyleColor();
+                    ImGui.sameLine();
+                    ImGui.textDisabled(entry.getValue());
+                }
+            }
+        }
+
         ImGui.spacing();
         ImGui.separator();
         ImGui.spacing();
@@ -1006,6 +1053,7 @@ public final class AudioAnalysisPanel {
             case BEAT_DETECTION   -> "踩点检测";
             case BAND_SPLIT       -> "频段分离";
             case SECTION_DETECTION-> "段落识别";
+            case STEM_SEPARATION  -> "Demucs 茎分离";
             case WRITE_BEATMAP    -> "写入 Beatmap";
         };
     }

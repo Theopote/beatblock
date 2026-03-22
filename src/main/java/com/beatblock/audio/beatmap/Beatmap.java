@@ -18,6 +18,12 @@ public final class Beatmap {
 	/** 可选：每条茎的独立波形预览，key = stem name (drums/bass/vocals/other) */
 	public final java.util.Map<String, WaveformPreview> stemWaveforms;
 
+	/**
+	 * 运行时元数据：该 beatmap 文件的绝对路径（读取后由 BeatmapReader 设置）。
+	 * 用于解析茎音频 WAV 文件的相对路径。不参与序列化。
+	 */
+	public java.nio.file.Path beatmapFilePath;
+
 	public Beatmap(int version, BeatmapMeta meta,
 	               List<BeatEvent> beats, List<MusicSection> sections,
 	               WaveformPreview waveformPreview,

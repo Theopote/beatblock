@@ -7,7 +7,9 @@ import com.beatblock.animation.AnimationTemplate;
 import com.beatblock.audio.AudioLoader;
 import com.beatblock.audio.BeatmapGenerator;
 import com.beatblock.audio.MusicPlayer;
+import com.beatblock.audio.StemMixer;
 import com.beatblock.audio.AudioAnalysisService;
+import com.beatblock.timeline.IAudioPlayer;
 import com.beatblock.audio.AudioConversionService;
 import com.beatblock.audio.assets.AudioAssetManager;
 import com.beatblock.beat.BeatScheduler;
@@ -52,12 +54,23 @@ public class BeatBlock implements ModInitializer {
 	public static AudioAnalysisEngine audioAnalysisEngine;
 	public static AudioAnalysisService externalAudioAnalyzer;
 	public static AudioConversionService audioConversionService;
+	/** Demucs 茎混音播放器；仅在当前已加载茎音频时活跃。 */
+	public static StemMixer stemMixer;
+
+	/**
+	 * 返回当前活跃的音频播放器。茎分离模式下返回 stemMixer，否则返回 musicPlayer。
+	 */
+	public static IAudioPlayer getActiveAudioPlayer() {
+		if (stemMixer != null && stemMixer.hasStems()) return stemMixer;
+		return musicPlayer;
+	}
 
 	@Override
 	public void onInitialize() {
 		audioLoader = new AudioLoader();
 		beatmapGenerator = new BeatmapGenerator();
 		musicPlayer = new MusicPlayer();
+		stemMixer = new StemMixer();
 		beatScheduler = new BeatScheduler();
 		animationRegistry = new AnimationRegistry();
 		animationManager = new AnimationManager();
