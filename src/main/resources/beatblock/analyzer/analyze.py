@@ -3,9 +3,10 @@
 BeatBlock Audio Analyzer  v3.0
 ================================
 使用 librosa 对音频文件做预处理，输出 .beatmap JSON 契约文件。
-v3.0：HPSS + 谱聚类自适应轨道分配。
-      对打击成分中的所有 onset 提取频谱特征，k-means 聚类自动
-      决定轨道数（1~5），无需人工指定 kick/snare/hihat 三种类别。
+v3.0：HPSS + 频谱比例阈值分类，完全确定性，无聚类随机性。
+      对打击成分统一检测 onset，按低/中/高频能量占比阈值分配轨道
+      （低频主导→kick，高频主导→hihat，其余→snare）。
+      稀疏类自动丢弃，输出 1~3 条轨道，无需指定数量。
 
 用法（由 Java 通过 ProcessBuilder 调用）：
     python analyze.py <input_audio> <output_beatmap> [--waveform]
@@ -99,8 +100,6 @@ def analyze(input_path: str, output_path: str, include_waveform: bool) -> dict:
     # ── 3. 踩点检测（HPSS + 谱聚类，自动适配轨道数）──────────────────────
     progress("BEAT_DETECTION", 35)
 
-    from scipy.cluster.vq import kmeans as sp_kmeans, vq
-
     # HPSS：谐波 / 打击分离
     y_harmonic, y_percussive = librosa.effects.hpss(y, margin=3.0)
 
@@ -115,88 +114,48 @@ def analyze(input_path: str, output_path: str, include_waveform: bool) -> dict:
     all_onset_times = librosa.frames_to_time(all_onset_frames, sr=sr, hop_length=_HOP)
     progress("BEAT_DETECTION", 44)
 
-    if len(all_onset_times) < 4:
-        # 踩点过少无法聚类，归为单个轨道
+    # ── 为每个 onset 计算频谱重心：[低/中/高 能量占比] ─────────────────────
+    # 结果完全由物理规律决定，无随机性，同一首歌多次运行结果完全一致。
+    _WIN   = int(sr * 0.05)   # 50ms 分析窗（onset 瞬态持续时间）
+    _N_FFT = 512
+
+    def _spectral_ratios(t):
+        """返回 (low_ratio, mid_ratio, high_ratio)，三者之和为 1。"""
+        s   = int(t * sr)
+        seg = y_percussive[s : s + _WIN]
+        if len(seg) < _N_FFT // 2:
+            return 0.33, 0.34, 0.33
+        S  = np.abs(librosa.stft(seg, n_fft=_N_FFT, hop_length=_N_FFT // 2))
+        fr = librosa.fft_frequencies(sr=sr, n_fft=_N_FFT)
+        lo = float(S[fr <  250, :].sum())
+        mi = float(S[(fr >= 250) & (fr < 3000), :].sum())
+        hi = float(S[fr >= 3000, :].sum())
+        tot = lo + mi + hi + 1e-9
+        return lo / tot, mi / tot, hi / tot
+
+    # ── 阈值分类：直接按主导频段划分，无需聚类 ────────────────────────────
+    #   kick  : 低频主导（低频占比 > 0.5）→ 对应底鼓
+    #   hihat : 高频主导（高频占比 > 0.5）→ 对应踩镲/碎音
+    #   snare : 其余（中频主导或混合频段）→ 对应军鼓/拍手
+    #
+    # 阈值来自打击乐的物理特性，不随数据分布改变，结果确定且可重现。
+    MIN_CLUSTER_FRACTION = 0.04   # 占比不足 4% 视为稀疏噪声，丢弃该轨道
+    raw_groups: dict[str, list[float]] = {"kick": [], "snare": [], "hihat": []}
+
+    for t in all_onset_times:
+        lo, mi, hi = _spectral_ratios(t)
+        if lo > 0.50:
+            raw_groups["kick"].append(t)
+        elif hi > 0.50:
+            raw_groups["hihat"].append(t)
+        else:
+            raw_groups["snare"].append(t)
+
+    # 过滤稀疏轨道（若某类几乎不存在，说明该乐器在此曲中不显著）
+    min_count = max(3, int(len(all_onset_times) * MIN_CLUSTER_FRACTION))
+    band_onsets = {k: v for k, v in raw_groups.items() if len(v) >= min_count}
+    if not band_onsets:
         band_onsets = {"kick": list(all_onset_times)}
-    else:
-        # ── 为每个 onset 提取频谱特征 [低/中/高 能量占比] ──────────────────
-        _WIN   = int(sr * 0.05)   # 50ms 分析窗
-        _N_FFT = 512
-
-        def _feat(t):
-            s   = int(t * sr)
-            seg = y_percussive[s : s + _WIN]
-            if len(seg) < _N_FFT // 2:
-                return np.array([0.33, 0.34, 0.33], dtype=np.float32)
-            S  = np.abs(librosa.stft(seg, n_fft=_N_FFT, hop_length=_N_FFT // 2))
-            fr = librosa.fft_frequencies(sr=sr, n_fft=_N_FFT)
-            lo = float(S[fr <  250, :].sum())
-            mi = float(S[(fr >= 250) & (fr < 3000), :].sum())
-            hi = float(S[fr >= 3000, :].sum())
-            tot = lo + mi + hi + 1e-9
-            return np.array([lo / tot, mi / tot, hi / tot], dtype=np.float32)
-
-        feat_mat = np.array([_feat(t) for t in all_onset_times])   # (N, 3)
-
-        # 手动标准化（避免 whiten 对零方差列产生 NaN）
-        std = feat_mat.std(axis=0)
-        std[std < 1e-6] = 1.0
-        X = (feat_mat - feat_mat.mean(axis=0)) / std
-
-        # ── 选最优聚类数 k（1~MAX_TRACKS）用拐点法 ──────────────────────────
-        MAX_TRACKS = 5
-        MIN_CLUSTER_FRACTION = 0.04   # 占比不足 4% 的聚类视为噪声丢弃
-
-        def _fit(k):
-            np.random.seed(42)
-            try:
-                ctrs, _ = sp_kmeans(X, k, iter=25)
-                lbls, _ = vq(X, ctrs)
-                sse = float(np.sum((X - ctrs[lbls]) ** 2))
-                return ctrs, lbls, sse
-            except Exception:
-                return X[:k].copy(), np.zeros(len(X), dtype=int), float('inf')
-
-        inertias, fit_cache = [], []
-        for k in range(1, MAX_TRACKS + 1):
-            c, l, e = _fit(k)
-            inertias.append(e)
-            fit_cache.append((c, l))
-
-        # 从 k=1 开始；新增一个 k 带来 ≥15% 的相对误差降低时接受
-        best_k = 1
-        for i in range(1, len(inertias)):
-            prev = inertias[i - 1]
-            if prev > 1e-9 and (prev - inertias[i]) / prev >= 0.15:
-                best_k = i + 1
-        _, labels = fit_cache[best_k - 1]
-
-        # ── 按主频段给聚类命名（低→高排列以符合音乐习惯）──────────────────
-        raw_ctr = np.array([
-            feat_mat[labels == c].mean(axis=0) if np.any(labels == c) else feat_mat[0]
-            for c in range(best_k)
-        ])  # (best_k, 3): [low_ratio, mid_ratio, high_ratio]
-
-        _BAND_NAMES = ["kick", "snare", "hihat"]
-        order = sorted(range(best_k), key=lambda c: float(np.dot(raw_ctr[c], [0.0, 0.5, 1.0])))
-        used_names, cluster_key = set(), {}
-        for c in order:
-            base = _BAND_NAMES[int(np.argmax(raw_ctr[c]))]
-            name, sfx = base, 2
-            while name in used_names:
-                name, sfx = f"{base}_{sfx}", sfx + 1
-            used_names.add(name)
-            cluster_key[c] = name
-
-        # ── 过滤稀疏聚类（噪声），按聚类归组 onset 时间 ────────────────────
-        min_count = max(3, int(len(all_onset_times) * MIN_CLUSTER_FRACTION))
-        band_onsets = {}
-        for c, key in cluster_key.items():
-            times = [t for t, lbl in zip(all_onset_times, labels) if lbl == c]
-            if len(times) >= min_count:
-                band_onsets[key] = times
-        if not band_onsets:
-            band_onsets = {"kick": list(all_onset_times)}
 
     progress("BEAT_DETECTION", 55)
 
