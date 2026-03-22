@@ -124,13 +124,21 @@ public final class AudioAnalysisEngine {
 			timeline.setWaveform(new WaveformData(peaks, ft.getDurationSeconds(), sr));
 		}
 
-		// 频段事件：从 bands 生成 FrequencyEvent（超过阈值即加）
+		// 频段事件：只对能量显著的帧生成 FrequencyEvent（低于全局峰值能量 5% 的帧跳过）
+		List<FrequencyBands> bandFrames = ft.getBands();
 		float threshold = 0.02f;
+		// 第一遍：计算全局峰值总能量，用于绝对阈值过滤
+		float maxAbsSum = 0f;
+		for (FrequencyBands b : bandFrames) {
+			float s = b.getLow() + b.getMid() + b.getHigh();
+			if (s > maxAbsSum) maxAbsSum = s;
+		}
+		float absFloor = maxAbsSum * 0.05f; // 低于峰值能量 5% 的帧视为安静段，不生成事件
 		List<FrequencyEvent> events = new ArrayList<>();
-		for (FrequencyBands b : ft.getBands()) {
+		for (FrequencyBands b : bandFrames) {
 			float low = b.getLow(), mid = b.getMid(), high = b.getHigh();
 			float sum = low + mid + high;
-			if (sum < 1e-10f) continue;
+			if (sum < 1e-10f || sum < absFloor) continue;
 			low /= sum; mid /= sum; high /= sum;
 			if (low >= threshold) events.add(new FrequencyEvent(b.getTimeSeconds(), FrequencyBand.LOW, Math.min(1f, low * 2f)));
 			if (mid >= threshold) events.add(new FrequencyEvent(b.getTimeSeconds(), FrequencyBand.MID, Math.min(1f, mid * 2f)));

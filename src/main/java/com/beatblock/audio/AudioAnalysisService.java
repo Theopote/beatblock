@@ -4,6 +4,8 @@ import com.beatblock.audio.beatmap.Beatmap;
 import com.beatblock.audio.beatmap.BeatmapReader;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -35,6 +37,8 @@ import java.util.function.Consumer;
  *   ERROR    <message>        — 错误信息
  */
 public final class AudioAnalysisService {
+
+	private static final Logger LOGGER = LoggerFactory.getLogger(AudioAnalysisService.class);
 
 	/** 单线程池，串行执行分析任务（避免同时分析多首占用 CPU）*/
 	private final ExecutorService executor = Executors.newSingleThreadExecutor(r -> {
@@ -175,6 +179,24 @@ public final class AudioAnalysisService {
 		String audioFingerprint = Integer.toHexString(
 			audioPath.toAbsolutePath().normalize().toString().toLowerCase().hashCode());
 		Path beatmapPath = outputDir.resolve(baseName + "-" + audioFingerprint + ".beatmap");
+
+		// 若 beatmap 文件已存在且可读，直接加载，跳过 Python 分析（避免重复运行耗时分析）
+		if (Files.isRegularFile(beatmapPath)) {
+			try {
+				long fileSize = Files.size(beatmapPath);
+				if (fileSize > 16) {
+					Beatmap cached = BeatmapReader.read(beatmapPath);
+					LOGGER.info("BeatBlock AudioAnalysis: beatmap cache hit, skipping Python path={} beatmap={}",
+						audioPath.getFileName(), beatmapPath.getFileName());
+					onComplete.accept(cached);
+					return;
+				}
+			} catch (Exception e) {
+				LOGGER.warn("BeatBlock AudioAnalysis: existing beatmap unreadable, re-analyzing path={} reason={}",
+					audioPath.getFileName(), e.getMessage());
+				// fall through to Python re-analysis
+			}
+		}
 
 		// 解析 Python 可执行文件
 		String pythonExe = resolvePythonExe(outputDir.getParent());
