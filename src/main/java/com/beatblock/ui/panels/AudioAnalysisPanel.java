@@ -12,7 +12,6 @@ import com.beatblock.audio.assets.AudioAssetManager;
 import com.beatblock.audio.assets.AudioAssetStatus;
 import com.beatblock.audio.beatmap.Beatmap;
 import imgui.ImGui;
-import imgui.ImVec2;
 import imgui.ImVec4;
 import imgui.flag.ImGuiCol;
 import imgui.flag.ImGuiCond;
@@ -1171,7 +1170,7 @@ public final class AudioAnalysisPanel {
                 if (parent != null && parent.exists()) {
                     dialog.setDirectory(parent.getAbsolutePath());
                 }
-                if (seed.getName() != null && !seed.getName().isBlank()) {
+                if (!seed.getName().isBlank()) {
                     dialog.setFile(seed.getName());
                 }
             }
