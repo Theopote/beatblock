@@ -13,7 +13,6 @@ import javax.sound.sampled.UnsupportedAudioFileException;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Locale;
 
 /**
  * 音乐播放与进度控制，与 BeatScheduler 同步驱动时间轴。
@@ -117,17 +116,15 @@ public class MusicPlayer implements IAudioPlayer {
 
 		Path file = Path.of(path).toAbsolutePath().normalize();
 		if (!Files.isRegularFile(file)) return false;
-		String lower = file.getFileName().toString().toLowerCase(Locale.ROOT);
-		if (!lower.endsWith(".mp3")) return false;
 
 		try {
-			loadMp3Clip(file);
+			loadClip(file);
 			loadedAudioPath = file.toString();
 			playing = false;
 			currentTimeSeconds = 0;
 			return true;
 		} catch (Exception e) {
-			LOGGER.warn("BeatBlock: MP3 playback unavailable for {}: {}", file, e.getMessage());
+			LOGGER.warn("BeatBlock: audio playback unavailable for {}: {}", file, e.getMessage());
 			closeAudioClip();
 			return false;
 		}
@@ -137,7 +134,16 @@ public class MusicPlayer implements IAudioPlayer {
 		return loadedAudioPath;
 	}
 
-	private void loadMp3Clip(Path file) throws UnsupportedAudioFileException, IOException, LineUnavailableException {
+	public String getPlaybackStatusText() {
+		if (loadedAudioPath == null || loadedAudioPath.isBlank()) {
+			return "音频输出: 未绑定";
+		}
+		Path p = Path.of(loadedAudioPath);
+		String name = p.getFileName() != null ? p.getFileName().toString() : loadedAudioPath;
+		return "音频输出: " + name;
+	}
+
+	private void loadClip(Path file) throws UnsupportedAudioFileException, IOException, LineUnavailableException {
 		try (AudioInputStream source = AudioSystem.getAudioInputStream(file.toFile())) {
 			AudioFormat srcFmt = source.getFormat();
 			AudioFormat pcmFmt = new AudioFormat(

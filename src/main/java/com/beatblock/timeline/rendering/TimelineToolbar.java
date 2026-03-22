@@ -271,6 +271,11 @@ public final class TimelineToolbar {
 			nextItemInGroup();
 			ImGui.textDisabled("(" + lastAutoMapCount + " events)");
 		}
+
+		nextGroup();
+		if (BeatBlock.musicPlayer != null) {
+			ImGui.textDisabled(BeatBlock.musicPlayer.getPlaybackStatusText());
+		}
 	}
 
 	private void renderOverflowMenu(TimelineEditor editor, TimelineToolbarState toolbarState, double seekStep) {
@@ -380,6 +385,11 @@ public final class TimelineToolbar {
 		if (lastAutoMapCount >= 0) {
 			ImGui.sameLine();
 			ImGui.textDisabled("(" + lastAutoMapCount + " events)");
+		}
+
+		ImGui.separator();
+		if (BeatBlock.musicPlayer != null) {
+			ImGui.textDisabled(BeatBlock.musicPlayer.getPlaybackStatusText());
 		}
 
 		ImGui.endPopup();

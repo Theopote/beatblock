@@ -199,6 +199,11 @@ public final class AudioAnalysisPanel {
         IconButtonStyle.popBeatBlockIconButton();
         if (ImGui.isItemHovered()) ImGui.setTooltip(detailExpanded ? "折叠详情" : "展开详情");
 
+        ImGui.sameLine();
+        if (BeatBlock.musicPlayer != null) {
+            ImGui.textDisabled(BeatBlock.musicPlayer.getPlaybackStatusText());
+        }
+
         // 添加路径弹窗
         renderAddPopup();
 
@@ -551,6 +556,18 @@ public final class AudioAnalysisPanel {
         ImGui.spacing();
         ImGui.textDisabled(Icons.MENU + " 拖动到时间线音频轨道");
 
+        ImGui.sameLine();
+        if (ImGui.smallButton("绑定播放##bindPlayback_" + asset.getId())) {
+            if (bindAssetToTimelinePlayback(asset)) {
+                setPanelHint("已绑定播放音频: " + asset.getFileName(), false);
+            } else {
+                setPanelHint("绑定失败：音频文件不可用或格式暂不支持", true);
+            }
+        }
+        if (ImGui.isItemHovered()) {
+            ImGui.setTooltip("将该音频绑定到时间线播放控制（播放/暂停/拖动）");
+        }
+
         // 整个 child window 作为拖拽源
         if (ImGui.beginDragDropSource(imgui.flag.ImGuiDragDropFlags.SourceAllowNullID)) {
             AudioAssetManager.getInstance().setCurrentDragAsset(asset);
@@ -781,6 +798,17 @@ public final class AudioAnalysisPanel {
 
         ImGui.spacing();
         ImGui.separator();
+        ImGui.spacing();
+
+        if (ImGui.button(Icons.MUSIC_NOTE + "  绑定到时间线播放##detailBindPlayback", ImGui.getContentRegionAvailX(), 26f)) {
+            if (bindAssetToTimelinePlayback(asset)) {
+                setPanelHint("已绑定播放音频: " + asset.getFileName(), false);
+            } else {
+                setPanelHint("绑定失败：音频文件不可用或格式暂不支持", true);
+            }
+        }
+        if (ImGui.isItemHovered()) ImGui.setTooltip("将该音频作为时间线播放音源");
+
         ImGui.spacing();
 
         // ── 拖拽到时间线 ──────────────────────────────────────────────
@@ -1099,6 +1127,26 @@ public final class AudioAnalysisPanel {
         }
 
         return null;
+    }
+
+    private boolean bindAssetToTimelinePlayback(AudioAsset asset) {
+        if (asset == null || asset.getPath() == null) return false;
+        String path = asset.getPath().toAbsolutePath().normalize().toString();
+        if (BeatBlock.timeline != null) {
+            BeatBlock.timeline.setMetadata("audioPath", path);
+            if (asset.getDurationSeconds() > 0) {
+                BeatBlock.timeline.setDurationSeconds(asset.getDurationSeconds());
+            }
+        }
+        if (BeatBlock.musicPlayer == null) return false;
+        boolean loaded = BeatBlock.musicPlayer.loadAudio(path);
+        if (!loaded) return false;
+        BeatBlock.musicPlayer.setCurrentTimeSeconds(0);
+        if (BeatBlock.timelineEditor != null) {
+            BeatBlock.timelineEditor.syncClockDuration();
+            BeatBlock.timelineEditor.getClock().seek(0);
+        }
+        return true;
     }
 
     private String openNativeAudioFileDialog() throws Exception {
