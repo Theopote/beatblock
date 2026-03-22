@@ -40,6 +40,7 @@ public final class TimelineToolbar {
 	private static final String TOOLTIP_LOOP_CLEAR = "清除循环区间（保留 Loop 开关）";
 	private static final String TOOLTIP_SPEED = "播放速度";
 	private static final String TOOLTIP_SNAP = "拖拽事件时吸附到网格";
+	private static final String TOOLTIP_BEAT_SNAP = "拖拽事件时吸附到节拍";
 	private static final String TOOLTIP_BEAT_GRID = "显示节拍网格线";
 	private static final String TOOLTIP_MAGNET = "吸附到其他事件/关键帧";
 	private static final String TOOLTIP_AUTO_MAP = "根据频段事件自动生成动画事件（需先导入音乐）";
@@ -206,6 +207,13 @@ public final class TimelineToolbar {
 			if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_SNAP);
 			nextItemInGroup();
 
+			boolean beatSnap = toolbarState.isSnapToBeat();
+			if (ImGui.checkbox("Beat Snap", beatSnap)) {
+				toolbarState.setSnapToBeat(!beatSnap);
+			}
+			if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_BEAT_SNAP);
+			nextItemInGroup();
+
 			boolean beatGrid = toolbarState.isBeatGridVisible();
 			if (ImGui.checkbox("Beat Grid", beatGrid)) {
 				toolbarState.setBeatGridVisible(!beatGrid);
@@ -314,6 +322,12 @@ public final class TimelineToolbar {
 		}
 		if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_SNAP);
 
+		boolean beatSnap = toolbarState.isSnapToBeat();
+		if (ImGui.checkbox("Beat Snap##tlMoreBeatSnap", beatSnap)) {
+			toolbarState.setSnapToBeat(!beatSnap);
+		}
+		if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_BEAT_SNAP);
+
 		boolean beatGrid = toolbarState.isBeatGridVisible();
 		if (ImGui.checkbox("Beat Grid##tlMoreBeatGrid", beatGrid)) {
 			toolbarState.setBeatGridVisible(!beatGrid);
@@ -384,6 +398,7 @@ public final class TimelineToolbar {
 			+ comboTotalWidth("Speed", SPEED_LABELS);
 
 		float snapGroupWidth = checkboxWidth("Snap") + TOOLBAR_ITEM_SPACING
+			+ checkboxWidth("Beat Snap") + TOOLBAR_ITEM_SPACING
 			+ checkboxWidth("Beat Grid") + TOOLBAR_ITEM_SPACING
 			+ checkboxWidth("Magnet") + TOOLBAR_GROUP_SPACING
 			+ checkboxWidth("Loop");

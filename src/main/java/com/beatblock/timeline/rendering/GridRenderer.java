@@ -81,14 +81,15 @@ public final class GridRenderer {
 			secondsPerBeat = 60.0 / bpm;
 			secondsPerBar  = secondsPerBeat * 4;
 		}
-		boolean beatMode = bpm > 0 && (secondsPerBar * view.getZoom()) >= 30;
+		boolean beatGridVisible = toolbarState == null || toolbarState.isBeatGridVisible();
+		boolean beatMode = beatGridVisible && bpm > 0 && (secondsPerBar * view.getZoom()) >= 30;
 
 		if (beatMode) {
 			renderBeatModeRuler(view, layout, bpm, secondsPerBeat, secondsPerBar,
 					rTop, rBot, rLeft);
 		} else {
 			renderTimeModeRuler(view, layout, bpm, secondsPerBeat, secondsPerBar,
-					rTop, rBot, rLeft);
+					rTop, rBot, rLeft, beatGridVisible);
 		}
 
 		renderMarkers(view, layout, timeline, rTop, rBot, rLeft);
@@ -135,7 +136,7 @@ public final class GridRenderer {
 	 */
 	private void renderTimeModeRuler(TimelineViewState view, TimelineLayout layout,
 			double bpm, double secondsPerBeat, double secondsPerBar,
-			float rTop, float rBot, float rLeft) {
+			float rTop, float rBot, float rLeft, boolean beatGridVisible) {
 
 		double viewStart = view.getViewStartTimeSeconds();
 		double viewEnd   = view.getViewEndTimeSeconds();
@@ -179,7 +180,7 @@ public final class GridRenderer {
 		}
 
 		// BPM 叠加：小节线 + 拍线（底部较小的刻度层）
-		if (bpm > 0 && secondsPerBar > 0) {
+		if (beatGridVisible && bpm > 0 && secondsPerBar > 0) {
 			float barPx  = (float) (secondsPerBar  * view.getZoom());
 			float beatPx = (float) (secondsPerBeat * view.getZoom());
 			float barTickH  = layout.rulerHeight * BAR_TICK_FRAC;
