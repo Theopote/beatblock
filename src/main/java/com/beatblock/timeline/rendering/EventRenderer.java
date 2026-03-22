@@ -113,6 +113,59 @@ public final class EventRenderer {
 		ImGui.setCursorPosY(rowY + rowHeight);
 	}
 
+	/**
+	 * Feature-track bar rendering (kick/snare/hihat or any named track).
+	 * Mirrors renderFrequencyBars but consumes {@link FeatureEvent} lists.
+	 */
+	public void renderFeatureBars(
+		float rowY,
+		float rowHeight,
+		List<FeatureEvent> events,
+		TimelineLayout layout,
+		TimelineViewState view,
+		int color,
+		double bpm,
+		float widthRatio,
+		float dotScale
+	) {
+		if (view == null || layout == null || events == null || events.isEmpty()) return;
+		ImGui.setCursorPosY(rowY);
+		ImGui.setCursorPosX(layout.trackLabelWidth);
+		float baseX = ImGui.getCursorScreenPosX();
+		float baseY = ImGui.getCursorScreenPosY();
+		double vs = view.getViewStartTimeSeconds();
+		double ve = view.getViewEndTimeSeconds();
+
+		float pxPerSecond = (float) (view.timeToScreen(1.0) - view.timeToScreen(0.0));
+		double beatDur = bpm > 1e-6 ? (60.0 / bpm) : 0.5;
+		float beatWidthPx = (float) (pxPerSecond * beatDur);
+		float barHalfW = Math.max(MIN_BAR_HALF_WIDTH, beatWidthPx * Math.max(0.08f, widthRatio) * 0.5f);
+
+		float bottomY = baseY + rowHeight - 2f;
+		float maxBarH = Math.max(6f, rowHeight - 6f);
+		int barColor = withAlpha(color, 0x66);
+		int fillColor = withAlpha(color, 0x24);
+
+		int start = lowerBound(events, FeatureEvent::getTimeSeconds, vs);
+		for (int i = start; i < events.size(); i++) {
+			FeatureEvent e = events.get(i);
+			double t = e.getTimeSeconds();
+			if (t > ve) break;
+			float x = baseX + view.timeToScreen(t);
+			float energy = clamp01(e.getEnergy());
+			float barH = 3f + energy * (maxBarH - 3f);
+			float y0 = bottomY - barH;
+
+			ImGui.getWindowDrawList().addRectFilled(x - barHalfW, y0, x + barHalfW, bottomY, barColor, 1.5f);
+			ImGui.getWindowDrawList().addRectFilled(x - barHalfW, bottomY - maxBarH, x + barHalfW, bottomY, fillColor, 1f);
+
+			float dotR = Math.max(1.2f, (1.2f + energy * 2.8f) * Math.max(0.7f, dotScale));
+			ImGui.getWindowDrawList().addCircleFilled(x, bottomY, dotR, color);
+		}
+
+		ImGui.setCursorPosY(rowY + rowHeight);
+	}
+
 	public void renderAnimationEventBlocks(float rowY, List<TimelineAnimationEvent> events, TimelineLayout layout, TimelineViewState view, SelectionState selection) {
 		if (view == null || layout == null || events.isEmpty()) return;
 		ImGui.setCursorPosY(rowY);

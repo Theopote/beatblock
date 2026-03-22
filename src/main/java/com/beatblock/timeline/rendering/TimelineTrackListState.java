@@ -144,20 +144,20 @@ public final class TimelineTrackListState {
 		return Math.abs(audioRowHeightPx - AUDIO_ROW_HEIGHT_DEFAULT) < 0.001f;
 	}
 
-	/** 组轨道是否已折叠（仅对组行 0、5 有效） */
+	/** 组轨道是否已折叠（仅对组行 ROW_AUDIO_GROUP、ROW_ANIMATION_GROUP 有效） */
 	public boolean isGroupCollapsed(int groupRowIndex) {
 		return collapsedGroupRows.contains(groupRowIndex);
 	}
 
 	public void setGroupCollapsed(int groupRowIndex, boolean collapsed) {
-		if (groupRowIndex == 0 || groupRowIndex == 5) {
+		if (groupRowIndex == TimelineTrackMeta.ROW_AUDIO_GROUP || groupRowIndex == TimelineTrackMeta.ROW_ANIMATION_GROUP) {
 			if (collapsed) collapsedGroupRows.add(groupRowIndex);
 			else collapsedGroupRows.remove(groupRowIndex);
 		}
 	}
 
 	public void toggleGroupCollapsed(int groupRowIndex) {
-		if (groupRowIndex == 0 || groupRowIndex == 5) {
+		if (groupRowIndex == TimelineTrackMeta.ROW_AUDIO_GROUP || groupRowIndex == TimelineTrackMeta.ROW_ANIMATION_GROUP) {
 			if (collapsedGroupRows.contains(groupRowIndex)) collapsedGroupRows.remove(groupRowIndex);
 			else collapsedGroupRows.add(groupRowIndex);
 		}

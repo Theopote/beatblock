@@ -2,73 +2,71 @@ package com.beatblock.timeline.rendering;
 
 /**
  * 轨道行元数据：默认名称、层级（一级轨道 / 子轨道），与 TimelineLayout.CONTENT_ROW_COUNT 对应。
- * 音频为一组，下辖波形、低频、中频、高频；动画为一组，下辖方块动画、自动动画。
+ *
+ * <p>音频子轨支持最多 {@link #MAX_AUDIO_SUB_ROWS} 条动态轨道（由 TrackRegistry 填充）。
+ * 动画组及其他固定轨道行索引从 {@link #ROW_ANIMATION_GROUP} 开始，固定偏移在 MAX_AUDIO_SUB_ROWS 之后。</p>
  */
 public final class TimelineTrackMeta {
 
 	public static final int NO_PARENT = -1;
-	public static final int ROW_AUDIO_GROUP = 0;
-	public static final int ROW_WAVEFORM = 1;
-	public static final int ROW_FREQ_LOW = 2;
-	public static final int ROW_FREQ_MID = 3;
-	public static final int ROW_FREQ_HIGH = 4;
-	public static final int ROW_ANIMATION_GROUP = 5;
-	public static final int ROW_ANIM_BLOCK = 6;
-	public static final int ROW_ANIM_AUTO = 7;
-	public static final int ROW_CAMERA = 8;
-	public static final int ROW_GLOBAL_EVENT = 9;
-	private static final int ROW_COUNT = ROW_GLOBAL_EVENT + 1;
+
+	/** 音频子轨最大槽数（动态分配，实际使用数由 TrackRegistry 决定）。 */
+	public static final int MAX_AUDIO_SUB_ROWS = 8;
+
+	// ── 固定行索引 ──────────────────────────────────────────────────────────
+	public static final int ROW_AUDIO_GROUP     = 0;
+	/** 动态音频子轨占据行 1 … 1+MAX_AUDIO_SUB_ROWS-1 */
+	public static final int ROW_AUDIO_SUBS_START = 1;
+	public static final int ROW_AUDIO_SUBS_END   = ROW_AUDIO_SUBS_START + MAX_AUDIO_SUB_ROWS - 1;
+
+	public static final int ROW_ANIMATION_GROUP = ROW_AUDIO_SUBS_END + 1;  // = 9
+	public static final int ROW_ANIM_BLOCK      = ROW_ANIMATION_GROUP + 1; // = 10
+	public static final int ROW_ANIM_AUTO       = ROW_ANIM_BLOCK + 1;      // = 11
+	public static final int ROW_CAMERA          = ROW_ANIM_AUTO + 1;       // = 12
+	public static final int ROW_GLOBAL_EVENT    = ROW_CAMERA + 1;           // = 13
+
+	/** 总行槽数（最大值，含所有音频子轨槽位）。 */
+	private static final int ROW_COUNT = ROW_GLOBAL_EVENT + 1;             // = 14
+
+	// ── 遗留常量（向后兼容，指向动态区的前三个槽）────────────────────────
+	/** @deprecated 使用 TrackRegistry 动态轨道，不要依赖固定槽索引。 */
+	@Deprecated
+	public static final int ROW_WAVEFORM  = ROW_AUDIO_SUBS_START;     // 槽 0 = 行 1
+	/** @deprecated */
+	@Deprecated
+	public static final int ROW_FREQ_LOW  = ROW_AUDIO_SUBS_START + 1; // 槽 1 = 行 2
+	/** @deprecated */
+	@Deprecated
+	public static final int ROW_FREQ_MID  = ROW_AUDIO_SUBS_START + 2; // 槽 2 = 行 3
+	/** @deprecated */
+	@Deprecated
+	public static final int ROW_FREQ_HIGH = ROW_AUDIO_SUBS_START + 3; // 槽 3 = 行 4
 
 	private static final String[] DEFAULT_NAMES = new String[ROW_COUNT];
-
 	/** 父行索引，NO_PARENT 表示一级轨道（或组标题） */
 	private static final int[] PARENT_ROW = new int[ROW_COUNT];
 
 	static {
-		DEFAULT_NAMES[ROW_AUDIO_GROUP] = "音频";
-		DEFAULT_NAMES[ROW_WAVEFORM] = "波形";
-		DEFAULT_NAMES[ROW_FREQ_LOW] = "低频";
-		DEFAULT_NAMES[ROW_FREQ_MID] = "中频";
-		DEFAULT_NAMES[ROW_FREQ_HIGH] = "高频";
+		DEFAULT_NAMES[ROW_AUDIO_GROUP]     = "音频";
+		// 动态子轨槽：默认名称为空（由 TrackRegistry / TrackListState 提供）
+		for (int i = ROW_AUDIO_SUBS_START; i <= ROW_AUDIO_SUBS_END; i++) {
+			DEFAULT_NAMES[i] = "";
+		}
 		DEFAULT_NAMES[ROW_ANIMATION_GROUP] = "动画";
-		DEFAULT_NAMES[ROW_ANIM_BLOCK] = "方块动画";
-		DEFAULT_NAMES[ROW_ANIM_AUTO] = "自动动画";
-		DEFAULT_NAMES[ROW_CAMERA] = "摄像机";
-		DEFAULT_NAMES[ROW_GLOBAL_EVENT] = "事件";
+		DEFAULT_NAMES[ROW_ANIM_BLOCK]      = "方块动画";
+		DEFAULT_NAMES[ROW_ANIM_AUTO]       = "自动动画";
+		DEFAULT_NAMES[ROW_CAMERA]          = "摄像机";
+		DEFAULT_NAMES[ROW_GLOBAL_EVENT]    = "事件";
 
 		PARENT_ROW[ROW_AUDIO_GROUP] = NO_PARENT;
-		PARENT_ROW[ROW_WAVEFORM] = ROW_AUDIO_GROUP;
-		PARENT_ROW[ROW_FREQ_LOW] = ROW_AUDIO_GROUP;
-		PARENT_ROW[ROW_FREQ_MID] = ROW_AUDIO_GROUP;
-		PARENT_ROW[ROW_FREQ_HIGH] = ROW_AUDIO_GROUP;
-		PARENT_ROW[ROW_ANIMATION_GROUP] = NO_PARENT;
-		PARENT_ROW[ROW_ANIM_BLOCK] = ROW_ANIMATION_GROUP;
-		PARENT_ROW[ROW_ANIM_AUTO] = ROW_ANIMATION_GROUP;
-		PARENT_ROW[ROW_CAMERA] = NO_PARENT;
-		PARENT_ROW[ROW_GLOBAL_EVENT] = NO_PARENT;
-
-		validateMeta();
-	}
-
-	private static void validateMeta() {
-		for (int i = 0; i < ROW_COUNT; i++) {
-			String name = DEFAULT_NAMES[i];
-			if (name == null || name.isBlank()) {
-				throw new IllegalStateException("TimelineTrackMeta missing default name at row " + i);
-			}
-
-			int parent = PARENT_ROW[i];
-			if (parent == NO_PARENT) continue;
-			if (parent < 0 || parent >= ROW_COUNT) {
-				throw new IllegalStateException("TimelineTrackMeta parent row out of range: row=" + i + ", parent=" + parent);
-			}
-			if (parent == i) {
-				throw new IllegalStateException("TimelineTrackMeta parent row cannot reference itself: row=" + i);
-			}
-			if (!isGroupRow(parent)) {
-				throw new IllegalStateException("TimelineTrackMeta parent row must be a group row: row=" + i + ", parent=" + parent);
-			}
+		for (int i = ROW_AUDIO_SUBS_START; i <= ROW_AUDIO_SUBS_END; i++) {
+			PARENT_ROW[i] = ROW_AUDIO_GROUP;
 		}
+		PARENT_ROW[ROW_ANIMATION_GROUP] = NO_PARENT;
+		PARENT_ROW[ROW_ANIM_BLOCK]      = ROW_ANIMATION_GROUP;
+		PARENT_ROW[ROW_ANIM_AUTO]       = ROW_ANIMATION_GROUP;
+		PARENT_ROW[ROW_CAMERA]          = NO_PARENT;
+		PARENT_ROW[ROW_GLOBAL_EVENT]    = NO_PARENT;
 	}
 
 	public static String getDefaultName(int rowIndex) {
@@ -77,9 +75,18 @@ public final class TimelineTrackMeta {
 	}
 
 	public static boolean isGroupRow(int rowIndex) {
-		if (rowIndex < 0 || rowIndex >= PARENT_ROW.length) return false;
-		return PARENT_ROW[rowIndex] == NO_PARENT
-			&& (rowIndex == ROW_AUDIO_GROUP || rowIndex == ROW_ANIMATION_GROUP);
+		return rowIndex == ROW_AUDIO_GROUP || rowIndex == ROW_ANIMATION_GROUP;
+	}
+
+	/** 是否是动态音频子轨槽位（行 ROW_AUDIO_SUBS_START … ROW_AUDIO_SUBS_END）。 */
+	public static boolean isAudioSubRow(int rowIndex) {
+		return rowIndex >= ROW_AUDIO_SUBS_START && rowIndex <= ROW_AUDIO_SUBS_END;
+	}
+
+	/** 音频子轨的槽序号（0-based），非音频子轨返回 -1。 */
+	public static int audioSubRowSlot(int rowIndex) {
+		if (!isAudioSubRow(rowIndex)) return -1;
+		return rowIndex - ROW_AUDIO_SUBS_START;
 	}
 
 	/** 是否有父轨道（是否为子轨道，需要缩进显示） */
@@ -98,8 +105,8 @@ public final class TimelineTrackMeta {
 	 */
 	public static String getCategoryTypeLabel(int rowIndex) {
 		if (rowIndex < 0 || rowIndex >= DEFAULT_NAMES.length) return "";
-		if (rowIndex >= ROW_AUDIO_GROUP && rowIndex <= ROW_FREQ_HIGH) return "音频";
-		if (rowIndex >= ROW_ANIMATION_GROUP && rowIndex <= ROW_ANIM_AUTO) return "动画";
+		if (rowIndex == ROW_AUDIO_GROUP || isAudioSubRow(rowIndex)) return "音频";
+		if (rowIndex == ROW_ANIMATION_GROUP || rowIndex == ROW_ANIM_BLOCK || rowIndex == ROW_ANIM_AUTO) return "动画";
 		if (rowIndex == ROW_CAMERA) return "摄像机";
 		if (rowIndex == ROW_GLOBAL_EVENT) return "事件";
 		return "";

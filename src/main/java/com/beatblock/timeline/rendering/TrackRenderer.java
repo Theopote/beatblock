@@ -152,7 +152,7 @@ public final class TrackRenderer {
 				listState.startEditing(rowIndex);
 			}
 			if (listState != null && nameHovered) {
-				if (rowIndex >= TimelineTrackMeta.ROW_WAVEFORM && rowIndex <= TimelineTrackMeta.ROW_FREQ_HIGH) {
+				if (TimelineTrackMeta.isAudioSubRow(rowIndex)) {
 					ImGui.setTooltip("双击可修改轨道名称\nAlt+滚轮：调整音频轨高度\nAlt+中键：重置音频轨高度");
 				} else {
 					ImGui.setTooltip("双击可修改轨道名称");

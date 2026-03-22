@@ -3,12 +3,7 @@ package com.beatblock.audio.analysis;
 import com.beatblock.audio.beatmap.Beatmap;
 import com.beatblock.audio.beatmap.BeatEvent;
 import com.beatblock.audio.beatmap.MusicSection;
-import com.beatblock.timeline.FrequencyBand;
-import com.beatblock.timeline.FrequencyEvent;
-import com.beatblock.timeline.MarkerType;
-import com.beatblock.timeline.Timeline;
-import com.beatblock.timeline.TimelineMarker;
-import com.beatblock.timeline.WaveformData;
+import com.beatblock.timeline.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -170,6 +165,9 @@ public final class AudioAnalysisEngine {
 	/**
 	 * 使用 .beatmap JSON（Python 预处理产物）直接填充时间线。
 	 * 运行时无需重新读取/分析音频文件。
+	 *
+	 * <p>新路径：BeatEvent.bandKey 写入 Timeline.featureTracks（开放键）。
+	 * 遗留三频段列表同步保留，兼容尚未迁移的消费方。</p>
 	 */
 	public void fillTimelineFromBeatmap(Timeline timeline, Beatmap beatmap) {
 		if (timeline == null || beatmap == null) return;
@@ -193,17 +191,22 @@ public final class AudioAnalysisEngine {
 		}
 
 		timeline.clearFrequencyEvents();
+		timeline.clearFeatureTracks();
 		for (BeatEvent e : beatmap.beats) {
-			FrequencyBand band = switch (e.band()) {
-				case LOW -> FrequencyBand.LOW;
-				case MID -> FrequencyBand.MID;
-				case HIGH -> FrequencyBand.HIGH;
+			double timeSec = e.timeMs() / 1000.0;
+			float  energy  = Math.max(0f, Math.min(1f, e.energy()));
+			String key     = e.bandKey();
+
+			// ── 新路径：写入开放特征轨道 ──────────────────────────────
+			timeline.addFeatureEvent(key, localizedFeatureLabel(key), new FeatureEvent(timeSec, energy));
+
+			// ── 遗留路径：同步写入三频段列表，兼容旧渲染器 ─────────────
+			FrequencyBand legacyBand = switch (key.toLowerCase()) {
+				case "kick", "low", "bass", "sub"    -> FrequencyBand.LOW;
+				case "hihat", "hat", "high", "cymbal"-> FrequencyBand.HIGH;
+				default                              -> FrequencyBand.MID;
 			};
-			timeline.addFrequencyEvent(new FrequencyEvent(
-				e.timeMs() / 1000.0,
-				band,
-				Math.max(0f, Math.min(1f, e.energy()))
-			));
+			timeline.addFrequencyEvent(new FrequencyEvent(timeSec, legacyBand, energy));
 		}
 
 		List<TimelineMarker> preserved = timeline.getMarkers().stream()
@@ -221,6 +224,20 @@ public final class AudioAnalysisEngine {
 		timeline.setMetadata("sectionCount", beatmap.sections.size());
 		timeline.setMetadata("sourceFile", beatmap.meta.sourceFile());
 		timeline.sortAll();
+	}
+
+	/** 已知 key 的中文显示名称（未知 key 直接返回 key）。 */
+	private static String localizedFeatureLabel(String key) {
+		return switch (key.toLowerCase()) {
+			case "kick"  -> "底鼓";
+			case "snare" -> "军鼓";
+			case "hihat", "hat" -> "踩镲";
+			case "bass"  -> "贝斯";
+			case "low"   -> "低频";
+			case "mid"   -> "中频";
+			case "high"  -> "高频";
+			default      -> key;
+		};
 	}
 
 	public AudioFeatureTimeline getLastFeatureTimeline() {

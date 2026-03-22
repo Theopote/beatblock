@@ -111,9 +111,11 @@ public final class BeatmapReader {
 		for (JsonElement el : arr) {
 			JsonObject o = el.getAsJsonObject();
 			try {
+				// band 字段现在是开放字符串键（"kick"/"snare"/"hihat"或旧的"low"/"mid"/"high"）
+				String bandKey = getString(o, "band", "low");
 				list.add(new BeatEvent(
 					getLong(o, "time_ms", 0),
-					FrequencyBand.fromJson(getString(o, "band", "low")),
+					bandKey,
 					(float) getDouble(o, "energy", 0.5),
 					AnchorType.fromJson(getString(o, "anchor", "arrive")),
 					getInt(o, "beat_index", 0),

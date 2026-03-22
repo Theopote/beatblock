@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """
-BeatBlock Audio Analyzer  v1.0
+BeatBlock Audio Analyzer  v2.0
 ================================
 使用 librosa 对音频文件做预处理，输出 .beatmap JSON 契约文件。
+v2.0：改用 HPSS（谐波-打击成分分离）+ 感知子频带拆分，
+      輸出 band 字段为 "kick" / "snare" / "hihat"。
 
 用法（由 Java 通过 ProcessBuilder 调用）：
     python analyze.py <input_audio> <output_beatmap> [--waveform]
@@ -36,7 +38,7 @@ except ImportError as e:
     print(f"ERROR 缺少依赖：{e}，请运行 pip install librosa soundfile numpy scipy", file=sys.stderr)
     sys.exit(1)
 
-ANALYZER_VERSION = "1.0.0"
+ANALYZER_VERSION = "2.0.0"
 SCHEMA_VERSION   = 1
 
 # ── 进度报告（Java 端按行读取 stdout）──────────────────────────────────────
@@ -93,42 +95,61 @@ def analyze(input_path: str, output_path: str, include_waveform: bool) -> dict:
     beat_times_ms = [int(t * 1000) for t in librosa.frames_to_time(beat_frames, sr=sr)]
     progress("BPM_DETECTION", 30)
 
-    # ── 3. 踩点检测（三频段分别处理）──────────────────────────────────────
+    # ── 3. 踩点检测（HPSS 感知分离 + 子频带拆分）─────────────────────────
     progress("BEAT_DETECTION", 35)
 
-    # 频段分离：使用 butterworth 滤波器模拟低/中/高频
-    # librosa 没有内置带通滤波，用 scipy 补充
+    # HPSS：将音频分为谐波成分（旋律/和弦）与打击成分（鼓/打击乐）
+    # margin 参数影响分离质量；默认值 1 已足够
+    y_harmonic, y_percussive = librosa.effects.hpss(y, margin=3.0)
+
+    # 对打击成分做子频带拆分，分离 kick / snare / hihat
     from scipy.signal import butter, sosfilt
 
+    def lowpass(signal, hi_hz, sample_rate):
+        nyq = sample_rate / 2.0
+        hi  = min(hi_hz / nyq, 0.999)
+        sos = butter(4, hi, btype="low", output="sos")
+        return sosfilt(sos, signal)
+
     def bandpass(signal, lo_hz, hi_hz, sample_rate):
-        """巴特沃斯带通滤波，返回滤波后的信号。"""
         nyq = sample_rate / 2.0
         lo  = lo_hz / nyq
         hi  = min(hi_hz / nyq, 0.999)
         sos = butter(4, [lo, hi], btype="band", output="sos")
         return sosfilt(sos, signal)
 
-    # 频段划分（Hz）
-    # 低频 20~250：鼓点/bass，能量大、瞬态强
-    # 中频 250~4000：人声/旋律，节奏感强
-    # 高频 4000~16000：打击乐/hi-hat，密度高
+    def highpass(signal, lo_hz, sample_rate):
+        nyq = sample_rate / 2.0
+        lo  = lo_hz / nyq
+        sos = butter(4, lo, btype="high", output="sos")
+        return sosfilt(sos, signal)
+
+    # kick：打击成分的低频段（20~200 Hz），对应底鼓
+    # snare：打击成分的中频段（200~3000 Hz），对应军鼓/拍手
+    # hihat：打击成分的高频段（3000~16000 Hz），对应踩镲/碎音
     bands = {
-        "low":  bandpass(y, 20,   250,   sr),
-        "mid":  bandpass(y, 250,  4000,  sr),
-        "high": bandpass(y, 4000, 16000, sr),
+        "kick":  lowpass(y_percussive, 200,          sr),
+        "snare": bandpass(y_percussive, 200,  3000,  sr),
+        "hihat": highpass(y_percussive, 3000,         sr),
     }
 
-    # 对每个频段做 onset 检测
-    # onset_detect 返回的是帧索引
+    # 每个感知频带的 onset 检测参数（kick 间隔更长，hihat 更密）
+    onset_params = {
+        "kick":  {"delta": 0.06, "wait_ms": 100, "backtrack": True},
+        "snare": {"delta": 0.07, "wait_ms": 80,  "backtrack": True},
+        "hihat": {"delta": 0.05, "wait_ms": 40,  "backtrack": False},
+    }
+
     band_onsets = {}
     for band_name, band_signal in bands.items():
+        params = onset_params[band_name]
         onset_frames = librosa.onset.onset_detect(
             y=band_signal,
             sr=sr,
             units="frames",
-            backtrack=True,       # 回溯到真实起点，让时间更精确
-            delta=0.07,           # 灵敏度阈值，越小检测越多
-            wait=int(sr / 1000 * 80),  # 最小间隔 80ms，避免同一击点重复
+            backtrack=params["backtrack"],
+            delta=params["delta"],
+            wait=int(sr / 1000 * params["wait_ms"]),
         )
         band_onsets[band_name] = librosa.frames_to_time(onset_frames, sr=sr)
 
@@ -177,10 +198,10 @@ def analyze(input_path: str, output_path: str, include_waveform: bool) -> dict:
             beat_in_bar = nearest_beat_idx % 4
 
             # anchor 规则：
-            # 低频鼓点 → arrive（重音对应落地冲击）
-            # 中频旋律 → arrive（旋律线落在强拍）
-            # 高频打击 → depart（打击乐是起飞的冲动）
-            anchor = "arrive" if band_name in ("low", "mid") else "depart"
+            # kick（底鼓）→ arrive（重音对应落地冲击）
+            # snare（军鼓）→ arrive（卡拍）
+            # hihat（踩镲）→ depart（轻触起飞）
+            anchor = "depart" if band_name == "hihat" else "arrive"
 
             beats.append({
                 "time_ms":    t_ms,

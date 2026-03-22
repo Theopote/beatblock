@@ -180,6 +180,54 @@ public class Timeline {
 		if (ad != null) ad.clearAllBands();
 	}
 
+	// ── 新特征轨道 API（kick / snare / hihat 等开放键） ─────────────────
+
+	/**
+	 * 向命名特征轨道追加事件（首次写入时自动创建轨道）。
+	 *
+	 * @param key   轨道键，如 "kick"、"snare"、"hihat"
+	 * @param event 特征事件
+	 */
+	public void addFeatureEvent(String key, FeatureEvent event) {
+		AudioTrackData ad = getAudioTrackData();
+		if (ad != null) ad.addFeatureEvent(key, event);
+	}
+
+	/**
+	 * 向命名特征轨道追加事件，并指定显示名称（首次创建时生效）。
+	 */
+	public void addFeatureEvent(String key, String label, FeatureEvent event) {
+		AudioTrackData ad = getAudioTrackData();
+		if (ad != null) ad.addFeatureEvent(key, label, event);
+	}
+
+	/** 获取指定 key 的特征轨道事件列表，不存在返回空列表。 */
+	public List<FeatureEvent> getFeatureEvents(String key) {
+		AudioTrackData ad = getAudioTrackData();
+		if (ad == null) return List.of();
+		FeatureTrack ft = ad.getFeatureTrack(key);
+		return ft != null ? ft.getEvents() : List.of();
+	}
+
+	/** 获取所有命名特征轨道（保持插入顺序）。 */
+	public java.util.Map<String, FeatureTrack> getFeatureTracks() {
+		AudioTrackData ad = getAudioTrackData();
+		if (ad == null) return Map.of();
+		return ad.getFeatureTracks();
+	}
+
+	/** 是否包含任何命名特征轨道数据。 */
+	public boolean hasFeatureTracks() {
+		AudioTrackData ad = getAudioTrackData();
+		return ad != null && ad.hasFeatureTracks();
+	}
+
+	/** 清空所有命名特征轨道（不清除遗留频段）。 */
+	public void clearFeatureTracks() {
+		AudioTrackData ad = getAudioTrackData();
+		if (ad != null) ad.clearFeatureTracks();
+	}
+
 	public List<TimelineAnimationEvent> getBlockAnimationEvents() {
 		if (blockAnimationDirty) {
 			rebuildAnimationCache(TRACK_ID_ANIMATION_BLOCK, blockAnimationCache);

@@ -5,6 +5,7 @@ import com.beatblock.audio.analysis.AudioFeatureTimeline;
 import com.beatblock.audio.BeatBlockRuntime;
 import com.beatblock.audio.assets.AudioAsset;
 import com.beatblock.audio.assets.AudioAssetManager;
+import com.beatblock.timeline.FeatureEvent;
 import com.beatblock.timeline.FrequencyBand;
 import com.beatblock.timeline.Timeline;
 import com.beatblock.timeline.editor.SelectionBox;
@@ -17,6 +18,8 @@ import org.slf4j.LoggerFactory;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.util.Collections;
+import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -55,6 +58,12 @@ public final class TimelineRenderer {
 	private final ConcurrentMap<String, DenseApplyPayload> pendingDenseApplies = new ConcurrentHashMap<>();
 	private final ConcurrentMap<String, Boolean> denseAnalysisInFlight = new ConcurrentHashMap<>();
 
+	/**
+	 * 本帧计算出的音频子轨定义列表（由 TrackRegistry.buildAudioSubTracks 生成）。
+	 * 在 renderTrackArea 开始时更新，drawRowContent 中按槽索引查找。
+	 */
+	private List<TrackDefinition> currentAudioSubTracks = Collections.emptyList();
+
 	/** 当前帧音频组是否有拖拽悬停高亮（任意 row 0~4 悬停且有 audio payload 时置 true） */
 	private boolean audioGroupDropHighlight;
 
@@ -90,6 +99,10 @@ public final class TimelineRenderer {
 
 		applyPendingDenseUpdates(timeline);
 
+		// ── 每帧更新音频子轨定义列表 ──────────────────────────────────────────
+		currentAudioSubTracks = TrackRegistry.buildAudioSubTracks(timeline);
+		layout.setActiveAudioSubRowCount(currentAudioSubTracks.size());
+
 		// 预留轨道区总高度，使子窗口滚动范围正确
 		ImGui.dummy(0, layout.contentHeight);
 
@@ -119,7 +132,7 @@ public final class TimelineRenderer {
 			float rowY = layout.getRowCursorY(i);
 			float rowHeight = layout.getRowHeight(i);
 			boolean isGroup = TimelineTrackMeta.isGroupRow(i);
-			String displayName = trackListState != null ? trackListState.getDisplayName(i) : TimelineTrackMeta.getDefaultName(i);
+			String displayName = resolveDisplayName(i, trackListState);
 			trackRenderer.drawTrackLabel(rowY, rowHeight, i, displayName, isGroup, trackListState, layout.trackHeaderLeft, layout.trackHeaderWidth);
 			drawRowContent(i, rowY, timeline, viewState, selectionState, layout);
 		}
@@ -147,69 +160,93 @@ public final class TimelineRenderer {
 
 	private void drawRowContent(int rowIndex, float rowY, Timeline timeline, TimelineViewState viewState, SelectionState selectionState, TimelineLayout layout) {
 		float rowHeight = layout.getRowHeight(rowIndex);
-		switch (rowIndex) {
-			case TimelineTrackMeta.ROW_AUDIO_GROUP:
-			case TimelineTrackMeta.ROW_WAVEFORM:
-			case TimelineTrackMeta.ROW_FREQ_LOW:
-			case TimelineTrackMeta.ROW_FREQ_MID:
-			case TimelineTrackMeta.ROW_FREQ_HIGH: {
-				renderAudioGroupDropTarget(rowIndex, rowY, rowHeight, timeline, layout);
-				if (rowIndex == TimelineTrackMeta.ROW_WAVEFORM) {
-					waveformRenderer.render(rowY, rowHeight, timeline, layout, viewState);
-				}
-				if (rowIndex == TimelineTrackMeta.ROW_FREQ_LOW) {
-					eventRenderer.renderFrequencyBars(
-						rowY,
-						rowHeight,
-						timeline.getFrequencyEventsByBand(FrequencyBand.LOW),
-						layout,
-						viewState,
-						FREQ_LOW_COLOR,
-						timeline.getBpm(),
-						0.35f,
-						1.0f);
-				}
-				if (rowIndex == TimelineTrackMeta.ROW_FREQ_MID) {
-					eventRenderer.renderFrequencyBars(
-						rowY,
-						rowHeight,
-						timeline.getFrequencyEventsByBand(FrequencyBand.MID),
-						layout,
-						viewState,
-						FREQ_MID_COLOR,
-						timeline.getBpm(),
-						0.24f,
-						0.9f);
-				}
-				if (rowIndex == TimelineTrackMeta.ROW_FREQ_HIGH) {
-					eventRenderer.renderFrequencyBars(
-						rowY,
-						rowHeight,
-						timeline.getFrequencyEventsByBand(FrequencyBand.HIGH),
-						layout,
-						viewState,
-						FREQ_HIGH_COLOR,
-						timeline.getBpm(),
-						0.16f,
-						0.8f);
-				}
-				break;
-			}
-			case TimelineTrackMeta.ROW_ANIM_BLOCK:
-				eventRenderer.renderAnimationEventBlocks(rowY, timeline.getBlockAnimationEvents(), layout, viewState, selectionState);
-				break;
-			case TimelineTrackMeta.ROW_ANIM_AUTO:
-				eventRenderer.renderAnimationEventBlocks(rowY, timeline.getAutoAnimationEvents(), layout, viewState, selectionState);
-				break;
-			case TimelineTrackMeta.ROW_CAMERA:
-				eventRenderer.renderCameraKeyframeRow(rowY, timeline.getCameraKeyframes(), layout, viewState);
-				break;
-			case TimelineTrackMeta.ROW_GLOBAL_EVENT:
-				eventRenderer.renderGlobalEventRow(rowY, timeline.getGlobalEvents(), layout, viewState);
-				break;
-			default:
-				break;
+
+		// ── 音频组标题行 ──────────────────────────────────────────────────────
+		if (rowIndex == TimelineTrackMeta.ROW_AUDIO_GROUP) {
+			renderAudioGroupDropTarget(rowIndex, rowY, rowHeight, timeline, layout);
+			return;
 		}
+
+		// ── 动态音频子轨（TrackRegistry 驱动） ───────────────────────────────
+		if (TimelineTrackMeta.isAudioSubRow(rowIndex)) {
+			int slot = TimelineTrackMeta.audioSubRowSlot(rowIndex);
+			if (slot < 0 || slot >= currentAudioSubTracks.size()) return;
+			TrackDefinition td = currentAudioSubTracks.get(slot);
+			renderAudioGroupDropTarget(rowIndex, rowY, rowHeight, timeline, layout);
+			renderAudioSubTrack(td, rowY, rowHeight, timeline, layout, viewState);
+			return;
+		}
+
+		// ── 固定非音频轨道 ────────────────────────────────────────────────────
+		if (rowIndex == TimelineTrackMeta.ROW_ANIM_BLOCK) {
+			eventRenderer.renderAnimationEventBlocks(rowY, timeline.getBlockAnimationEvents(), layout, viewState, selectionState);
+		} else if (rowIndex == TimelineTrackMeta.ROW_ANIM_AUTO) {
+			eventRenderer.renderAnimationEventBlocks(rowY, timeline.getAutoAnimationEvents(), layout, viewState, selectionState);
+		} else if (rowIndex == TimelineTrackMeta.ROW_CAMERA) {
+			eventRenderer.renderCameraKeyframeRow(rowY, timeline.getCameraKeyframes(), layout, viewState);
+		} else if (rowIndex == TimelineTrackMeta.ROW_GLOBAL_EVENT) {
+			eventRenderer.renderGlobalEventRow(rowY, timeline.getGlobalEvents(), layout, viewState);
+		}
+	}
+
+	/**
+	 * 根据 {@link TrackDefinition} 渲染单条音频子轨内容（波形 / 冲击柱）。
+	 */
+	private void renderAudioSubTrack(TrackDefinition td, float rowY, float rowHeight,
+	                                 Timeline timeline, TimelineLayout layout, TimelineViewState viewState) {
+		switch (td.getVisualType()) {
+			case WAVEFORM -> waveformRenderer.render(rowY, rowHeight, timeline, layout, viewState);
+			case IMPULSE -> {
+				int color = td.hasCustomColor() ? td.getColor() : FREQ_MID_COLOR;
+				List<FeatureEvent> events = timeline.getFeatureEvents(td.getKey());
+				if (!events.isEmpty()) {
+					eventRenderer.renderFeatureBars(rowY, rowHeight, events, layout, viewState, color,
+						timeline.getBpm(), 0.20f, 0.9f);
+				} else {
+					// 遗留回退：若命名特征轨道无数据但有遗留频段数据，则用遗留数据渲染
+					renderLegacyBandFallback(td.getKey(), rowY, rowHeight, timeline, layout, viewState, color);
+				}
+			}
+		}
+	}
+
+	/** 遗留频段回退：只在 featureTracks 为空且遗留列表有数据时触发。 */
+	private void renderLegacyBandFallback(String key, float rowY, float rowHeight,
+	                                      Timeline timeline, TimelineLayout layout,
+	                                      TimelineViewState viewState, int color) {
+		switch (key) {
+			case "low" -> eventRenderer.renderFrequencyBars(rowY, rowHeight,
+				timeline.getFrequencyEventsByBand(FrequencyBand.LOW),
+				layout, viewState, FREQ_LOW_COLOR, timeline.getBpm(), 0.35f, 1.0f);
+			case "mid" -> eventRenderer.renderFrequencyBars(rowY, rowHeight,
+				timeline.getFrequencyEventsByBand(FrequencyBand.MID),
+				layout, viewState, FREQ_MID_COLOR, timeline.getBpm(), 0.24f, 0.9f);
+			case "high" -> eventRenderer.renderFrequencyBars(rowY, rowHeight,
+				timeline.getFrequencyEventsByBand(FrequencyBand.HIGH),
+				layout, viewState, FREQ_HIGH_COLOR, timeline.getBpm(), 0.16f, 0.8f);
+		}
+	}
+
+	/**
+	 * 解析行的显示名称：音频子轨优先使用 TrackDefinition.displayName，
+	 * 其次是用户自定义名，最后是 TimelineTrackMeta 默认名。
+	 */
+	private String resolveDisplayName(int rowIndex, TimelineTrackListState trackListState) {
+		// 用户自定义名（非空）优先
+		if (trackListState != null) {
+			String custom = trackListState.getDisplayName(rowIndex);
+			String fallback = TimelineTrackMeta.getDefaultName(rowIndex);
+			boolean isCustom = !custom.equals(fallback) && !custom.isEmpty();
+			if (isCustom) return custom;
+		}
+		// 动态音频子轨用 TrackDefinition 的 displayName
+		if (TimelineTrackMeta.isAudioSubRow(rowIndex)) {
+			int slot = TimelineTrackMeta.audioSubRowSlot(rowIndex);
+			if (slot >= 0 && slot < currentAudioSubTracks.size()) {
+				return currentAudioSubTracks.get(slot).getDisplayName();
+			}
+		}
+		return trackListState != null ? trackListState.getDisplayName(rowIndex) : TimelineTrackMeta.getDefaultName(rowIndex);
 	}
 
 	/**
@@ -364,16 +401,16 @@ public final class TimelineRenderer {
 	 */
 	private void drawAudioGroupDropHighlight(TimelineLayout layout) {
 		if (!audioGroupDropHighlight) return;
-		// 寻找组内第一个和最后一个可见行
+		// 寻找音频组内第一个和最后一个可见行（组头 + 所有活跃子轨）
 		float y0 = -1f, y1 = -1f;
-		for (int r = TimelineTrackMeta.ROW_AUDIO_GROUP; r <= TimelineTrackMeta.ROW_FREQ_HIGH; r++) {
+		int lastAudioRow = TimelineTrackMeta.ROW_AUDIO_SUBS_START + layout.getActiveAudioSubRowCount() - 1;
+		for (int r = TimelineTrackMeta.ROW_AUDIO_GROUP; r <= lastAudioRow; r++) {
 			float ry = layout.getRowScreenY(r);
 			if (ry < 0) continue;
 			if (y0 < 0) y0 = ry;
 			y1 = ry + layout.getRowHeight(r);
 		}
 		if (y0 >= 0 && y1 > y0) {
-			// 高亮覆盖内容区（时间线轨道内容），提示这里可以拖放音频
 			ImGui.getWindowDrawList().addRect(
 				layout.contentLeft, y0,
 				layout.contentLeft + layout.contentWidth, y1,

@@ -23,8 +23,8 @@ public final class TimelineLayout {
 	public static final float ROW_STRIDE = ROW_HEIGHT + ROW_GAP;
 	public static final float RULER_HEIGHT = 28f;
 
-	/** 内容区行数（不含标尺）：音频组+波形+低中高频+动画组+方块/自动+摄像机+全局 */
-	public static final int CONTENT_ROW_COUNT = 10;
+	/** 内容区最大行数（含所有音频子轨槽位）：1组+MAX_AUDIO_SUB_ROWS子轨+1动画组+2动画子轨+摄像机+全局 */
+	public static final int CONTENT_ROW_COUNT = TimelineTrackMeta.ROW_GLOBAL_EVENT + 1;
 
 	/** 可交互轨道在内容行中的索引（0-based）：方块动画、自动动画、摄像机、全局 */
 	public static final int[] INTERACTIVE_ROW_INDICES = {
@@ -83,8 +83,25 @@ public final class TimelineLayout {
 	/** 当前可见行数（考虑折叠） */
 	private int visibleRowCount;
 
+	/**
+	 * 本帧实际活跃的音频子轨道数（由 TimelineRenderer 每帧根据 TrackRegistry 设置）。
+	 * 超出此数量的子轨槽位（{@link TimelineTrackMeta#ROW_AUDIO_SUBS_START} + activeAudioSubRowCount ~ END）不参与渲染。
+	 * 默认值 3 与旧的低/中/高三频段行为一致。
+	 */
+	private int activeAudioSubRowCount = 3;
+
 	/** 时间线区域在窗口内的起始 Y（用于 setCursorPosY） */
 	public float startY;
+
+	/**
+	 * 设置本帧活跃的音频子轨道数，必须在 {@link #attachTrackAreaContext} 之前调用。
+	 * 值被钳制到 [0, MAX_AUDIO_SUB_ROWS]。
+	 */
+	public void setActiveAudioSubRowCount(int count) {
+		activeAudioSubRowCount = Math.max(0, Math.min(count, TimelineTrackMeta.MAX_AUDIO_SUB_ROWS));
+	}
+
+	public int getActiveAudioSubRowCount() { return activeAudioSubRowCount; }
 
 	/**
 	 * 采样固定标尺区域的锚点与共享宽度。本帧只调用一次。
@@ -133,7 +150,7 @@ public final class TimelineLayout {
 		int v = 0;
 		float cursorY = 0f;
 		for (int i = 0; i < CONTENT_ROW_COUNT; i++) {
-			boolean visible = isRowVisible(i, trackListState);
+			boolean visible = isRowVisible(i, trackListState, activeAudioSubRowCount);
 			float h = resolveRowHeight(i, trackListState);
 			rowHeights[i] = h;
 			if (visible) {
@@ -155,13 +172,18 @@ public final class TimelineLayout {
 
 	private static float resolveRowHeight(int rowIndex, TimelineTrackListState state) {
 		if (state == null) return ROW_HEIGHT;
-		if (rowIndex >= TimelineTrackMeta.ROW_WAVEFORM && rowIndex <= TimelineTrackMeta.ROW_FREQ_HIGH) {
+		if (TimelineTrackMeta.isAudioSubRow(rowIndex)) {
 			return state.getAudioRowHeight();
 		}
 		return ROW_HEIGHT;
 	}
 
-	private static boolean isRowVisible(int rowIndex, TimelineTrackListState state) {
+	private static boolean isRowVisible(int rowIndex, TimelineTrackListState state, int activeAudioSubRowCount) {
+		// 超出活跃音频子轨数量的槽位始终不可见
+		if (TimelineTrackMeta.isAudioSubRow(rowIndex)) {
+			int slot = TimelineTrackMeta.audioSubRowSlot(rowIndex);
+			if (slot >= activeAudioSubRowCount) return false;
+		}
 		if (state == null) return true;
 		int parent = TimelineTrackMeta.getParentRowIndex(rowIndex);
 		if (parent == TimelineTrackMeta.NO_PARENT) return true;
