@@ -9,6 +9,7 @@ import com.beatblock.timeline.TimelineOperations;
 import com.beatblock.timeline.Track;
 import com.beatblock.timeline.editor.*;
 import com.beatblock.timeline.rendering.TimelineLayout;
+import com.beatblock.timeline.rendering.TimelineTrackMeta;
 import com.beatblock.timeline.rendering.TimelineToolbarState;
 import com.beatblock.timeline.rendering.TimelineTrackListState;
 import imgui.ImGui;
@@ -212,6 +213,13 @@ public final class TimelineInteraction {
 			}
 		}
 
+		if (trackListState != null && ImGui.getIO().getKeyAlt() && wheel != 0 && layout.contentContains(mx, my)) {
+			int hoveredRow = layout.findRowAtScreenY(my);
+			if (hoveredRow >= TimelineTrackMeta.ROW_WAVEFORM && hoveredRow <= TimelineTrackMeta.ROW_FREQ_HIGH) {
+				trackListState.adjustAudioRowHeight(wheel * 2f);
+			}
+		}
+
 		// 轨道子窗口内：分割线悬停光标
 		if (trackListState != null) {
 			boolean overDivider = isMouseOverDivider(mx, my, layout);
@@ -288,7 +296,7 @@ public final class TimelineInteraction {
 					int logicalRow = TimelineLayout.INTERACTIVE_ROW_INDICES[i];
 					if (!layout.isRowVisible(logicalRow)) continue;
 					float rowTopY = layout.getRowScreenY(logicalRow);
-					float rowBotY = rowTopY + TimelineLayout.ROW_HEIGHT;
+					float rowBotY = rowTopY + layout.getRowHeight(logicalRow);
 					if (rowBotY < boxMinY || rowTopY > boxMaxY) continue;
 					Track track = timeline.getTrack(INTERACTIVE_TRACK_IDS[i]);
 					if (track == null) continue;
@@ -381,8 +389,9 @@ public final class TimelineInteraction {
 				int logicalRow = TimelineLayout.INTERACTIVE_ROW_INDICES[i];
 				if (!layout.isRowVisible(logicalRow)) continue;
 				float rowScreenY = layout.getRowScreenY(logicalRow);
+				float rowH = layout.getRowHeight(logicalRow);
 				HitResult hit = HitTestSystem.hitTestTrackContent(timeline, INTERACTIVE_TRACK_IDS[i], mx, my,
-					layout.contentLeft, rowScreenY, TimelineLayout.ROW_HEIGHT, layout.contentWidth, viewState);
+					layout.contentLeft, rowScreenY, rowH, layout.contentWidth, viewState);
 				if (hit.isEmpty()) continue;
 				if (hit.getHitType() == HitType.EVENT || hit.getHitType() == HitType.CLIP) {
 					interactionState.setMode(InteractionMode.DRAG_EVENT);
@@ -900,6 +909,7 @@ public final class TimelineInteraction {
 			int logicalRow = TimelineLayout.INTERACTIVE_ROW_INDICES[i];
 			if (!layout.isRowVisible(logicalRow)) continue;
 			float rowScreenY = layout.getRowScreenY(logicalRow);
+			float rowH = layout.getRowHeight(logicalRow);
 			HitResult hit = HitTestSystem.hitTestTrackContent(
 				timeline,
 				INTERACTIVE_TRACK_IDS[i],
@@ -907,7 +917,7 @@ public final class TimelineInteraction {
 				my,
 				layout.contentLeft,
 				rowScreenY,
-				TimelineLayout.ROW_HEIGHT,
+				rowH,
 				layout.contentWidth,
 				viewState);
 			if (!hit.isEmpty()) return hit;

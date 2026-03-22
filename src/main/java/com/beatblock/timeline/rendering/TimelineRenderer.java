@@ -24,6 +24,9 @@ public final class TimelineRenderer {
 
 	private static final int PLAYHEAD_COLOR = 0xFF_FF_66_66;
 	private static final int SELECTED_BORDER_COLOR = 0xFF_FF_FF_00;
+	private static final int FREQ_LOW_COLOR = 0xFF_77_77_DD;
+	private static final int FREQ_MID_COLOR = 0xFF_57_C4_A0;
+	private static final int FREQ_HIGH_COLOR = 0xFF_27_A0_EF;
 	/** 轨道槽交替背景（深色），使轨道行更明显 */
 	private static final int ROW_BG_EVEN = 0xFF_28_28_2A;
 	private static final int ROW_BG_ODD = 0xFF_1E_1E_20;
@@ -80,7 +83,7 @@ public final class TimelineRenderer {
 		for (int i = 0; i < TimelineLayout.CONTENT_ROW_COUNT; i++) {
 			if (!layout.isRowVisible(i)) continue;
 			float rowScreenY = layout.getRowScreenY(i);
-			float rowH = layout.rowHeight;
+			float rowH = layout.getRowHeight(i);
 			int vi = layout.getVisibleIndex(i);
 			int bg = (vi % 2 == 0) ? ROW_BG_EVEN : ROW_BG_ODD;
 			ImGui.getWindowDrawList().addRectFilled(x0, rowScreenY, x1, rowScreenY + rowH, bg);
@@ -98,9 +101,10 @@ public final class TimelineRenderer {
 		for (int i = 0; i < TimelineLayout.CONTENT_ROW_COUNT; i++) {
 			if (!layout.isRowVisible(i)) continue;
 			float rowY = layout.getRowCursorY(i);
+			float rowHeight = layout.getRowHeight(i);
 			boolean isGroup = TimelineTrackMeta.isGroupRow(i);
 			String displayName = trackListState != null ? trackListState.getDisplayName(i) : TimelineTrackMeta.getDefaultName(i);
-			trackRenderer.drawTrackLabel(rowY, i, displayName, isGroup, trackListState, layout.trackHeaderLeft, layout.trackHeaderWidth);
+			trackRenderer.drawTrackLabel(rowY, rowHeight, i, displayName, isGroup, trackListState, layout.trackHeaderLeft, layout.trackHeaderWidth);
 			drawRowContent(i, rowY, timeline, viewState, selectionState, layout);
 		}
 
@@ -126,24 +130,52 @@ public final class TimelineRenderer {
 	}
 
 	private void drawRowContent(int rowIndex, float rowY, Timeline timeline, TimelineViewState viewState, SelectionState selectionState, TimelineLayout layout) {
+		float rowHeight = layout.getRowHeight(rowIndex);
 		switch (rowIndex) {
 			case TimelineTrackMeta.ROW_AUDIO_GROUP:
 			case TimelineTrackMeta.ROW_WAVEFORM:
 			case TimelineTrackMeta.ROW_FREQ_LOW:
 			case TimelineTrackMeta.ROW_FREQ_MID:
 			case TimelineTrackMeta.ROW_FREQ_HIGH: {
-				renderAudioGroupDropTarget(rowIndex, rowY, timeline, layout);
+				renderAudioGroupDropTarget(rowIndex, rowY, rowHeight, timeline, layout);
 				if (rowIndex == TimelineTrackMeta.ROW_WAVEFORM) {
-					waveformRenderer.render(rowY, timeline, layout, viewState);
+					waveformRenderer.render(rowY, rowHeight, timeline, layout, viewState);
 				}
 				if (rowIndex == TimelineTrackMeta.ROW_FREQ_LOW) {
-					eventRenderer.renderFrequencyDots(rowY, timeline.getFrequencyEventsByBand(FrequencyBand.LOW), layout, viewState);
+					eventRenderer.renderFrequencyBars(
+						rowY,
+						rowHeight,
+						timeline.getFrequencyEventsByBand(FrequencyBand.LOW),
+						layout,
+						viewState,
+						FREQ_LOW_COLOR,
+						timeline.getBpm(),
+						0.35f,
+						1.0f);
 				}
 				if (rowIndex == TimelineTrackMeta.ROW_FREQ_MID) {
-					eventRenderer.renderFrequencyDots(rowY, timeline.getFrequencyEventsByBand(FrequencyBand.MID), layout, viewState);
+					eventRenderer.renderFrequencyBars(
+						rowY,
+						rowHeight,
+						timeline.getFrequencyEventsByBand(FrequencyBand.MID),
+						layout,
+						viewState,
+						FREQ_MID_COLOR,
+						timeline.getBpm(),
+						0.24f,
+						0.9f);
 				}
 				if (rowIndex == TimelineTrackMeta.ROW_FREQ_HIGH) {
-					eventRenderer.renderFrequencyDots(rowY, timeline.getFrequencyEventsByBand(FrequencyBand.HIGH), layout, viewState);
+					eventRenderer.renderFrequencyBars(
+						rowY,
+						rowHeight,
+						timeline.getFrequencyEventsByBand(FrequencyBand.HIGH),
+						layout,
+						viewState,
+						FREQ_HIGH_COLOR,
+						timeline.getBpm(),
+						0.16f,
+						0.8f);
 				}
 				break;
 			}
@@ -168,11 +200,11 @@ public final class TimelineRenderer {
 	 * 在指定行放置一个不可见按钮作为拖放目标（内容区），接受音频资产拖放。
 	 * 行 0~4（音频组/波形/低中高频）均调用此方法；松手后自动填充整组数据。
 	 */
-	private void renderAudioGroupDropTarget(int rowIndex, float rowY, Timeline timeline, TimelineLayout layout) {
+	private void renderAudioGroupDropTarget(int rowIndex, float rowY, float rowHeight, Timeline timeline, TimelineLayout layout) {
 		float screenY = layout.getRowScreenY(rowIndex);
 		if (screenY < 0) return;
 		ImGui.setCursorScreenPos(layout.contentLeft, screenY);
-		ImGui.invisibleButton("##AudioDropTarget_" + rowIndex, layout.contentWidth, layout.rowHeight);
+		ImGui.invisibleButton("##AudioDropTarget_" + rowIndex, layout.contentWidth, rowHeight);
 
 		if (ImGui.isItemHovered()) {
 			audioGroupDropHighlight = true;
@@ -242,7 +274,7 @@ public final class TimelineRenderer {
 			float ry = layout.getRowScreenY(r);
 			if (ry < 0) continue;
 			if (y0 < 0) y0 = ry;
-			y1 = ry + layout.rowHeight;
+			y1 = ry + layout.getRowHeight(r);
 		}
 		if (y0 >= 0 && y1 > y0) {
 			// 高亮覆盖内容区（时间线轨道内容），提示这里可以拖放音频

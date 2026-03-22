@@ -1,9 +1,14 @@
 package com.beatblock.timeline.rendering;
 
 import com.beatblock.timeline.Timeline;
+import com.beatblock.timeline.FrequencyEvent;
 import com.beatblock.timeline.WaveformData;
 import com.beatblock.timeline.editor.TimelineViewState;
 import imgui.ImGui;
+
+import java.util.List;
+import java.util.Set;
+import java.util.TreeSet;
 
 /**
  * 绘制音频波形轨：█████░░░████
@@ -11,6 +16,8 @@ import imgui.ImGui;
 public final class WaveformRenderer {
 
 	private static final int WAVEFORM_COLOR = 0xFF_66_AA_FF;
+	private static final int BEAT_LINE_COLOR = 0x55_7F_77_DD;
+	private static final int BEAT_HEAD_COLOR = 0xBB_7F_77_DD;
 	private static final double EPS = 1e-6;
 
 	private WaveformData cachedWaveform;
@@ -67,7 +74,7 @@ public final class WaveformRenderer {
 		cachedRenderSamples = renderSamples;
 	}
 
-	public void render(float rowY, Timeline timeline, TimelineLayout layout, TimelineViewState view) {
+	public void render(float rowY, float rowHeight, Timeline timeline, TimelineLayout layout, TimelineViewState view) {
 		if (timeline == null || layout == null || view == null) return;
 		ImGui.setCursorPosY(rowY);
 		ImGui.setCursorPosX(layout.trackLabelWidth);
@@ -78,21 +85,52 @@ public final class WaveformRenderer {
 		double viewEnd = view.getViewEndTimeSeconds();
 		if (wf != null && wf.getSampleCount() > 0) {
 			ensureCache(timeline, layout, view, wf, viewStart, viewEnd);
-			float halfH = layout.rowHeight * 0.4f;
+			float halfH = rowHeight * 0.42f;
+			float centerY = minY + rowHeight * 0.5f;
 			for (int i = 0; i < cachedCount; i++) {
 				float x = cachedXs[i];
 				float s = cachedSamples[i];
 				if (x < -1 || x > layout.timelineWidth + 1) continue;
-				float y0 = minY + layout.rowHeight * 0.5f;
+				float y0 = centerY;
 				float y1 = y0 - s * halfH;
 				ImGui.getWindowDrawList().addLine(minX + x, y0, minX + x, y1, WAVEFORM_COLOR, 1f);
 			}
+			renderBeatOverlay(minX, minY, rowHeight, timeline, view);
 		} else {
 			cachedWaveform = null;
 			cachedWaveformSampleCount = -1;
 			cachedCount = 0;
 			ImGui.textDisabled("~~~~ 波形（导入音乐后生成）~~~~");
 		}
-		ImGui.setCursorPosY(rowY + layout.rowHeight);
+		ImGui.setCursorPosY(rowY + rowHeight);
+	}
+
+	private void renderBeatOverlay(float screenLeft, float rowTopY, float rowHeight, Timeline timeline, TimelineViewState view) {
+		double bpm = timeline.getBpm();
+		if (bpm <= 0) return;
+		List<FrequencyEvent> events = timeline.getFrequencyEvents();
+		if (events.isEmpty()) return;
+
+		double beatDur = 60.0 / bpm;
+		Set<Long> beatIndices = new TreeSet<>();
+		for (FrequencyEvent event : events) {
+			long beatIndex = Math.round(event.getTimeSeconds() / beatDur);
+			beatIndices.add(beatIndex);
+		}
+
+		double viewStart = view.getViewStartTimeSeconds();
+		double viewEnd = view.getViewEndTimeSeconds();
+		float yStart = rowTopY + 4f;
+		float yEnd = rowTopY + rowHeight - 4f;
+		for (long beatIndex : beatIndices) {
+			double t = beatIndex * beatDur;
+			if (t < viewStart || t > viewEnd) continue;
+			float x = screenLeft + view.timeToScreen(t);
+			for (float y = yStart; y < yEnd; y += 5f) {
+				float y2 = Math.min(y + 2f, yEnd);
+				ImGui.getWindowDrawList().addLine(x, y, x, y2, BEAT_LINE_COLOR, 1f);
+			}
+			ImGui.getWindowDrawList().addRectFilled(x - 1f, rowTopY, x + 1f, rowTopY + 3f, BEAT_HEAD_COLOR);
+		}
 	}
 }

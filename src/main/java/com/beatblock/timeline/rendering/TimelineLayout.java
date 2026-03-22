@@ -74,6 +74,10 @@ public final class TimelineLayout {
 
 	/** 每行顶部 Y（屏幕），不可见行为 -1 */
 	private final float[] rowScreenY = new float[CONTENT_ROW_COUNT];
+	/** 每行顶部 Y（窗口本地坐标），不可见行为 -1 */
+	private final float[] rowCursorY = new float[CONTENT_ROW_COUNT];
+	/** 每行高度，默认 ROW_HEIGHT。 */
+	private final float[] rowHeights = new float[CONTENT_ROW_COUNT];
 	/** 逻辑行对应的可见行序号（0-based），不可见为 -1 */
 	private final int[] logicalToVisibleIndex = new int[CONTENT_ROW_COUNT];
 	/** 当前可见行数（考虑折叠） */
@@ -99,6 +103,10 @@ public final class TimelineLayout {
 		rowHeight = ROW_HEIGHT;
 		timelineWidth = contentWidth;
 		trackLabelWidth = headerW;
+		for (int i = 0; i < CONTENT_ROW_COUNT; i++) {
+			rowHeights[i] = ROW_HEIGHT;
+			rowCursorY[i] = -1f;
+		}
 
 		ImGui.setCursorPos(0f, startY);
 		rulerTop = ImGui.getCursorScreenPosY();
@@ -123,20 +131,34 @@ public final class TimelineLayout {
 		ImGui.setCursorPos(backupX, backupY);
 
 		int v = 0;
+		float cursorY = 0f;
 		for (int i = 0; i < CONTENT_ROW_COUNT; i++) {
 			boolean visible = isRowVisible(i, trackListState);
+			float h = resolveRowHeight(i, trackListState);
+			rowHeights[i] = h;
 			if (visible) {
 				logicalToVisibleIndex[i] = v;
-				rowScreenY[i] = trackHeaderTop + v * ROW_STRIDE;
+				rowCursorY[i] = cursorY;
+				rowScreenY[i] = trackHeaderTop + cursorY;
+				cursorY += h + ROW_GAP;
 				v++;
 			} else {
 				logicalToVisibleIndex[i] = -1;
 				rowScreenY[i] = -1f;
+				rowCursorY[i] = -1f;
 			}
 		}
 		visibleRowCount = v;
-		trackHeaderHeight = visibleRowCount * ROW_STRIDE;
+		trackHeaderHeight = visibleRowCount > 0 ? Math.max(0f, cursorY - ROW_GAP) : 0f;
 		contentHeight = trackHeaderHeight;
+	}
+
+	private static float resolveRowHeight(int rowIndex, TimelineTrackListState state) {
+		if (state == null) return ROW_HEIGHT;
+		if (rowIndex >= TimelineTrackMeta.ROW_WAVEFORM && rowIndex <= TimelineTrackMeta.ROW_FREQ_HIGH) {
+			return state.getAudioRowHeight();
+		}
+		return ROW_HEIGHT;
 	}
 
 	private static boolean isRowVisible(int rowIndex, TimelineTrackListState state) {
@@ -169,10 +191,24 @@ public final class TimelineLayout {
 	/** 第 i 行内容区的光标 Y（用于 ImGui.setCursorPosY），不可见返回 -1 */
 	public float getRowCursorY(int rowIndex) {
 		if (rowIndex < 0 || rowIndex >= CONTENT_ROW_COUNT) return -1f;
-		int vi = logicalToVisibleIndex[rowIndex];
-		if (vi < 0) return -1f;
-		// 轨道区总是在 child 窗口里按本地坐标绘制，返回窗口内行偏移即可。
-		return vi * ROW_STRIDE;
+		return rowCursorY[rowIndex];
+	}
+
+	/** 第 i 行高度（像素）。 */
+	public float getRowHeight(int rowIndex) {
+		if (rowIndex < 0 || rowIndex >= CONTENT_ROW_COUNT) return ROW_HEIGHT;
+		return rowHeights[rowIndex] > 0 ? rowHeights[rowIndex] : ROW_HEIGHT;
+	}
+
+	/** 根据屏幕 Y 命中可见行，未命中返回 -1。 */
+	public int findRowAtScreenY(float screenY) {
+		for (int i = 0; i < CONTENT_ROW_COUNT; i++) {
+			if (!isRowVisible(i)) continue;
+			float y = rowScreenY[i];
+			float h = getRowHeight(i);
+			if (screenY >= y && screenY <= y + h) return i;
+		}
+		return -1;
 	}
 
 	/** 第 i 个可交互轨道的屏幕 Y（与 INTERACTIVE_TRACK_IDS[i] 对应） */

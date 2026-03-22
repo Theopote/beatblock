@@ -24,6 +24,11 @@ public final class TimelineTrackListState {
 	private float trackHeaderWidthPx = 220f;
 	private static final float TRACK_HEADER_WIDTH_MIN = 160f;
 	private static final float TRACK_HEADER_WIDTH_MAX = 420f;
+	private static final float AUDIO_ROW_HEIGHT_MIN = 16f;
+	private static final float AUDIO_ROW_HEIGHT_MAX = 64f;
+
+	/** 音频子轨（波形/低中高频）行高，可通过 Alt+滚轮调整。 */
+	private float audioRowHeightPx = TimelineLayout.ROW_HEIGHT;
 
 	/** 已折叠的组轨道行号（0=音频，5=动画），折叠后其子轨道不显示 */
 	private final Set<Integer> collapsedGroupRows = new HashSet<>();
@@ -106,6 +111,18 @@ public final class TimelineTrackListState {
 		trackHeaderWidthPx = Math.max(TRACK_HEADER_WIDTH_MIN, Math.min(TRACK_HEADER_WIDTH_MAX, width));
 	}
 
+	public float getAudioRowHeight() {
+		return audioRowHeightPx;
+	}
+
+	public void setAudioRowHeight(float height) {
+		audioRowHeightPx = Math.max(AUDIO_ROW_HEIGHT_MIN, Math.min(AUDIO_ROW_HEIGHT_MAX, height));
+	}
+
+	public void adjustAudioRowHeight(float delta) {
+		setAudioRowHeight(audioRowHeightPx + delta);
+	}
+
 	/** 组轨道是否已折叠（仅对组行 0、5 有效） */
 	public boolean isGroupCollapsed(int groupRowIndex) {
 		return collapsedGroupRows.contains(groupRowIndex);
@@ -156,12 +173,14 @@ public final class TimelineTrackListState {
 	 */
 	public void applyPersistedState(
 		float widthPx,
+		float audioRowHeight,
 		boolean[] visibleStates,
 		boolean[] lockedStates,
 		Map<Integer, String> names,
 		Set<Integer> collapsedRows
 	) {
 		setTrackHeaderWidth(widthPx);
+		setAudioRowHeight(audioRowHeight > 0f ? audioRowHeight : TimelineLayout.ROW_HEIGHT);
 
 		if (visibleStates != null) {
 			int n = Math.min(visible.length, visibleStates.length);

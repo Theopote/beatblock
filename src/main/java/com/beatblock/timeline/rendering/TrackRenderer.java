@@ -32,6 +32,7 @@ public final class TrackRenderer {
 	 */
 	public float drawTrackLabel(
 		float rowY,
+		float rowHeight,
 		int rowIndex,
 		String displayName,
 		boolean isGroup,
@@ -42,7 +43,7 @@ public final class TrackRenderer {
 		ImGui.setCursorPosY(rowY);
 		float baseX = trackHeaderLeft;
 		float headW = trackHeaderWidth > 0 ? trackHeaderWidth : TimelineLayout.TRACK_LABEL_WIDTH;
-		float rowH = TimelineLayout.ROW_HEIGHT;
+		float rowH = Math.max(14f, rowHeight);
 		/** 折叠槽宽 = 行高，折叠按钮与轨道行同高同宽 */
 		float foldColW = rowH;
 		float iconBtn = rowH;

@@ -156,6 +156,7 @@ public final class TimelineUiStateStore {
 			if (d != null) {
 				state.applyPersistedState(
 					d.trackHeaderWidthPx,
+					d.audioRowHeightPx,
 					d.visible,
 					d.locked,
 					d.customNames,
@@ -169,6 +170,7 @@ public final class TimelineUiStateStore {
 
 	private static int hashState(TimelineTrackListState state) {
 		int h = Float.hashCode(state.getTrackHeaderWidth());
+		h = 31 * h + Float.hashCode(state.getAudioRowHeight());
 		h = 31 * h + Arrays.hashCode(state.copyVisibleStates());
 		h = 31 * h + Arrays.hashCode(state.copyLockedStates());
 		h = 31 * h + state.copyCustomNames().hashCode();
@@ -184,6 +186,7 @@ public final class TimelineUiStateStore {
 
 	private static final class TrackListData {
 		float trackHeaderWidthPx = TimelineLayout.TRACK_LABEL_WIDTH;
+		float audioRowHeightPx = TimelineLayout.ROW_HEIGHT;
 		boolean[] visible = new boolean[TimelineLayout.CONTENT_ROW_COUNT];
 		boolean[] locked = new boolean[TimelineLayout.CONTENT_ROW_COUNT];
 		Map<Integer, String> customNames = new HashMap<>();
@@ -196,6 +199,7 @@ public final class TimelineUiStateStore {
 		static TrackListData fromState(TimelineTrackListState state) {
 			TrackListData d = new TrackListData();
 			d.trackHeaderWidthPx = state.getTrackHeaderWidth();
+			d.audioRowHeightPx = state.getAudioRowHeight();
 			d.visible = state.copyVisibleStates();
 			d.locked = state.copyLockedStates();
 			d.customNames = state.copyCustomNames();
