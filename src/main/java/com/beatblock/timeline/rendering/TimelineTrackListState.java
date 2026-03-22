@@ -26,6 +26,7 @@ public final class TimelineTrackListState {
 	private static final float TRACK_HEADER_WIDTH_MAX = 420f;
 	private static final float AUDIO_ROW_HEIGHT_MIN = 16f;
 	private static final float AUDIO_ROW_HEIGHT_MAX = 64f;
+	private static final float AUDIO_ROW_HEIGHT_DEFAULT = TimelineLayout.ROW_HEIGHT;
 
 	/** 音频子轨（波形/低中高频）行高，可通过 Alt+滚轮调整。 */
 	private float audioRowHeightPx = TimelineLayout.ROW_HEIGHT;
@@ -121,6 +122,10 @@ public final class TimelineTrackListState {
 
 	public void adjustAudioRowHeight(float delta) {
 		setAudioRowHeight(audioRowHeightPx + delta);
+	}
+
+	public void resetAudioRowHeight() {
+		audioRowHeightPx = AUDIO_ROW_HEIGHT_DEFAULT;
 	}
 
 	/** 组轨道是否已折叠（仅对组行 0、5 有效） */

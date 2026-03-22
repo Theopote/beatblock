@@ -219,6 +219,13 @@ public final class TimelineInteraction {
 				trackListState.adjustAudioRowHeight(wheel * 2f);
 			}
 		}
+		if (trackListState != null && alt && ImGui.isMouseClicked(2) && layout.contentContains(mx, my)) {
+			int hoveredRow = layout.findRowAtScreenY(my);
+			if (hoveredRow >= TimelineTrackMeta.ROW_WAVEFORM && hoveredRow <= TimelineTrackMeta.ROW_FREQ_HIGH) {
+				trackListState.resetAudioRowHeight();
+				return;
+			}
+		}
 
 		// 轨道子窗口内：分割线悬停光标
 		if (trackListState != null) {
