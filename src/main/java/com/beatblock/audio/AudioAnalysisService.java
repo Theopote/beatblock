@@ -181,15 +181,23 @@ public final class AudioAnalysisService {
 		Path beatmapPath = outputDir.resolve(baseName + "-" + audioFingerprint + ".beatmap");
 
 		// 若 beatmap 文件已存在且可读，直接加载，跳过 Python 分析（避免重复运行耗时分析）
+		// 若 analyzerVersion 低于当前最低兼容版本（2.0），则废弃缓存并重新分析
 		if (Files.isRegularFile(beatmapPath)) {
 			try {
 				long fileSize = Files.size(beatmapPath);
 				if (fileSize > 16) {
 					Beatmap cached = BeatmapReader.read(beatmapPath);
-					LOGGER.info("BeatBlock AudioAnalysis: beatmap cache hit, skipping Python path={} beatmap={}",
-						audioPath.getFileName(), beatmapPath.getFileName());
-					onComplete.accept(cached);
-					return;
+					if (isBeatmapVersionCompatible(cached)) {
+						LOGGER.info("BeatBlock AudioAnalysis: beatmap cache hit, skipping Python path={} beatmap={}",
+							audioPath.getFileName(), beatmapPath.getFileName());
+						onComplete.accept(cached);
+						return;
+					} else {
+						LOGGER.info("BeatBlock AudioAnalysis: beatmap cache stale (analyzerVersion={}), re-analyzing path={}",
+							cached.meta != null ? cached.meta.analyzerVersion() : "null",
+							audioPath.getFileName());
+						// fall through to Python re-analysis
+					}
 				}
 			} catch (Exception e) {
 				LOGGER.warn("BeatBlock AudioAnalysis: existing beatmap unreadable, re-analyzing path={} reason={}",
@@ -346,6 +354,23 @@ public final class AudioAnalysisService {
 			onComplete.accept(beatmap);
 		} catch (Exception e) {
 			onError.accept("读取 beatmap 文件失败：" + e.getMessage());
+		}
+	}
+
+	/**
+	 * 检查缓存的 beatmap 是否与当前分析器版本兼容。
+	 * v2.0+ 使用 HPSS 生成 kick/snare/hihat 语义轨道；v1.x 为 low/mid/high 物理频段。
+	 */
+	private static boolean isBeatmapVersionCompatible(Beatmap beatmap) {
+		if (beatmap == null || beatmap.meta == null) return false;
+		String ver = beatmap.meta.analyzerVersion();
+		if (ver == null || ver.isBlank()) return false;
+		// 只接受 2.x 及以上的版本
+		try {
+			int major = Integer.parseInt(ver.split("\\.")[0]);
+			return major >= 2;
+		} catch (NumberFormatException e) {
+			return false;
 		}
 	}
 
