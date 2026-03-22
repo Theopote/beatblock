@@ -197,16 +197,8 @@ public final class AudioAnalysisEngine {
 			float  energy  = Math.max(0f, Math.min(1f, e.energy()));
 			String key     = e.bandKey();
 
-			// ── 新路径：写入开放特征轨道 ──────────────────────────────
+			// 写入开放特征轨道（新路径，renderers 按 TrackRegistry 动态渲染）
 			timeline.addFeatureEvent(key, localizedFeatureLabel(key), new FeatureEvent(timeSec, energy));
-
-			// ── 遗留路径：同步写入三频段列表，兼容旧渲染器 ─────────────
-			FrequencyBand legacyBand = switch (key.toLowerCase()) {
-				case "kick", "low", "bass", "sub"    -> FrequencyBand.LOW;
-				case "hihat", "hat", "high", "cymbal"-> FrequencyBand.HIGH;
-				default                              -> FrequencyBand.MID;
-			};
-			timeline.addFrequencyEvent(new FrequencyEvent(timeSec, legacyBand, energy));
 		}
 
 		List<TimelineMarker> preserved = timeline.getMarkers().stream()
@@ -229,14 +221,16 @@ public final class AudioAnalysisEngine {
 	/** 已知 key 的中文显示名称（未知 key 直接返回 key）。 */
 	private static String localizedFeatureLabel(String key) {
 		return switch (key.toLowerCase()) {
-			case "kick"  -> "底鼓";
-			case "snare" -> "军鼓";
+			case "kick"       -> "底鼓";
+			case "snare"      -> "军鼓";
+			case "snare_hi"   -> "高军鼓";
 			case "hihat", "hat" -> "踩镲";
-			case "bass"  -> "贝斯";
-			case "low"   -> "低频";
-			case "mid"   -> "中频";
-			case "high"  -> "高频";
-			default      -> key;
+			case "hihat_open" -> "开镲";
+			case "bass"       -> "贝斯";
+			case "low"        -> "低频";
+			case "mid"        -> "中频";
+			case "high"       -> "高频";
+			default           -> key;
 		};
 	}
 

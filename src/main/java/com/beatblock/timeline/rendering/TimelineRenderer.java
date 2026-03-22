@@ -21,6 +21,7 @@ import java.nio.file.Path;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
@@ -61,8 +62,11 @@ public final class TimelineRenderer {
 	/**
 	 * 本帧计算出的音频子轨定义列表（由 TrackRegistry.buildAudioSubTracks 生成）。
 	 * 在 renderTrackArea 开始时更新，drawRowContent 中按槽索引查找。
+	 * 只在 featureTracks keySet 发生变化时重建，避免每帧分配新对象。
 	 */
 	private List<TrackDefinition> currentAudioSubTracks = Collections.emptyList();
+	/** 上次构建 currentAudioSubTracks 时的 featureTracks key 快照，用于脏检测。 */
+	private Set<String> lastFeatureTrackKeys = Set.of();
 
 	/** 当前帧音频组是否有拖拽悬停高亮（任意 row 0~4 悬停且有 audio payload 时置 true） */
 	private boolean audioGroupDropHighlight;
@@ -99,8 +103,14 @@ public final class TimelineRenderer {
 
 		applyPendingDenseUpdates(timeline);
 
-		// ── 每帧更新音频子轨定义列表 ──────────────────────────────────────────
-		currentAudioSubTracks = TrackRegistry.buildAudioSubTracks(timeline);
+		// ── 音频子轨定义列表：仅在 featureTracks keySet 变化时重建 ─────────────
+		// TrackRegistry.buildAudioSubTracks 内部每次都分配新 ArrayList + TrackDefinition 对象，
+		// 60fps 下产生持续 GC 压力。轨道定义只在 featureTracks 内容发生变化时才需要重建。
+		Set<String> currentKeys = timeline.getFeatureTracks().keySet();
+		if (!lastFeatureTrackKeys.equals(currentKeys)) {
+			lastFeatureTrackKeys   = Set.copyOf(currentKeys);
+			currentAudioSubTracks  = TrackRegistry.buildAudioSubTracks(timeline);
+		}
 		layout.setActiveAudioSubRowCount(currentAudioSubTracks.size());
 
 		// 预留轨道区总高度，使子窗口滚动范围正确

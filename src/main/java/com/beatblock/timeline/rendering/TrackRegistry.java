@@ -84,19 +84,21 @@ public final class TrackRegistry {
 				}
 			}
 
-			// 再输出不在 RHYTHM_KEYS 中的扩展轨道
+			// 再输出不在 RHYTHM_KEYS 中的扩展轨道（字典序排列，保证顺序与 LinkedHashMap 插入顺序无关）
 			int extIdx = 0;
-			for (String key : featureKeys) {
-				if (!RHYTHM_KEYS.contains(key)) {
-					result.add(new TrackDefinition(
-						key,
-						localizedName(key),
-						TrackDefinition.VisualType.IMPULSE,
-						TrackDefinition.GROUP_EXTENDED,
-						EXTENDED_COLORS[extIdx % EXTENDED_COLORS.length]
-					));
-					extIdx++;
-				}
+			List<String> extKeys = featureKeys.stream()
+				.filter(k -> !RHYTHM_KEYS.contains(k))
+				.sorted()
+				.toList();
+			for (String key : extKeys) {
+				result.add(new TrackDefinition(
+					key,
+					localizedName(key),
+					TrackDefinition.VisualType.IMPULSE,
+					TrackDefinition.GROUP_EXTENDED,
+					EXTENDED_COLORS[extIdx % EXTENDED_COLORS.length]
+				));
+				extIdx++;
 			}
 		} else {
 			// ── 遗留回退：生成 low/mid/high 三条轨道 ────────────────
