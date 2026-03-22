@@ -4,6 +4,7 @@ import com.beatblock.audio.beatmap.Beatmap;
 import com.beatblock.audio.beatmap.BeatmapReader;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -30,7 +31,7 @@ import java.util.function.Consumer;
  * AudioAnalysisService
  * ─────────────────────────────────────────────────────────────────────────────
  * 在后台线程调用 Python analyze.py，解析进度输出，完成后加载 Beatmap。
- *
+ * <p>
  * Python 脚本向 stdout 逐行输出：
  *   PROGRESS <step> <0-100>   — 进度更新
  *   RESULT   <json>           — 完成摘要（单行 JSON）
@@ -138,7 +139,7 @@ public final class AudioAnalysisService {
 		summaryExecutor.submit(() -> {
 			try {
 				String summary = probePythonRuntimeSummary();
-				if (summary != null && !summary.isBlank()) {
+				if (!summary.isBlank()) {
 					cachedPythonSummary = summary;
 				}
 			} catch (Exception e) {
@@ -268,7 +269,7 @@ public final class AudioAnalysisService {
 			return;
 		}
 
-		String resultJson = null;
+		String resultJson;
 		FutureTask<String> stdoutTask = new FutureTask<>(
 			() -> consumeStdout(process.getInputStream(), onProgress, onError)
 		);
@@ -513,7 +514,7 @@ public final class AudioAnalysisService {
 
 		PythonProbeInfo info = getPythonProbeInfo(exe);
 		String version = info.versionString();
-		if (version == null || version.isBlank()) version = "unknown";
+		if (version.isBlank()) version = "unknown";
 		String path = (info.executablePath != null && !info.executablePath.isBlank())
 			? info.executablePath
 			: exe;
@@ -703,7 +704,7 @@ public final class AudioAnalysisService {
 			}
 
 			@Override
-			public Object get(long timeout, TimeUnit unit)
+			public Object get(long timeout, @NonNull TimeUnit unit)
 				throws InterruptedException, ExecutionException, java.util.concurrent.TimeoutException {
 				return delegate.get(timeout, unit);
 			}
