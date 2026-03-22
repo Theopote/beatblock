@@ -430,6 +430,324 @@ def heuristic_label(idx: int, total: int, energy: float,
 
 # ── CLI 入口 ─────────────────────────────────────────────────────────────────
 
+# ── Demucs 茎分离模式 ────────────────────────────────────────────────────────
+
+_DEMUCS_STEMS = ["drums", "bass", "vocals", "other"]
+
+def _ensure_demucs():
+    """检查 demucs 是否可用，不可用则报友好错误。"""
+    try:
+        import demucs.api
+        return True
+    except ImportError:
+        fatal("缺少 demucs 依赖。请运行：pip install demucs torch")
+        return False
+
+
+def _run_demucs(input_path: str, stems_dir: str) -> dict[str, str]:
+    """
+    调用 demucs 分离音频为 4 条茎（drums/bass/vocals/other）。
+    返回 {stem_name: wav_path} 字典。
+    如果茎文件已存在则跳过分离（利用缓存）。
+    """
+    import demucs.api
+
+    # 检查缓存：所有 4 条茎的 wav 文件都存在则直接返回
+    stem_paths = {}
+    all_cached = True
+    for stem in _DEMUCS_STEMS:
+        p = os.path.join(stems_dir, f"{stem}.wav")
+        stem_paths[stem] = p
+        if not os.path.isfile(p):
+            all_cached = False
+
+    if all_cached:
+        progress("DEMUCS_SEPARATE", 40)
+        return stem_paths
+
+    # 运行 demucs 分离
+    progress("DEMUCS_SEPARATE", 10)
+    os.makedirs(stems_dir, exist_ok=True)
+
+    separator = demucs.api.Separator(model="htdemucs", segment=None)
+    progress("DEMUCS_SEPARATE", 20)
+
+    _, outputs = separator.separate_audio_file(input_path)
+    progress("DEMUCS_SEPARATE", 35)
+
+    # 将分离结果保存为 wav
+    for stem_name in _DEMUCS_STEMS:
+        if stem_name in outputs:
+            tensor = outputs[stem_name]
+            # demucs 输出 shape: (channels, samples)，采样率来自 separator
+            audio_np = tensor.numpy()
+            sf.write(stem_paths[stem_name], audio_np.T, separator.samplerate)
+
+    progress("DEMUCS_SEPARATE", 40)
+    return stem_paths
+
+
+def analyze_demucs(input_path: str, output_path: str,
+                   include_waveform: bool, style: str = "auto") -> dict:
+    """
+    Demucs 增强分析模式：先做茎分离，再对每条茎做节拍分析。
+    输出与 analyze() 格式兼容，额外包含茎路径和茎波形。
+    """
+    _ensure_demucs()
+
+    # ── 1. 加载原始音频（用于全局 BPM / 段落检测）──────────────────────────
+    progress("LOAD", 5)
+    if not os.path.isfile(input_path):
+        fatal(f"文件不存在：{input_path}")
+
+    try:
+        y, sr = librosa.load(input_path, sr=None, mono=True)
+    except Exception as e:
+        fatal(f"无法加载音频：{e}")
+
+    duration_ms = int(len(y) / sr * 1000)
+    source_file = os.path.basename(input_path)
+    progress("LOAD", 8)
+
+    # ── 2. BPM 检测（与 analyze() 相同）──────────────────────────────────────
+    progress("BPM_DETECTION", 10)
+    tempo, beat_frames = librosa.beat.beat_track(y=y, sr=sr, units="frames")
+    bpm = float(tempo)
+    dtempo = librosa.beat.tempo(y=y, sr=sr, aggregate=None)
+    bpm_std = float(np.std(dtempo)) if len(dtempo) > 1 else 0.0
+    bpm_confidence = float(np.clip(1.0 - bpm_std / 30.0, 0.0, 1.0))
+    beat_times_ms = [int(t * 1000) for t in librosa.frames_to_time(beat_frames, sr=sr)]
+    beat_time_arr = librosa.frames_to_time(beat_frames, sr=sr)
+    progress("BPM_DETECTION", 15)
+
+    # ── 3. 风格检测 ──────────────────────────────────────────────────────────
+    resolved_style = style
+    if style == "auto":
+        resolved_style = _detect_style(y, sr)
+
+    # ── 4. Demucs 茎分离 ────────────────────────────────────────────────────
+    # 茎缓存目录：与输出 beatmap 同目录下的 stems/<音频指纹>/
+    audio_fingerprint = format(
+        abs(hash(os.path.abspath(input_path).lower())), 'x')
+    output_parent = os.path.dirname(os.path.abspath(output_path))
+    stems_dir = os.path.join(output_parent, "stems", audio_fingerprint)
+    stem_paths = _run_demucs(input_path, stems_dir)
+
+    # ── 5. 对每条茎做节拍分析 ────────────────────────────────────────────────
+    # drums → 使用现有 HPSS+onset 流程（打击乐分析）
+    # bass/vocals/other → onset 检测 + RMS 能量
+    beats = []
+
+    # ─ drums 茎：精细打击分类（复用 analyze() 的阈值分类逻辑）──────────────
+    progress("STEM_ANALYSIS", 42)
+    if os.path.isfile(stem_paths.get("drums", "")):
+        y_drums, sr_drums = librosa.load(stem_paths["drums"], sr=None, mono=True)
+        hpss_margin = 1.5 if resolved_style == "electronic" else 3.0
+        _, y_perc = librosa.effects.hpss(y_drums, margin=hpss_margin)
+
+        _HOP = 512
+        drum_onsets = librosa.onset.onset_detect(
+            y=y_perc, sr=sr_drums, units="frames",
+            backtrack=True, delta=0.05,
+            wait=max(1, int(0.040 * sr_drums / _HOP)),
+        )
+        drum_times = librosa.frames_to_time(drum_onsets, sr=sr_drums, hop_length=_HOP)
+
+        # 频谱比例分类
+        _WIN = int(sr_drums * 0.05)
+        _N_FFT = 512
+
+        def _spectral_ratios_drums(t):
+            s = int(t * sr_drums)
+            seg = y_perc[s: s + _WIN]
+            if len(seg) < _N_FFT // 2:
+                return 0.33, 0.34, 0.33
+            S = np.abs(librosa.stft(seg, n_fft=_N_FFT, hop_length=_N_FFT // 2))
+            fr = librosa.fft_frequencies(sr=sr_drums, n_fft=_N_FFT)
+            lo = float(S[fr < 250, :].sum())
+            mi = float(S[(fr >= 250) & (fr < 3000), :].sum())
+            hi = float(S[fr >= 3000, :].sum())
+            tot = lo + mi + hi + 1e-9
+            return lo / tot, mi / tot, hi / tot
+
+        drum_times_list = [float(t) for t in drum_times]
+        all_ratios = [_spectral_ratios_drums(t) for t in drum_times_list]
+        ratio_by_time = dict(zip(drum_times_list, all_ratios))
+
+        MIN_CLUSTER_FRACTION = 0.04
+        raw_groups = {"kick": [], "snare": [], "hihat": []}
+        for t, (lo, mi, hi) in zip(drum_times_list, all_ratios):
+            if lo > 0.50:
+                raw_groups["kick"].append(t)
+            elif hi > 0.50:
+                raw_groups["hihat"].append(t)
+            else:
+                raw_groups["snare"].append(t)
+
+        min_count = max(3, int(len(drum_times_list) * MIN_CLUSTER_FRACTION))
+        band_onsets = {k: v for k, v in raw_groups.items() if len(v) >= min_count}
+        if not band_onsets:
+            band_onsets = {"kick": drum_times_list}
+
+        # centroid-sort naming
+        _NAME_POOL = ["kick", "snare", "snare_hi", "hihat", "hihat_open"]
+
+        def _track_mean_centroid(times):
+            if not times:
+                return 0.0
+            total = 0.0
+            for t in times:
+                lo, mi, hi = ratio_by_time.get(t, (0.33, 0.34, 0.33))
+                total += lo * 125.0 + mi * 1125.0 + hi * 12500.0
+            return total / len(times)
+
+        sorted_items = sorted(band_onsets.items(),
+                              key=lambda kv: _track_mean_centroid(kv[1]))
+        band_onsets = {_NAME_POOL[i]: kv[1] for i, kv in enumerate(sorted_items)}
+
+        # RMS for energy
+        _hop_e = 512
+        _rms_drums = librosa.feature.rms(y=y_drums, hop_length=_hop_e)[0]
+
+        def _raw_energy_drums(t_sec):
+            frame = librosa.time_to_frames(t_sec, sr=sr_drums, hop_length=_hop_e)
+            lo_f = max(0, frame - 2)
+            hi_f = min(len(_rms_drums) - 1, frame + 2)
+            return float(np.max(_rms_drums[lo_f:hi_f + 1]))
+
+        for band_name, onset_times in band_onsets.items():
+            raw_energies = [_raw_energy_drums(t) for t in onset_times]
+            track_max = max(raw_energies) if raw_energies else 1.0
+            track_min = min(raw_energies) if raw_energies else 0.0
+            track_range = track_max - track_min + 1e-8
+
+            for t_sec, raw_e in zip(onset_times, raw_energies):
+                t_ms = int(t_sec * 1000)
+                if t_ms < 0 or t_ms > duration_ms:
+                    continue
+                energy = float(np.clip((raw_e - track_min) / track_range, 0.0, 1.0))
+                if energy < 0.05:
+                    continue
+                nearest = int(np.argmin(np.abs(beat_time_arr - t_sec)))
+                anchor = "depart" if band_name.startswith("hihat") else "arrive"
+                beats.append({
+                    "time_ms": t_ms, "band": band_name,
+                    "energy": round(energy, 4), "anchor": anchor,
+                    "beat_index": nearest,
+                    "bar_index": nearest // 4, "beat_in_bar": nearest % 4,
+                })
+
+    progress("STEM_ANALYSIS", 55)
+
+    # ─ bass / vocals / other 茎：onset + RMS 能量 ────────────────────────────
+    _melodic_stems = ["bass", "vocals", "other"]
+    for stem_idx, stem_name in enumerate(_melodic_stems):
+        stem_wav = stem_paths.get(stem_name, "")
+        if not os.path.isfile(stem_wav):
+            continue
+        y_stem, sr_stem = librosa.load(stem_wav, sr=None, mono=True)
+        _hop_s = 512
+
+        onset_frames = librosa.onset.onset_detect(
+            y=y_stem, sr=sr_stem, units="frames",
+            backtrack=True, delta=0.07,
+            wait=max(1, int(0.060 * sr_stem / _hop_s)),
+        )
+        onset_times = librosa.frames_to_time(onset_frames, sr=sr_stem, hop_length=_hop_s)
+
+        rms_stem = librosa.feature.rms(y=y_stem, hop_length=_hop_s)[0]
+
+        def _raw_energy_stem(t_sec, rms_arr=rms_stem, sr_s=sr_stem):
+            frame = librosa.time_to_frames(t_sec, sr=sr_s, hop_length=_hop_s)
+            lo_f = max(0, frame - 2)
+            hi_f = min(len(rms_arr) - 1, frame + 2)
+            return float(np.max(rms_arr[lo_f:hi_f + 1]))
+
+        raw_energies = [_raw_energy_stem(t) for t in onset_times]
+        if not raw_energies:
+            continue
+        track_max = max(raw_energies)
+        track_min = min(raw_energies)
+        track_range = track_max - track_min + 1e-8
+
+        for t_sec, raw_e in zip(onset_times, raw_energies):
+            t_ms = int(t_sec * 1000)
+            if t_ms < 0 or t_ms > duration_ms:
+                continue
+            energy = float(np.clip((raw_e - track_min) / track_range, 0.0, 1.0))
+            if energy < 0.05:
+                continue
+            nearest = int(np.argmin(np.abs(beat_time_arr - t_sec)))
+            beats.append({
+                "time_ms": t_ms, "band": stem_name,
+                "energy": round(energy, 4), "anchor": "arrive",
+                "beat_index": nearest,
+                "bar_index": nearest // 4, "beat_in_bar": nearest % 4,
+            })
+
+        pct = 55 + int((stem_idx + 1) / len(_melodic_stems) * 15)
+        progress("STEM_ANALYSIS", pct)
+
+    beats.sort(key=lambda b: b["time_ms"])
+    progress("STEM_ANALYSIS", 75)
+
+    # ── 6. 段落识别 ──────────────────────────────────────────────────────────
+    progress("SECTION_DETECTION", 77)
+    sections = detect_sections(y, sr, duration_ms)
+    progress("SECTION_DETECTION", 85)
+
+    # ── 7. 波形预览 ──────────────────────────────────────────────────────────
+    waveform_data = None
+    stem_waveforms = None
+    if include_waveform:
+        progress("WAVEFORM", 87)
+        waveform_data = _make_waveform_preview(y, sr, duration_ms)
+
+        # 每条茎也生成独立波形预览
+        stem_waveforms = {}
+        for stem_name in _DEMUCS_STEMS:
+            stem_wav = stem_paths.get(stem_name, "")
+            if os.path.isfile(stem_wav):
+                y_sw, sr_sw = librosa.load(stem_wav, sr=None, mono=True)
+                dur_sw = int(len(y_sw) / sr_sw * 1000)
+                stem_waveforms[stem_name] = _make_waveform_preview(y_sw, sr_sw, dur_sw)
+        progress("WAVEFORM", 92)
+
+    # ── 8. 组装 beatmap ──────────────────────────────────────────────────────
+    progress("WRITE_BEATMAP", 93)
+
+    # 将茎路径转为相对于输出目录的相对路径
+    stems_relative = {}
+    for k, v in stem_paths.items():
+        stems_relative[k] = os.path.relpath(v, output_parent)
+
+    beatmap = {
+        "version": SCHEMA_VERSION,
+        "meta": {
+            "source_file":       source_file,
+            "duration_ms":       duration_ms,
+            "bpm":               round(bpm, 2),
+            "bpm_confidence":    round(bpm_confidence, 4),
+            "time_signature":    "4/4",
+            "sample_rate":       int(sr),
+            "generated_at":      datetime.now(timezone.utc).isoformat(),
+            "analyzer_version":  ANALYZER_VERSION,
+            "style":             resolved_style,
+            "separation_mode":   "demucs",
+            "stems":             stems_relative,
+        },
+        "beats":    beats,
+        "sections": sections,
+    }
+
+    if waveform_data:
+        beatmap["waveform_preview"] = waveform_data
+    if stem_waveforms:
+        beatmap["stem_waveforms"] = stem_waveforms
+
+    return beatmap
+
+
 def main():
     parser = argparse.ArgumentParser(description="BeatBlock Audio Analyzer")
     parser.add_argument("input",    help="输入音频文件路径")
@@ -440,10 +758,17 @@ def main():
                         default="auto",
                         help="音乐风格（影响 HPSS 分离参数）："
                              "auto=自动检测（默认），acoustic=原声，electronic=电子")
+    parser.add_argument("--demucs", action="store_true",
+                        help="使用 Demucs 进行茎分离（需要额外安装 demucs + torch）")
     args = parser.parse_args()
 
     try:
-        beatmap = analyze(args.input, args.output, args.waveform, style=args.style)
+        if args.demucs:
+            beatmap = analyze_demucs(args.input, args.output, args.waveform,
+                                     style=args.style)
+        else:
+            beatmap = analyze(args.input, args.output, args.waveform,
+                              style=args.style)
     except SystemExit:
         raise
     except Exception:
@@ -467,6 +792,7 @@ def main():
         "beat_count":   len(beatmap["beats"]),
         "section_count":len(beatmap["sections"]),
         "duration_ms":  beatmap["meta"]["duration_ms"],
+        "separation_mode": beatmap["meta"].get("separation_mode", "none"),
     }
     print(f"RESULT {json.dumps(summary)}", flush=True)
 

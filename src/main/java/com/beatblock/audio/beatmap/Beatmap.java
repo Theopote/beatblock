@@ -15,15 +15,19 @@ public final class Beatmap {
 	public final List<MusicSection> sections;
 	/** 可选：UI 波形预览数据，可能为 null */
 	public final WaveformPreview waveformPreview;
+	/** 可选：每条茎的独立波形预览，key = stem name (drums/bass/vocals/other) */
+	public final java.util.Map<String, WaveformPreview> stemWaveforms;
 
 	public Beatmap(int version, BeatmapMeta meta,
 	               List<BeatEvent> beats, List<MusicSection> sections,
-	               WaveformPreview waveformPreview) {
+	               WaveformPreview waveformPreview,
+	               java.util.Map<String, WaveformPreview> stemWaveforms) {
 		this.version         = version;
 		this.meta            = meta;
 		this.beats           = List.copyOf(beats);
 		this.sections        = List.copyOf(sections);
 		this.waveformPreview = waveformPreview;
+		this.stemWaveforms   = stemWaveforms != null ? java.util.Map.copyOf(stemWaveforms) : java.util.Map.of();
 	}
 
 	// ── 便捷查询 ─────────────────────────────────────────────────────────

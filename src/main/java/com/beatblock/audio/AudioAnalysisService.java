@@ -59,6 +59,12 @@ public final class AudioAnalysisService {
 	private static final long PYTHON_PROBE_TIMEOUT_MS = 3000L;
 	private final Map<String, PythonProbeInfo> pythonProbeCache = new ConcurrentHashMap<>();
 
+	/** 是否使用 Demucs 进行茎分离（需要额外 Python 依赖）。UI 可切换。 */
+	private volatile boolean useDemucs = false;
+
+	public boolean isUseDemucs() { return useDemucs; }
+	public void setUseDemucs(boolean useDemucs) { this.useDemucs = useDemucs; }
+
 	// ── 公共 API ─────────────────────────────────────────────────────────────
 
 	/**
@@ -256,6 +262,9 @@ public final class AudioAnalysisService {
 		cmd.add(audioPath.toAbsolutePath().toString());
 		cmd.add(beatmapPath.toAbsolutePath().toString());
 		cmd.add("--waveform"); // 包含波形预览数据
+		if (useDemucs) {
+			cmd.add("--demucs");
+		}
 
 		Process process;
 		try {

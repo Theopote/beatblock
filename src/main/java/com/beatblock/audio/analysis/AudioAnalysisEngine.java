@@ -215,6 +215,28 @@ public final class AudioAnalysisEngine {
 		timeline.setMetadata("beatCount", beatmap.beats.size());
 		timeline.setMetadata("sectionCount", beatmap.sections.size());
 		timeline.setMetadata("sourceFile", beatmap.meta.sourceFile());
+		if (beatmap.meta.separationMode() != null) {
+			timeline.setMetadata("separationMode", beatmap.meta.separationMode());
+		}
+
+		// 茎波形（Demucs 模式）
+		if (!beatmap.stemWaveforms.isEmpty()) {
+			for (var entry : beatmap.stemWaveforms.entrySet()) {
+				com.beatblock.audio.beatmap.WaveformPreview wp = entry.getValue();
+				if (wp != null && wp.data() != null) {
+					float[] peaks = wp.data().clone();
+					float max = 0f;
+					for (float p : peaks) if (p > max) max = p;
+					if (max > 1e-6f && max != 1f) {
+						for (int i = 0; i < peaks.length; i++) peaks[i] /= max;
+					}
+					timeline.setStemWaveform(entry.getKey(), new WaveformData(
+						peaks, timeline.getDurationSeconds(), beatmap.meta.sampleRate()
+					));
+				}
+			}
+		}
+
 		timeline.sortAll();
 	}
 
@@ -227,6 +249,9 @@ public final class AudioAnalysisEngine {
 			case "hihat", "hat" -> "踩镲";
 			case "hihat_open" -> "开镲";
 			case "bass"       -> "贝斯";
+			case "vocals"     -> "人声";
+			case "other"      -> "其他";
+			case "drums"      -> "鼓组";
 			case "low"        -> "低频";
 			case "mid"        -> "中频";
 			case "high"       -> "高频";

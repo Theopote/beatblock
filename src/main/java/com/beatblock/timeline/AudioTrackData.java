@@ -29,6 +29,9 @@ public class AudioTrackData {
 	/** key → FeatureTrack，插入顺序即渲染顺序（LinkedHashMap）。 */
 	private final Map<String, FeatureTrack> featureTracks = new LinkedHashMap<>();
 
+	/** Demucs 茎波形：key = "drums"/"bass"/"vocals"/"other" → WaveformData */
+	private final Map<String, WaveformData> stemWaveforms = new LinkedHashMap<>();
+
 	// ── 波形 ───────────────────────────────────────────────────────────────
 
 	public WaveformData getWaveform() { return waveform; }
@@ -111,5 +114,27 @@ public class AudioTrackData {
 	/** 是否存在任何命名特征轨道数据。 */
 	public boolean hasFeatureTracks() {
 		return !featureTracks.isEmpty();
+	}
+
+	// ── 茎波形 API（Demucs 模式）──────────────────────────────────────────
+
+	public void setStemWaveform(String stemKey, WaveformData data) {
+		if (stemKey != null && data != null) stemWaveforms.put(stemKey, data);
+	}
+
+	public WaveformData getStemWaveform(String stemKey) {
+		return stemWaveforms.get(stemKey);
+	}
+
+	public Set<String> getStemWaveformKeys() {
+		return Collections.unmodifiableSet(stemWaveforms.keySet());
+	}
+
+	public boolean hasStemWaveforms() {
+		return !stemWaveforms.isEmpty();
+	}
+
+	public void clearStemWaveforms() {
+		stemWaveforms.clear();
 	}
 }

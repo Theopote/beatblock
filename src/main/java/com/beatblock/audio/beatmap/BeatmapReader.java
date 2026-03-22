@@ -7,7 +7,9 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * BeatmapReader
@@ -90,12 +92,29 @@ public final class BeatmapReader {
 			waveform = parseWaveform(root.getAsJsonObject("waveform_preview"));
 		}
 
-		return new Beatmap(version, meta, beats, sections, waveform);
+		// ── stem_waveforms（可选，Demucs 模式）──────────────────────────────
+		Map<String, WaveformPreview> stemWaveforms = null;
+		if (root.has("stem_waveforms") && !root.get("stem_waveforms").isJsonNull()) {
+			stemWaveforms = parseStemWaveforms(root.getAsJsonObject("stem_waveforms"));
+		}
+
+		return new Beatmap(version, meta, beats, sections, waveform, stemWaveforms);
 	}
 
 	private static BeatmapMeta parseMeta(JsonObject m) {
 		String style = m.has("style") && !m.get("style").isJsonNull()
 			? m.get("style").getAsString() : null;
+		String separationMode = m.has("separation_mode") && !m.get("separation_mode").isJsonNull()
+			? m.get("separation_mode").getAsString() : null;
+		Map<String, String> stems = null;
+		if (m.has("stems") && m.get("stems").isJsonObject()) {
+			stems = new HashMap<>();
+			for (var entry : m.getAsJsonObject("stems").entrySet()) {
+				if (!entry.getValue().isJsonNull()) {
+					stems.put(entry.getKey(), entry.getValue().getAsString());
+				}
+			}
+		}
 		return new BeatmapMeta(
 			getString(m, "source_file", "unknown"),
 			getLong(m, "duration_ms", 0),
@@ -105,7 +124,9 @@ public final class BeatmapReader {
 			getInt(m, "sample_rate", 44100),
 			getString(m, "generated_at", ""),
 			getString(m, "analyzer_version", ""),
-			style
+			style,
+			separationMode,
+			stems
 		);
 	}
 
@@ -154,6 +175,16 @@ public final class BeatmapReader {
 			data[i] = dataArr.get(i).getAsFloat();
 		}
 		return new WaveformPreview(sps, data);
+	}
+
+	private static Map<String, WaveformPreview> parseStemWaveforms(JsonObject obj) {
+		Map<String, WaveformPreview> map = new HashMap<>();
+		for (var entry : obj.entrySet()) {
+			if (!entry.getValue().isJsonNull() && entry.getValue().isJsonObject()) {
+				map.put(entry.getKey(), parseWaveform(entry.getValue().getAsJsonObject()));
+			}
+		}
+		return map;
 	}
 
 	// ── JSON 字段安全读取工具 ─────────────────────────────────────────────────

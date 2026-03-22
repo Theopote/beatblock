@@ -23,6 +23,14 @@ public final class TrackRegistry {
 	private static final List<String> RHYTHM_KEYS =
 		List.of("kick", "snare", "snare_hi", "hihat", "hihat_open");
 
+	// ── Demucs 旋律茎键（bass/vocals/other → 非 drums，drums 拆成 RHYTHM_KEYS）
+	private static final List<String> MELODIC_STEM_KEYS =
+		List.of("bass", "vocals", "other");
+
+	// ── Demucs 茎波形键（用于独立波形预览行）─────────────────────────────────
+	public static final List<String> STEM_WAVEFORM_KEYS =
+		List.of("drums", "bass", "vocals", "other");
+
 	// ── 颜色表（ABGR，与 TimelineRenderer 遗留色对齐）───────────────────────
 	// kick：暖橙红，snare：青绿，snare_hi：青蓝，hihat：天蓝，hihat_open：亮蓝
 	private static final int COLOR_KICK       = 0xFF_55_88_EE; // 暖橙红
@@ -30,6 +38,9 @@ public final class TrackRegistry {
 	private static final int COLOR_SNARE_HI   = 0xFF_3A_B8_C8; // 青蓝（snare 与 hihat 之间）
 	private static final int COLOR_HIHAT      = 0xFF_27_A0_EF; // 天蓝
 	private static final int COLOR_HIHAT_OPEN = 0xFF_10_80_FF; // 亮蓝（开镲）
+	private static final int COLOR_BASS       = 0xFF_44_99_DD; // 深蓝 bass
+	private static final int COLOR_VOCALS     = 0xFF_66_44_CC; // 紫色 vocals
+	private static final int COLOR_OTHER      = 0xFF_88_AA_44; // 橄榄绿 other
 	private static final int COLOR_LOW     = 0xFF_77_77_DD; // 遗留低频色
 	private static final int COLOR_MID     = 0xFF_57_C4_A0; // 遗留中频色
 	private static final int COLOR_HIGH    = 0xFF_27_A0_EF; // 遗留高频色
@@ -67,6 +78,20 @@ public final class TrackRegistry {
 
 		if (timeline == null) return List.copyOf(result);
 
+		// 2. 茎波形行（Demucs 模式下，每条茎一条波形子轨）
+		Set<String> stemWaveformKeys = timeline.getStemWaveformKeys();
+		for (String stemKey : STEM_WAVEFORM_KEYS) {
+			if (stemWaveformKeys.contains(stemKey)) {
+				result.add(new TrackDefinition(
+					"stem_wf_" + stemKey,
+					localizedName(stemKey) + " 波形",
+					TrackDefinition.VisualType.WAVEFORM,
+					TrackDefinition.GROUP_STEMS,
+					colorForKey(stemKey, 0)
+				));
+			}
+		}
+
 		Set<String> featureKeys = timeline.getFeatureTracks().keySet();
 
 		if (!featureKeys.isEmpty()) {
@@ -84,10 +109,23 @@ public final class TrackRegistry {
 				}
 			}
 
-			// 再输出不在 RHYTHM_KEYS 中的扩展轨道（字典序排列，保证顺序与 LinkedHashMap 插入顺序无关）
+			// 再输出旋律茎轨道（Demucs 模式：bass/vocals/other）
+			for (String key : MELODIC_STEM_KEYS) {
+				if (featureKeys.contains(key)) {
+					result.add(new TrackDefinition(
+						key,
+						localizedName(key),
+						TrackDefinition.VisualType.IMPULSE,
+						TrackDefinition.GROUP_STEMS,
+						colorForKey(key, 0)
+					));
+				}
+			}
+
+			// 再输出不在 RHYTHM_KEYS 和 MELODIC_STEM_KEYS 中的扩展轨道
 			int extIdx = 0;
 			List<String> extKeys = featureKeys.stream()
-				.filter(k -> !RHYTHM_KEYS.contains(k))
+				.filter(k -> !RHYTHM_KEYS.contains(k) && !MELODIC_STEM_KEYS.contains(k))
 				.sorted()
 				.toList();
 			for (String key : extKeys) {
@@ -122,7 +160,9 @@ public final class TrackRegistry {
 			case "hihat", "hat" -> "踩镲";
 			case "hihat_open"   -> "开镲";
 			case "bass"         -> "贝斯";
-			case "vocal"        -> "人声";
+			case "vocals"       -> "人声";
+			case "other"        -> "其他";
+			case "drums"        -> "鼓组";
 			case "low"          -> "低频";
 			case "mid"          -> "中频";
 			case "high"         -> "高频";
@@ -138,6 +178,10 @@ public final class TrackRegistry {
 			case "snare_hi"     -> COLOR_SNARE_HI;
 			case "hihat", "hat" -> COLOR_HIHAT;
 			case "hihat_open"   -> COLOR_HIHAT_OPEN;
+			case "bass"         -> COLOR_BASS;
+			case "vocals"       -> COLOR_VOCALS;
+			case "other"        -> COLOR_OTHER;
+			case "drums"        -> COLOR_KICK;  // 鼓组波形复用 kick 色
 			case "low"          -> COLOR_LOW;
 			case "mid"          -> COLOR_MID;
 			case "high"         -> COLOR_HIGH;

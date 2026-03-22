@@ -15,9 +15,10 @@ public final class TrackDefinition {
 	}
 
 	/** 分组 ID（同组在轨道头有缩进视觉、折叠联动） */
-	public static final int GROUP_NONE    = -1;
-	public static final int GROUP_RHYTHM  =  0;
-	public static final int GROUP_EXTENDED = 1;
+	public static final int GROUP_NONE     = -1;
+	public static final int GROUP_RHYTHM   =  0;
+	public static final int GROUP_EXTENDED =  1;
+	public static final int GROUP_STEMS    =  2;
 
 	/** 特征 map 的 key（"waveform" 固定，其余对应 FeatureTrack.key） */
 	private final String key;

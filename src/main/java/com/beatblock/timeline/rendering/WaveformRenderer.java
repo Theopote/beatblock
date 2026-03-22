@@ -75,12 +75,26 @@ public final class WaveformRenderer {
 	}
 
 	public void render(float rowY, float rowHeight, Timeline timeline, TimelineLayout layout, TimelineViewState view) {
+		WaveformData wf = timeline.getWaveform();
+		renderWaveform(rowY, rowHeight, wf, WAVEFORM_COLOR, timeline, layout, view, true);
+	}
+
+	/**
+	 * 渲染指定的波形数据（用于茎波形轨）。
+	 */
+	public void renderStemWaveform(float rowY, float rowHeight, WaveformData wf, int color,
+	                               Timeline timeline, TimelineLayout layout, TimelineViewState view) {
+		renderWaveform(rowY, rowHeight, wf, color, timeline, layout, view, false);
+	}
+
+	private void renderWaveform(float rowY, float rowHeight, WaveformData wf, int color,
+	                            Timeline timeline, TimelineLayout layout, TimelineViewState view,
+	                            boolean showBeatOverlay) {
 		if (timeline == null || layout == null || view == null) return;
 		ImGui.setCursorPosY(rowY);
 		ImGui.setCursorPosX(layout.trackLabelWidth);
 		float minX = ImGui.getCursorScreenPosX();
 		float minY = ImGui.getCursorScreenPosY();
-		WaveformData wf = timeline.getWaveform();
 		double viewStart = view.getViewStartTimeSeconds();
 		double viewEnd = view.getViewEndTimeSeconds();
 		if (wf != null && wf.getSampleCount() > 0) {
@@ -93,9 +107,11 @@ public final class WaveformRenderer {
 				if (x < -1 || x > layout.timelineWidth + 1) continue;
 				float y0 = centerY;
 				float y1 = y0 - s * halfH;
-				ImGui.getWindowDrawList().addLine(minX + x, y0, minX + x, y1, WAVEFORM_COLOR, 1f);
+				ImGui.getWindowDrawList().addLine(minX + x, y0, minX + x, y1, color, 1f);
 			}
-			renderBeatOverlay(minX, minY, rowHeight, timeline, view);
+			if (showBeatOverlay) {
+				renderBeatOverlay(minX, minY, rowHeight, timeline, view);
+			}
 		} else {
 			cachedWaveform = null;
 			cachedWaveformSampleCount = -1;

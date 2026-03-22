@@ -12,6 +12,13 @@ public record BeatmapMeta(
 	int     sampleRate,
 	String  generatedAt,
 	String  analyzerVersion,
-	String  style           // "acoustic" | "electronic" | null for old beatmaps
-) {}
+	String  style,              // "acoustic" | "electronic" | null for old beatmaps
+	String  separationMode,     // "demucs" | null (no stem separation)
+	java.util.Map<String, String> stems  // stem_name -> relative wav path, null if no stems
+) {
+	/** Whether this beatmap was generated with stem separation. */
+	public boolean hasStemSeparation() {
+		return separationMode != null && stems != null && !stems.isEmpty();
+	}
+}
 

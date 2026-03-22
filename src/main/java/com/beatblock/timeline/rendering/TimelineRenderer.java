@@ -8,6 +8,7 @@ import com.beatblock.audio.assets.AudioAssetManager;
 import com.beatblock.timeline.FeatureEvent;
 import com.beatblock.timeline.FrequencyBand;
 import com.beatblock.timeline.Timeline;
+import com.beatblock.timeline.WaveformData;
 import com.beatblock.timeline.editor.SelectionBox;
 import com.beatblock.timeline.editor.SelectionState;
 import com.beatblock.timeline.editor.TimelineClock;
@@ -209,7 +210,18 @@ public final class TimelineRenderer {
 	private void renderAudioSubTrack(TrackDefinition td, float rowY, float rowHeight,
 	                                 Timeline timeline, TimelineLayout layout, TimelineViewState viewState) {
 		switch (td.getVisualType()) {
-			case WAVEFORM -> waveformRenderer.render(rowY, rowHeight, timeline, layout, viewState);
+			case WAVEFORM -> {
+				String key = td.getKey();
+				if (key.startsWith("stem_wf_")) {
+					// 茎波形轨：从 Timeline 的 stemWaveforms 获取对应数据
+					String stemKey = key.substring("stem_wf_".length());
+					WaveformData stemWf = timeline.getStemWaveform(stemKey);
+					int color = td.hasCustomColor() ? td.getColor() : 0xFF_66_AA_FF;
+					waveformRenderer.renderStemWaveform(rowY, rowHeight, stemWf, color, timeline, layout, viewState);
+				} else {
+					waveformRenderer.render(rowY, rowHeight, timeline, layout, viewState);
+				}
+			}
 			case IMPULSE -> {
 				int color = td.hasCustomColor() ? td.getColor() : FREQ_MID_COLOR;
 				List<FeatureEvent> events = timeline.getFeatureEvents(td.getKey());

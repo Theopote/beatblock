@@ -228,6 +228,28 @@ public class Timeline {
 		if (ad != null) ad.clearFeatureTracks();
 	}
 
+	// ── 茎波形委托（Demucs 模式）──────────────────────────────────────────
+
+	public void setStemWaveform(String stemKey, WaveformData data) {
+		AudioTrackData ad = getAudioTrackData();
+		if (ad != null) ad.setStemWaveform(stemKey, data);
+	}
+
+	public WaveformData getStemWaveform(String stemKey) {
+		AudioTrackData ad = getAudioTrackData();
+		return ad != null ? ad.getStemWaveform(stemKey) : null;
+	}
+
+	public java.util.Set<String> getStemWaveformKeys() {
+		AudioTrackData ad = getAudioTrackData();
+		return ad != null ? ad.getStemWaveformKeys() : java.util.Set.of();
+	}
+
+	public boolean hasStemWaveforms() {
+		AudioTrackData ad = getAudioTrackData();
+		return ad != null && ad.hasStemWaveforms();
+	}
+
 	public List<TimelineAnimationEvent> getBlockAnimationEvents() {
 		if (blockAnimationDirty) {
 			rebuildAnimationCache(TRACK_ID_ANIMATION_BLOCK, blockAnimationCache);
