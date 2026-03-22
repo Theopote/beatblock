@@ -26,6 +26,7 @@ public class MusicPlayer implements IAudioPlayer {
 	private double playbackSpeed = 1.0;
 	private Clip audioClip;
 	private String loadedAudioPath;
+	private String lastLoadError;
 
 	public MusicPlayer() {
 		this.playing = false;
@@ -112,18 +113,37 @@ public class MusicPlayer implements IAudioPlayer {
 	public boolean loadAudio(String path) {
 		closeAudioClip();
 		loadedAudioPath = null;
-		if (path == null || path.isBlank()) return false;
+		lastLoadError = null;
+		if (path == null || path.isBlank()) {
+			lastLoadError = "未提供音频路径";
+			return false;
+		}
 
 		Path file = Path.of(path).toAbsolutePath().normalize();
-		if (!Files.isRegularFile(file)) return false;
+		if (!Files.isRegularFile(file)) {
+			lastLoadError = "音频文件不存在: " + file;
+			return false;
+		}
 
 		try {
 			loadClip(file);
 			loadedAudioPath = file.toString();
 			playing = false;
 			currentTimeSeconds = 0;
+			lastLoadError = null;
 			return true;
+		} catch (UnsupportedAudioFileException e) {
+			lastLoadError = "格式不受当前音频后端支持: " + file.getFileName();
+			LOGGER.warn("BeatBlock: unsupported audio format for {}: {}", file, e.getMessage());
+			closeAudioClip();
+			return false;
+		} catch (LineUnavailableException e) {
+			lastLoadError = "无法打开系统音频输出设备";
+			LOGGER.warn("BeatBlock: audio output unavailable for {}: {}", file, e.getMessage());
+			closeAudioClip();
+			return false;
 		} catch (Exception e) {
+			lastLoadError = "音频绑定失败: " + e.getMessage();
 			LOGGER.warn("BeatBlock: audio playback unavailable for {}: {}", file, e.getMessage());
 			closeAudioClip();
 			return false;
@@ -141,6 +161,10 @@ public class MusicPlayer implements IAudioPlayer {
 		Path p = Path.of(loadedAudioPath);
 		String name = p.getFileName() != null ? p.getFileName().toString() : loadedAudioPath;
 		return "音频输出: " + name;
+	}
+
+	public String getLastLoadError() {
+		return lastLoadError;
 	}
 
 	private void loadClip(Path file) throws UnsupportedAudioFileException, IOException, LineUnavailableException {

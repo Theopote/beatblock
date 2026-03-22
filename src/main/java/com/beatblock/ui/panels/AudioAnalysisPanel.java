@@ -561,7 +561,7 @@ public final class AudioAnalysisPanel {
             if (bindAssetToTimelinePlayback(asset)) {
                 setPanelHint("已绑定播放音频: " + asset.getFileName(), false);
             } else {
-                setPanelHint("绑定失败：音频文件不可用或格式暂不支持", true);
+				setPanelHint(describePlaybackBindFailure(), true);
             }
         }
         if (ImGui.isItemHovered()) {
@@ -804,7 +804,7 @@ public final class AudioAnalysisPanel {
             if (bindAssetToTimelinePlayback(asset)) {
                 setPanelHint("已绑定播放音频: " + asset.getFileName(), false);
             } else {
-                setPanelHint("绑定失败：音频文件不可用或格式暂不支持", true);
+				setPanelHint(describePlaybackBindFailure(), true);
             }
         }
         if (ImGui.isItemHovered()) ImGui.setTooltip("将该音频作为时间线播放音源");
@@ -1147,6 +1147,17 @@ public final class AudioAnalysisPanel {
             BeatBlock.timelineEditor.getClock().seek(0);
         }
         return true;
+    }
+
+    private String describePlaybackBindFailure() {
+        if (BeatBlock.musicPlayer == null) {
+            return "绑定失败：播放器未初始化";
+        }
+        String loadError = BeatBlock.musicPlayer.getLastLoadError();
+        if (loadError != null && !loadError.isBlank()) {
+            return loadError;
+        }
+        return "绑定失败：音频文件不可用或格式暂不支持";
     }
 
     private String openNativeAudioFileDialog() throws Exception {
