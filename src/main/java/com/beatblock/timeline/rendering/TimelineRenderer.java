@@ -102,6 +102,12 @@ public final class TimelineRenderer {
 			float rowY = layout.getRowCursorY(i);
 			boolean isGroup = TimelineTrackMeta.isGroupRow(i);
 			String displayName = trackListState != null ? trackListState.getDisplayName(i) : TimelineTrackMeta.getDefaultName(i);
+
+			// 音频组行（0~4）：在轨道头区域加一个拖放目标（先画，让后续交互控件覆盖在上面）
+			if (i >= TimelineTrackMeta.ROW_AUDIO_GROUP && i <= TimelineTrackMeta.ROW_FREQ_HIGH) {
+				renderAudioTrackHeaderDropTarget(i, timeline, layout);
+			}
+
 			trackRenderer.drawTrackLabel(rowY, i, displayName, isGroup, trackListState, layout.trackHeaderLeft, layout.trackHeaderWidth);
 			drawRowContent(i, rowY, timeline, viewState, selectionState, layout);
 		}
@@ -167,18 +173,43 @@ public final class TimelineRenderer {
 	}
 
 	/**
-	 * 在指定行放置一个不可见按钮作为拖放目标，接受音频资产拖放。
+	 * 在指定行放置一个不可见按钮作为拖放目标（内容区），接受音频资产拖放。
 	 * 行 0~4（音频组/波形/低中高频）均调用此方法；松手后自动填充整组数据。
 	 */
 	private void renderAudioGroupDropTarget(int rowIndex, float rowY, Timeline timeline, TimelineLayout layout) {
-		float dropX = layout.contentLeft;
-		ImGui.setCursorScreenPos(dropX, rowY);
+		float screenY = layout.getRowScreenY(rowIndex);
+		if (screenY < 0) return;
+		ImGui.setCursorScreenPos(layout.contentLeft, screenY);
 		ImGui.invisibleButton("##AudioDropTarget_" + rowIndex, layout.contentWidth, layout.rowHeight);
 
 		if (ImGui.isItemHovered()) {
 			audioGroupDropHighlight = true;
 		}
 
+		acceptAudioAssetDrop(timeline);
+	}
+
+	/**
+	 * 在轨道头区域为音频行放置拖放目标。先于 drawTrackLabel 调用，
+	 * 使后续交互控件（折叠/改名/可见/锁定）覆盖在上方、优先获取 hover。
+	 * 拖拽操作时鼠标不会点击按钮，因此不影响交互，而松手时 ImGui 会
+	 * 回退到最底层的 hovered item 作为 drop target。
+	 */
+	private void renderAudioTrackHeaderDropTarget(int rowIndex, Timeline timeline, TimelineLayout layout) {
+		float screenY = layout.getRowScreenY(rowIndex);
+		if (screenY < 0) return;
+		ImGui.setCursorScreenPos(layout.trackHeaderLeft, screenY);
+		ImGui.invisibleButton("##AudioHeaderDrop_" + rowIndex, layout.trackHeaderWidth, layout.rowHeight);
+
+		if (ImGui.isItemHovered()) {
+			audioGroupDropHighlight = true;
+		}
+
+		acceptAudioAssetDrop(timeline);
+	}
+
+	/** 共用的音频资产拖放接受逻辑。在 invisibleButton 之后调用。 */
+	private void acceptAudioAssetDrop(Timeline timeline) {
 		if (ImGui.beginDragDropTarget()) {
 			byte[] payload = ImGui.acceptDragDropPayload("BB_AUDIO_ASSET_ID");
 			if (payload != null) {
@@ -218,8 +249,9 @@ public final class TimelineRenderer {
 			y1 = ry + layout.rowHeight;
 		}
 		if (y0 >= 0 && y1 > y0) {
+			// 高亮覆盖整行（轨道头 + 内容区），提示整个音频组都是拖放区域
 			ImGui.getWindowDrawList().addRect(
-				layout.contentLeft, y0,
+				layout.trackHeaderLeft, y0,
 				layout.contentLeft + layout.contentWidth, y1,
 				AUDIO_GROUP_DROP_HIGHLIGHT_COLOR, 3f, 0, 1.5f);
 		}
