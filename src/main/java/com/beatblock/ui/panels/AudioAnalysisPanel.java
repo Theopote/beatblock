@@ -19,6 +19,7 @@ import imgui.flag.ImGuiCond;
 import imgui.flag.ImGuiMouseCursor;
 import imgui.flag.ImGuiStyleVar;
 import imgui.flag.ImGuiWindowFlags;
+import imgui.type.ImBoolean;
 import imgui.type.ImString;
 
 import java.awt.EventQueue;
@@ -92,6 +93,7 @@ public final class AudioAnalysisPanel {
 	private String panelHintText;
 	private boolean panelHintError;
 	private long panelHintExpireAtMs;
+    private final ImBoolean demucsToggle = new ImBoolean(false);
 
     // ── 公共入口 ─────────────────────────────────────────────────────────────
 
@@ -205,9 +207,9 @@ public final class AudioAnalysisPanel {
             ImGui.sameLine();
             ImGui.spacing();
             ImGui.sameLine();
-            boolean[] demucsRef = { BeatBlock.externalAudioAnalyzer.isUseDemucs() };
-            if (ImGui.checkbox("Demucs##demucsToggle", demucsRef)) {
-                BeatBlock.externalAudioAnalyzer.setUseDemucs(demucsRef[0]);
+            demucsToggle.set(BeatBlock.externalAudioAnalyzer.isUseDemucs());
+            if (ImGui.checkbox("Demucs##demucsToggle", demucsToggle)) {
+                BeatBlock.externalAudioAnalyzer.setUseDemucs(demucsToggle.get());
             }
             if (ImGui.isItemHovered()) {
                 ImGui.setTooltip("启用 Demucs 高质量茎分离\n将音频拆分为鼓/贝斯/人声/其他四个独立轨道\n需要额外安装 demucs + torch，分析耗时更长");
