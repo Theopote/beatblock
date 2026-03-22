@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """
-BeatBlock Audio Analyzer  v2.0
+BeatBlock Audio Analyzer  v3.0
 ================================
 使用 librosa 对音频文件做预处理，输出 .beatmap JSON 契约文件。
-v2.0：改用 HPSS（谐波-打击成分分离）+ 感知子频带拆分，
-      輸出 band 字段为 "kick" / "snare" / "hihat"。
+v3.0：HPSS + 谱聚类自适应轨道分配。
+      对打击成分中的所有 onset 提取频谱特征，k-means 聚类自动
+      决定轨道数（1~5），无需人工指定 kick/snare/hihat 三种类别。
 
 用法（由 Java 通过 ProcessBuilder 调用）：
     python analyze.py <input_audio> <output_beatmap> [--waveform]
@@ -38,7 +39,7 @@ except ImportError as e:
     print(f"ERROR 缺少依赖：{e}，请运行 pip install librosa soundfile numpy scipy", file=sys.stderr)
     sys.exit(1)
 
-ANALYZER_VERSION = "2.0.0"
+ANALYZER_VERSION = "3.0.0"
 SCHEMA_VERSION   = 1
 
 # ── 进度报告（Java 端按行读取 stdout）──────────────────────────────────────
@@ -95,63 +96,107 @@ def analyze(input_path: str, output_path: str, include_waveform: bool) -> dict:
     beat_times_ms = [int(t * 1000) for t in librosa.frames_to_time(beat_frames, sr=sr)]
     progress("BPM_DETECTION", 30)
 
-    # ── 3. 踩点检测（HPSS 感知分离 + 子频带拆分）─────────────────────────
+    # ── 3. 踩点检测（HPSS + 谱聚类，自动适配轨道数）──────────────────────
     progress("BEAT_DETECTION", 35)
 
-    # HPSS：将音频分为谐波成分（旋律/和弦）与打击成分（鼓/打击乐）
-    # margin 参数影响分离质量；默认值 1 已足够
+    from scipy.cluster.vq import kmeans as sp_kmeans, vq
+
+    # HPSS：谐波 / 打击分离
     y_harmonic, y_percussive = librosa.effects.hpss(y, margin=3.0)
 
-    # 对打击成分做子频带拆分，分离 kick / snare / hihat
-    from scipy.signal import butter, sosfilt
+    # 统一检测所有打击 onset。
+    # wait 单位是「帧数」而非样本数：40ms ≈ int(0.04 * sr / hop_length) 帧
+    _HOP = 512
+    all_onset_frames = librosa.onset.onset_detect(
+        y=y_percussive, sr=sr, units="frames",
+        backtrack=True, delta=0.05,
+        wait=max(1, int(0.040 * sr / _HOP)),   # 40ms 最小间隔（帧数）
+    )
+    all_onset_times = librosa.frames_to_time(all_onset_frames, sr=sr, hop_length=_HOP)
+    progress("BEAT_DETECTION", 44)
 
-    def lowpass(signal, hi_hz, sample_rate):
-        nyq = sample_rate / 2.0
-        hi  = min(hi_hz / nyq, 0.999)
-        sos = butter(4, hi, btype="low", output="sos")
-        return sosfilt(sos, signal)
+    if len(all_onset_times) < 4:
+        # 踩点过少无法聚类，归为单个轨道
+        band_onsets = {"kick": list(all_onset_times)}
+    else:
+        # ── 为每个 onset 提取频谱特征 [低/中/高 能量占比] ──────────────────
+        _WIN   = int(sr * 0.05)   # 50ms 分析窗
+        _N_FFT = 512
 
-    def bandpass(signal, lo_hz, hi_hz, sample_rate):
-        nyq = sample_rate / 2.0
-        lo  = lo_hz / nyq
-        hi  = min(hi_hz / nyq, 0.999)
-        sos = butter(4, [lo, hi], btype="band", output="sos")
-        return sosfilt(sos, signal)
+        def _feat(t):
+            s   = int(t * sr)
+            seg = y_percussive[s : s + _WIN]
+            if len(seg) < _N_FFT // 2:
+                return np.array([0.33, 0.34, 0.33], dtype=np.float32)
+            S  = np.abs(librosa.stft(seg, n_fft=_N_FFT, hop_length=_N_FFT // 2))
+            fr = librosa.fft_frequencies(sr=sr, n_fft=_N_FFT)
+            lo = float(S[fr <  250, :].sum())
+            mi = float(S[(fr >= 250) & (fr < 3000), :].sum())
+            hi = float(S[fr >= 3000, :].sum())
+            tot = lo + mi + hi + 1e-9
+            return np.array([lo / tot, mi / tot, hi / tot], dtype=np.float32)
 
-    def highpass(signal, lo_hz, sample_rate):
-        nyq = sample_rate / 2.0
-        lo  = lo_hz / nyq
-        sos = butter(4, lo, btype="high", output="sos")
-        return sosfilt(sos, signal)
+        feat_mat = np.array([_feat(t) for t in all_onset_times])   # (N, 3)
 
-    # kick：打击成分的低频段（20~200 Hz），对应底鼓
-    # snare：打击成分的中频段（200~3000 Hz），对应军鼓/拍手
-    # hihat：打击成分的高频段（3000~16000 Hz），对应踩镲/碎音
-    bands = {
-        "kick":  lowpass(y_percussive, 200,          sr),
-        "snare": bandpass(y_percussive, 200,  3000,  sr),
-        "hihat": highpass(y_percussive, 3000,         sr),
-    }
+        # 手动标准化（避免 whiten 对零方差列产生 NaN）
+        std = feat_mat.std(axis=0)
+        std[std < 1e-6] = 1.0
+        X = (feat_mat - feat_mat.mean(axis=0)) / std
 
-    # 每个感知频带的 onset 检测参数（kick 间隔更长，hihat 更密）
-    onset_params = {
-        "kick":  {"delta": 0.06, "wait_ms": 100, "backtrack": True},
-        "snare": {"delta": 0.07, "wait_ms": 80,  "backtrack": True},
-        "hihat": {"delta": 0.05, "wait_ms": 40,  "backtrack": False},
-    }
+        # ── 选最优聚类数 k（1~MAX_TRACKS）用拐点法 ──────────────────────────
+        MAX_TRACKS = 5
+        MIN_CLUSTER_FRACTION = 0.04   # 占比不足 4% 的聚类视为噪声丢弃
 
-    band_onsets = {}
-    for band_name, band_signal in bands.items():
-        params = onset_params[band_name]
-        onset_frames = librosa.onset.onset_detect(
-            y=band_signal,
-            sr=sr,
-            units="frames",
-            backtrack=params["backtrack"],
-            delta=params["delta"],
-            wait=int(sr / 1000 * params["wait_ms"]),
-        )
-        band_onsets[band_name] = librosa.frames_to_time(onset_frames, sr=sr)
+        def _fit(k):
+            np.random.seed(42)
+            try:
+                ctrs, _ = sp_kmeans(X, k, iter=25)
+                lbls, _ = vq(X, ctrs)
+                sse = float(np.sum((X - ctrs[lbls]) ** 2))
+                return ctrs, lbls, sse
+            except Exception:
+                return X[:k].copy(), np.zeros(len(X), dtype=int), float('inf')
+
+        inertias, fit_cache = [], []
+        for k in range(1, MAX_TRACKS + 1):
+            c, l, e = _fit(k)
+            inertias.append(e)
+            fit_cache.append((c, l))
+
+        # 从 k=1 开始；新增一个 k 带来 ≥15% 的相对误差降低时接受
+        best_k = 1
+        for i in range(1, len(inertias)):
+            prev = inertias[i - 1]
+            if prev > 1e-9 and (prev - inertias[i]) / prev >= 0.15:
+                best_k = i + 1
+        _, labels = fit_cache[best_k - 1]
+
+        # ── 按主频段给聚类命名（低→高排列以符合音乐习惯）──────────────────
+        raw_ctr = np.array([
+            feat_mat[labels == c].mean(axis=0) if np.any(labels == c) else feat_mat[0]
+            for c in range(best_k)
+        ])  # (best_k, 3): [low_ratio, mid_ratio, high_ratio]
+
+        _BAND_NAMES = ["kick", "snare", "hihat"]
+        order = sorted(range(best_k), key=lambda c: float(np.dot(raw_ctr[c], [0.0, 0.5, 1.0])))
+        used_names, cluster_key = set(), {}
+        for c in order:
+            base = _BAND_NAMES[int(np.argmax(raw_ctr[c]))]
+            name, sfx = base, 2
+            while name in used_names:
+                name, sfx = f"{base}_{sfx}", sfx + 1
+            used_names.add(name)
+            cluster_key[c] = name
+
+        # ── 过滤稀疏聚类（噪声），按聚类归组 onset 时间 ────────────────────
+        min_count = max(3, int(len(all_onset_times) * MIN_CLUSTER_FRACTION))
+        band_onsets = {}
+        for c, key in cluster_key.items():
+            times = [t for t, lbl in zip(all_onset_times, labels) if lbl == c]
+            if len(times) >= min_count:
+                band_onsets[key] = times
+        if not band_onsets:
+            band_onsets = {"kick": list(all_onset_times)}
 
     progress("BEAT_DETECTION", 55)
 
@@ -197,11 +242,8 @@ def analyze(input_path: str, output_path: str, include_waveform: bool) -> dict:
             bar_index  = nearest_beat_idx // 4
             beat_in_bar = nearest_beat_idx % 4
 
-            # anchor 规则：
-            # kick（底鼓）→ arrive（重音对应落地冲击）
-            # snare（军鼓）→ arrive（卡拍）
-            # hihat（踩镲）→ depart（轻触起飞）
-            anchor = "depart" if band_name == "hihat" else "arrive"
+            # anchor 规则：hihat 系列（high-freq）→ depart；其余 → arrive
+            anchor = "depart" if band_name.startswith("hihat") else "arrive"
 
             beats.append({
                 "time_ms":    t_ms,

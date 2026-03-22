@@ -360,16 +360,18 @@ public final class AudioAnalysisService {
 
 	/**
 	 * 检查缓存的 beatmap 是否与当前分析器版本兼容。
-	 * v2.0+ 使用 HPSS 生成 kick/snare/hihat 语义轨道；v1.x 为 low/mid/high 物理频段。
+	 * v1.x: low/mid/high 物理频段（已废弃）
+	 * v2.x: HPSS + 固定 kick/snare/hihat 三轨道
+	 * v3.x: HPSS + 谱聚类自适应轨道（当前）
 	 */
 	private static boolean isBeatmapVersionCompatible(Beatmap beatmap) {
 		if (beatmap == null || beatmap.meta == null) return false;
 		String ver = beatmap.meta.analyzerVersion();
 		if (ver == null || ver.isBlank()) return false;
-		// 只接受 2.x 及以上的版本
+		// 只接受 3.x 及以上的版本（3.0 引入谱聚类自适应轨道）
 		try {
 			int major = Integer.parseInt(ver.split("\\.")[0]);
-			return major >= 2;
+			return major >= 3;
 		} catch (NumberFormatException e) {
 			return false;
 		}
