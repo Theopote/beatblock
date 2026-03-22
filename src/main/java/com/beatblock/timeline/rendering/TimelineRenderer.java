@@ -144,7 +144,7 @@ public final class TimelineRenderer {
 			boolean isGroup = TimelineTrackMeta.isGroupRow(i);
 			String displayName = resolveDisplayName(i, trackListState);
 			trackRenderer.drawTrackLabel(rowY, rowHeight, i, displayName, isGroup, trackListState, layout.trackHeaderLeft, layout.trackHeaderWidth);
-			drawRowContent(i, rowY, timeline, viewState, selectionState, layout);
+			drawRowContent(i, rowY, timeline, viewState, selectionState, layout, trackListState);
 		}
 
 		// 音频组拖放高亮（在所有行内容绘制后叠加边框）
@@ -168,7 +168,9 @@ public final class TimelineRenderer {
 		}
 	}
 
-	private void drawRowContent(int rowIndex, float rowY, Timeline timeline, TimelineViewState viewState, SelectionState selectionState, TimelineLayout layout) {
+	private void drawRowContent(int rowIndex, float rowY, Timeline timeline, TimelineViewState viewState,
+	                             SelectionState selectionState, TimelineLayout layout,
+	                             TimelineTrackListState trackListState) {
 		float rowHeight = layout.getRowHeight(rowIndex);
 
 		// ── 音频组标题行 ──────────────────────────────────────────────────────
@@ -183,6 +185,8 @@ public final class TimelineRenderer {
 			if (slot < 0 || slot >= currentAudioSubTracks.size()) return;
 			TrackDefinition td = currentAudioSubTracks.get(slot);
 			renderAudioGroupDropTarget(rowIndex, rowY, rowHeight, timeline, layout);
+			// 静音/独奏：有效静音时跳过内容渲染（保留拖放目标区）
+			if (trackListState != null && trackListState.isEffectivelyMuted(rowIndex)) return;
 			renderAudioSubTrack(td, rowY, rowHeight, timeline, layout, viewState);
 			return;
 		}

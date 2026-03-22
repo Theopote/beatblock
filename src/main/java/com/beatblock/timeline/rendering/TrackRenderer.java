@@ -62,7 +62,7 @@ public final class TrackRenderer {
 		float typeStartX = foldColLeft + foldColW;
 		float nameX = typeStartX + typeColW;
 
-		float iconBlockW = iconBtn * 2 + ICON_GAP; // 可见+锁定
+		float iconBlockW = iconBtn * 4 + ICON_GAP * 3; // 静音+独奏+可见+锁定
 		float nameRight = headW - PAD - iconBlockW;   // 名称区右边界（对齐图标块左边）
 		float nameW = nameRight - nameX;
 		if (nameW < 24f) {
@@ -160,15 +160,44 @@ public final class TrackRenderer {
 			}
 		}
 
-		// —— 可见 / 锁定：右对齐，纯图标按钮 —— //
+		// —— 静音 / 独奏 / 可见 / 锁定：右对齐，纯图标按钮 —— //
 		if (listState != null && !isEditing) {
 			float lockRight = headW - PAD - iconBtn;
-			float visX = lockRight - ICON_GAP - iconBtn;
+			float visX   = lockRight - ICON_GAP - iconBtn;
+			float soloX  = visX     - ICON_GAP - iconBtn;
+			float muteX  = soloX    - ICON_GAP - iconBtn;
+			String muteTooltip = null;
+			String soloTooltip = null;
 			String visTooltip = null;
 			String lockTooltip = null;
 
 			IconButtonStyle.pushBeatBlockIconButton();
 
+			// ── 静音按钮 ────────────────────────────────────────────
+			boolean muted = listState.isMuted(rowIndex);
+			if (muted) ImGui.pushStyleColor(ImGuiCol.Text, 0.95f, 0.35f, 0.35f, 1f);
+			ImGui.setCursorScreenPos(baseX + muteX, rowOriginScreenY);
+			if (ImGui.button((muted ? Icons.Timeline.MUTE : Icons.Audio.VOLUME) + "##mute" + rowIndex, iconBtn, iconBtn)) {
+				listState.toggleMuted(rowIndex);
+			}
+			if (muted) ImGui.popStyleColor();
+			if (ImGui.isItemHovered()) {
+				muteTooltip = muted ? "已静音 (点击取消)" : "静音 (点击静音)";
+			}
+
+			// ── 独奏按钮 ────────────────────────────────────────────
+			boolean solo = listState.isSoloed(rowIndex);
+			if (solo) ImGui.pushStyleColor(ImGuiCol.Text, 1.0f, 0.85f, 0.2f, 1f);
+			ImGui.setCursorScreenPos(baseX + soloX, rowOriginScreenY);
+			if (ImGui.button(Icons.Timeline.SOLO + "##solo" + rowIndex, iconBtn, iconBtn)) {
+				listState.toggleSoloed(rowIndex);
+			}
+			if (solo) ImGui.popStyleColor();
+			if (ImGui.isItemHovered()) {
+				soloTooltip = solo ? "独奏中 (点击取消)" : "独奏 (点击独奏)";
+			}
+
+			// ── 可见按钮 ────────────────────────────────────────────
 			boolean vis = listState.isVisible(rowIndex);
 			ImGui.setCursorScreenPos(baseX + visX, rowOriginScreenY);
 			if (ImGui.button((vis ? Icons.EYE : Icons.Action.HIDDEN) + "##vis" + rowIndex, iconBtn, iconBtn)) {
@@ -188,6 +217,8 @@ public final class TrackRenderer {
 			}
 
 			IconButtonStyle.popBeatBlockIconButton();
+			if (muteTooltip != null) ImGui.setTooltip(muteTooltip);
+			if (soloTooltip != null) ImGui.setTooltip(soloTooltip);
 			if (visTooltip != null) ImGui.setTooltip(visTooltip);
 			if (lockTooltip != null) ImGui.setTooltip(lockTooltip);
 		}

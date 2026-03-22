@@ -15,6 +15,8 @@ public final class TimelineTrackListState {
 
 	private final boolean[] visible = new boolean[TimelineLayout.CONTENT_ROW_COUNT];
 	private final boolean[] locked = new boolean[TimelineLayout.CONTENT_ROW_COUNT];
+	private final boolean[] muted = new boolean[TimelineLayout.CONTENT_ROW_COUNT];
+	private final boolean[] soloed = new boolean[TimelineLayout.CONTENT_ROW_COUNT];
 	private final Map<Integer, String> customNames = new HashMap<>();
 	/** 正在编辑名称的行，-1 表示未在编辑 */
 	private int editingRowIndex = -1;
@@ -64,6 +66,54 @@ public final class TimelineTrackListState {
 
 	public void toggleLocked(int rowIndex) {
 		if (rowIndex >= 0 && rowIndex < locked.length) locked[rowIndex] = !locked[rowIndex];
+	}
+
+	// ── 静音 / 独奏 ────────────────────────────────────────────────────────
+
+	public boolean isMuted(int rowIndex) {
+		if (rowIndex < 0 || rowIndex >= muted.length) return false;
+		return muted[rowIndex];
+	}
+
+	public void setMuted(int rowIndex, boolean v) {
+		if (rowIndex >= 0 && rowIndex < muted.length) muted[rowIndex] = v;
+	}
+
+	public void toggleMuted(int rowIndex) {
+		if (rowIndex >= 0 && rowIndex < muted.length) muted[rowIndex] = !muted[rowIndex];
+	}
+
+	public boolean isSoloed(int rowIndex) {
+		if (rowIndex < 0 || rowIndex >= soloed.length) return false;
+		return soloed[rowIndex];
+	}
+
+	public void setSoloed(int rowIndex, boolean v) {
+		if (rowIndex >= 0 && rowIndex < soloed.length) soloed[rowIndex] = v;
+	}
+
+	public void toggleSoloed(int rowIndex) {
+		if (rowIndex >= 0 && rowIndex < soloed.length) soloed[rowIndex] = !soloed[rowIndex];
+	}
+
+	/** 是否存在任何一条轨道处于 Solo 状态。 */
+	public boolean hasAnySolo() {
+		for (boolean s : soloed) { if (s) return true; }
+		return false;
+	}
+
+	/**
+	 * 综合判断：轨道是否被「有效静音」。
+	 * <ul>
+	 *   <li>如果该轨道自身 muted → true</li>
+	 *   <li>如果存在任何 solo 轨道，但该轨道不是 solo → true</li>
+	 *   <li>否则 → false</li>
+	 * </ul>
+	 */
+	public boolean isEffectivelyMuted(int rowIndex) {
+		if (isMuted(rowIndex)) return true;
+		if (hasAnySolo() && !isSoloed(rowIndex)) return true;
+		return false;
 	}
 
 	/** 当前显示名称：自定义名优先，否则用 TimelineTrackMeta 的默认名 */

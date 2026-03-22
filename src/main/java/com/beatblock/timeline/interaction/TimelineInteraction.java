@@ -273,9 +273,9 @@ public final class TimelineInteraction {
 		if (ImGui.isMouseClicked(1) && layout.contentContains(mx, my)) {
 			contextTimeSeconds = viewState.screenToTime(Math.max(0, Math.min(mx - layout.contentLeft, layout.contentWidth)));
 			HitResult hit = hitContentAtMouse(timeline, viewState, layout, mx, my);
-			contextTrackId = hit != null ? hit.getTrackId() : null;
-			contextClipId = hit != null ? hit.getClipId() : null;
-			if (hit != null && hit.getEventId() != null) {
+			contextTrackId = hit.getTrackId();
+			contextClipId = hit.getClipId();
+			if (hit.getEventId() != null) {
 				propertiesEventId = hit.getEventId();
 			}
 			ImGui.openPopup(POPUP_EVENT_CONTEXT);
@@ -385,7 +385,7 @@ public final class TimelineInteraction {
 				return;
 			}
 			// 点击播放头竖线也可拖动（与标尺一致的 SCRUB 行为）
-			if (clock != null && isMouseOverPlayhead(mx, my, layout, viewState, clock)) {
+			if (isMouseOverPlayhead(mx, my, layout, viewState, clock)) {
 				double t = viewState.screenToTime(mx - layout.contentLeft);
 				interactionState.setMode(InteractionMode.SCRUB_TIME);
 				interactionState.setMouseStart(mx, my);
@@ -801,7 +801,7 @@ public final class TimelineInteraction {
 				ImGui.setNextItemWidth(130f);
 				ImGui.inputText("##param_" + key, buf);
 				ImGui.sameLine();
-				boolean numberFlag = asNumber != null && asNumber;
+				boolean numberFlag = asNumber;
 				if (ImGui.checkbox("Number##param_type_" + key, numberFlag)) {
 					propertiesParamAsNumber.put(key, !numberFlag);
 				}
@@ -958,7 +958,7 @@ public final class TimelineInteraction {
 		if (timeline == null || selectionState == null) return;
 		if (clipboardEvents.isEmpty()) return;
 
-		double baseTime = clipboardEvents.get(0).timeSeconds;
+		double baseTime = clipboardEvents.getFirst().timeSeconds;
 		double maxTime = clipboardEvents.get(clipboardEvents.size() - 1).timeSeconds;
 		double span = Math.max(0.2, maxTime - baseTime);
 		selectionState.clearEvents();
