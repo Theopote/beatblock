@@ -56,11 +56,6 @@ public final class TimelineRenderer {
 		renderRulerRow(layout, viewState, bpm, null, null);
 	}
 
-	/** 兼容旧调用（无 BPM）。 */
-	public void renderRulerRow(TimelineLayout layout, TimelineViewState viewState) {
-		renderRulerRow(layout, viewState, 0, null, null);
-	}
-
 	/** 可滚动区域：轨道区（左侧轨道列表 + 竖线分隔 + 网格 + 一行一行轨道 + 播放头 + 框选）。 */
 	public void renderTrackArea(
 		Timeline timeline,
@@ -102,12 +97,6 @@ public final class TimelineRenderer {
 			float rowY = layout.getRowCursorY(i);
 			boolean isGroup = TimelineTrackMeta.isGroupRow(i);
 			String displayName = trackListState != null ? trackListState.getDisplayName(i) : TimelineTrackMeta.getDefaultName(i);
-
-			// 音频组行（0~4）：在轨道头区域加一个拖放目标（先画，让后续交互控件覆盖在上面）
-			if (i >= TimelineTrackMeta.ROW_AUDIO_GROUP && i <= TimelineTrackMeta.ROW_FREQ_HIGH) {
-				renderAudioTrackHeaderDropTarget(i, timeline, layout);
-			}
-
 			trackRenderer.drawTrackLabel(rowY, i, displayName, isGroup, trackListState, layout.trackHeaderLeft, layout.trackHeaderWidth);
 			drawRowContent(i, rowY, timeline, viewState, selectionState, layout);
 		}
@@ -190,25 +179,8 @@ public final class TimelineRenderer {
 	}
 
 	/**
-	 * 在轨道头区域为音频行放置拖放目标。先于 drawTrackLabel 调用，
-	 * 使后续交互控件（折叠/改名/可见/锁定）覆盖在上方、优先获取 hover。
-	 * 拖拽操作时鼠标不会点击按钮，因此不影响交互，而松手时 ImGui 会
-	 * 回退到最底层的 hovered item 作为 drop target。
+	 * 共用的音频资产拖放接受逻辑。在 invisibleButton 之后调用。
 	 */
-	private void renderAudioTrackHeaderDropTarget(int rowIndex, Timeline timeline, TimelineLayout layout) {
-		float screenY = layout.getRowScreenY(rowIndex);
-		if (screenY < 0) return;
-		ImGui.setCursorScreenPos(layout.trackHeaderLeft, screenY);
-		ImGui.invisibleButton("##AudioHeaderDrop_" + rowIndex, layout.trackHeaderWidth, layout.rowHeight);
-
-		if (ImGui.isItemHovered()) {
-			audioGroupDropHighlight = true;
-		}
-
-		acceptAudioAssetDrop(timeline);
-	}
-
-	/** 共用的音频资产拖放接受逻辑。在 invisibleButton 之后调用。 */
 	private void acceptAudioAssetDrop(Timeline timeline) {
 		if (ImGui.beginDragDropTarget()) {
 			byte[] payload = ImGui.acceptDragDropPayload("BB_AUDIO_ASSET_ID");
@@ -235,7 +207,7 @@ public final class TimelineRenderer {
 	}
 
 	/**
-	 * 绘制音频组拖放高亮边框（row 0~4 外围），并在帧末重置标记。
+	 * 绘制音频组拖放高亮边框（row 0~4 内容区外围），并在帧末重置标记。
 	 * 应在所有行内容绘制完毕后调用。
 	 */
 	private void drawAudioGroupDropHighlight(TimelineLayout layout) {
@@ -249,12 +221,13 @@ public final class TimelineRenderer {
 			y1 = ry + layout.rowHeight;
 		}
 		if (y0 >= 0 && y1 > y0) {
-			// 高亮覆盖整行（轨道头 + 内容区），提示整个音频组都是拖放区域
+			// 高亮覆盖内容区（时间线轨道内容），提示这里可以拖放音频
 			ImGui.getWindowDrawList().addRect(
-				layout.trackHeaderLeft, y0,
+				layout.contentLeft, y0,
 				layout.contentLeft + layout.contentWidth, y1,
 				AUDIO_GROUP_DROP_HIGHLIGHT_COLOR, 3f, 0, 1.5f);
 		}
 		audioGroupDropHighlight = false;
 	}
 }
+
