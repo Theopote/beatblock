@@ -12,6 +12,7 @@ import javax.sound.sampled.Clip;
 import javax.sound.sampled.DataLine;
 import javax.sound.sampled.Line;
 import javax.sound.sampled.LineUnavailableException;
+import javax.sound.sampled.SourceDataLine;
 import javax.sound.sampled.UnsupportedAudioFileException;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -32,6 +33,13 @@ public class MusicPlayer implements IAudioPlayer {
 	private double durationSeconds;
 	private double playbackSpeed = 1.0;
 	private Clip audioClip;
+	private SourceDataLine streamLine;
+	private Thread streamThread;
+	private final Object streamLock = new Object();
+	private byte[] streamPcmData;
+	private AudioFormat streamPcmFormat;
+	private int streamBytePosition;
+	private int streamStartBytePosition;
 	private String loadedAudioPath;
 	private String lastLoadError;
 
@@ -59,6 +67,17 @@ public class MusicPlayer implements IAudioPlayer {
 			}
 			audioClip.start();
 			LOGGER.info("BeatBlock MusicPlayer: playback started path={} time={}s", loadedAudioPath, String.format("%.3f", currentTimeSeconds));
+		} else if (hasStreamBackend()) {
+			if (durationSeconds > 0 && currentTimeSeconds >= durationSeconds - 0.001) {
+				streamBytePosition = 0;
+				currentTimeSeconds = 0;
+			}
+			if (!startStreamPlayback()) {
+				LOGGER.warn("BeatBlock MusicPlayer: stream playback start failed. lastLoadError={}", lastLoadError);
+				playing = false;
+				return;
+			}
+			LOGGER.info("BeatBlock MusicPlayer: stream playback started path={} time={}s", loadedAudioPath, String.format("%.3f", currentTimeSeconds));
 		} else {
 			LOGGER.warn("BeatBlock MusicPlayer: play requested but no audio clip is loaded. lastLoadError={}", lastLoadError);
 		}
@@ -69,6 +88,9 @@ public class MusicPlayer implements IAudioPlayer {
 		if (audioClip != null) {
 			audioClip.stop();
 			currentTimeSeconds = clipPositionSeconds();
+		} else if (hasStreamBackend()) {
+			stopStreamPlayback(false);
+			currentTimeSeconds = streamPositionSeconds();
 		}
 		playing = false;
 	}
@@ -77,6 +99,8 @@ public class MusicPlayer implements IAudioPlayer {
 		if (audioClip != null) {
 			audioClip.stop();
 			audioClip.setMicrosecondPosition(0);
+		} else if (hasStreamBackend()) {
+			stopStreamPlayback(true);
 		}
 		playing = false;
 		currentTimeSeconds = 0;
@@ -100,6 +124,12 @@ public class MusicPlayer implements IAudioPlayer {
 			audioClip.setMicrosecondPosition((long) Math.max(0, this.currentTimeSeconds * 1_000_000.0));
 			if (restart) {
 				audioClip.start();
+			}
+		} else if (hasStreamBackend()) {
+			streamBytePosition = secondsToStreamBytePosition(this.currentTimeSeconds);
+			if (playing) {
+				stopStreamPlayback(false);
+				startStreamPlayback();
 			}
 		}
 	}
@@ -206,22 +236,31 @@ public class MusicPlayer implements IAudioPlayer {
 				false
 			);
 			try (AudioInputStream pcmStream = AudioSystem.getAudioInputStream(pcmFmt, source)) {
-				Clip clip = acquireClip();
-				clip.open(pcmStream);
-				audioClip = clip;
-				durationSeconds = clip.getMicrosecondLength() / 1_000_000.0;
+				byte[] pcmBytes = readAllBytes(pcmStream);
+				openPcmAsPlaybackBackend(pcmBytes, pcmFmt);
 			}
 		}
 	}
 
 	private void syncClipState() {
-		if (audioClip == null) return;
-		currentTimeSeconds = clipPositionSeconds();
-		if (playing && !audioClip.isRunning()) {
-			if (durationSeconds > 0 && currentTimeSeconds >= durationSeconds - 0.001) {
-				currentTimeSeconds = durationSeconds;
+		if (audioClip != null) {
+			currentTimeSeconds = clipPositionSeconds();
+			if (playing && !audioClip.isRunning()) {
+				if (durationSeconds > 0 && currentTimeSeconds >= durationSeconds - 0.001) {
+					currentTimeSeconds = durationSeconds;
+				}
+				playing = false;
 			}
-			playing = false;
+			return;
+		}
+		if (hasStreamBackend()) {
+			currentTimeSeconds = streamPositionSeconds();
+			if (playing && (streamThread == null || !streamThread.isAlive())) {
+				if (durationSeconds > 0 && currentTimeSeconds >= durationSeconds - 0.001) {
+					currentTimeSeconds = durationSeconds;
+				}
+				playing = false;
+			}
 		}
 	}
 
@@ -231,6 +270,11 @@ public class MusicPlayer implements IAudioPlayer {
 	}
 
 	private void closeAudioClip() {
+		stopStreamPlayback(false);
+		streamPcmData = null;
+		streamPcmFormat = null;
+		streamBytePosition = 0;
+		streamStartBytePosition = 0;
 		if (audioClip == null) return;
 		try {
 			audioClip.stop();
@@ -309,13 +353,7 @@ public class MusicPlayer implements IAudioPlayer {
 				sampleRate,
 				false
 			);
-			long frameLength = pcmBytes.length / pcmFmt.getFrameSize();
-			try (AudioInputStream pcmStream = new AudioInputStream(new ByteArrayInputStream(pcmBytes), pcmFmt, frameLength)) {
-				Clip clip = acquireClip();
-				clip.open(pcmStream);
-				audioClip = clip;
-				durationSeconds = clip.getMicrosecondLength() / 1_000_000.0;
-			}
+			openPcmAsPlaybackBackend(pcmBytes, pcmFmt);
 			return true;
 		} catch (Throwable e) {
 			lastLoadError = "ffmpeg 已解码，但加载 PCM 失败: " + e.getMessage();
@@ -323,11 +361,189 @@ public class MusicPlayer implements IAudioPlayer {
 		}
 	}
 
-	private Clip acquireClip() throws LineUnavailableException {
+	private void openPcmAsPlaybackBackend(byte[] pcmBytes, AudioFormat pcmFmt) throws LineUnavailableException, IOException {
+		if (pcmBytes == null || pcmBytes.length == 0) {
+			throw new IOException("PCM 数据为空");
+		}
+		long frameLength = pcmBytes.length / pcmFmt.getFrameSize();
+		Throwable clipFailure = null;
+		try (AudioInputStream pcmStream = new AudioInputStream(new ByteArrayInputStream(pcmBytes), pcmFmt, frameLength)) {
+			try {
+				Clip clip = acquireClip(pcmFmt);
+				clip.open(pcmStream);
+				audioClip = clip;
+				streamPcmData = null;
+				streamPcmFormat = null;
+				streamBytePosition = 0;
+				streamStartBytePosition = 0;
+				durationSeconds = clip.getMicrosecondLength() / 1_000_000.0;
+				return;
+			} catch (Throwable e) {
+				clipFailure = e;
+				LOGGER.warn("BeatBlock MusicPlayer: Clip backend unavailable, switching to SourceDataLine backend: {}", e.getMessage());
+			}
+		}
+
+		DataLine.Info info = new DataLine.Info(SourceDataLine.class, pcmFmt);
+		if (!AudioSystem.isLineSupported(info)) {
+			if (clipFailure != null) {
+				throw new LineUnavailableException("no mixer supporting source line: " + pcmFmt + " (clip error: " + clipFailure.getMessage() + ")");
+			}
+			throw new LineUnavailableException("no mixer supporting source line: " + pcmFmt);
+		}
+		streamPcmData = pcmBytes;
+		streamPcmFormat = pcmFmt;
+		streamBytePosition = 0;
+		streamStartBytePosition = 0;
+		audioClip = null;
+		durationSeconds = pcmBytes.length / (pcmFmt.getFrameRate() * pcmFmt.getFrameSize());
+	}
+
+	private boolean hasStreamBackend() {
+		return streamPcmData != null && streamPcmFormat != null;
+	}
+
+	private boolean startStreamPlayback() {
+		if (!hasStreamBackend()) return false;
+		stopStreamPlayback(false);
+		AudioFormat fmt = streamPcmFormat;
+		byte[] data = streamPcmData;
+		int startByte = Math.max(0, Math.min(streamBytePosition, data.length));
+		int frameSize = Math.max(1, fmt.getFrameSize());
+		startByte -= (startByte % frameSize);
+		final int alignedStartByte = startByte;
+		try {
+			DataLine.Info info = new DataLine.Info(SourceDataLine.class, fmt);
+			SourceDataLine line = (SourceDataLine) AudioSystem.getLine(info);
+			line.open(fmt);
+			line.start();
+
+			streamLine = line;
+			streamStartBytePosition = alignedStartByte;
+			streamBytePosition = alignedStartByte;
+			Thread t = new Thread(() -> runStreamLoop(line, data, fmt, alignedStartByte), "BeatBlock-AudioStream");
+			t.setDaemon(true);
+			streamThread = t;
+			t.start();
+			return true;
+		} catch (Exception e) {
+			lastLoadError = "无法打开流式音频输出设备: " + e.getMessage();
+			return false;
+		}
+	}
+
+	private void runStreamLoop(SourceDataLine line, byte[] data, AudioFormat fmt, int startByte) {
+		int pos = startByte;
+		int frameSize = Math.max(1, fmt.getFrameSize());
+		byte[] buffer = new byte[8192];
+		try {
+			while (playing && streamThread == Thread.currentThread()) {
+				if (pos >= data.length) break;
+				int len = Math.min(buffer.length, data.length - pos);
+				len -= (len % frameSize);
+				if (len <= 0) break;
+				System.arraycopy(data, pos, buffer, 0, len);
+				int written = line.write(buffer, 0, len);
+				if (written <= 0) break;
+				pos += written;
+				streamBytePosition = pos;
+			}
+		} finally {
+			try {
+				line.stop();
+				line.flush();
+			} catch (Exception ignored) {
+			}
+			try {
+				line.close();
+			} catch (Exception ignored) {
+			}
+			if (streamLine == line) {
+				streamLine = null;
+			}
+			if (streamThread == Thread.currentThread()) {
+				streamThread = null;
+			}
+			streamBytePosition = Math.max(0, Math.min(pos, data.length));
+			currentTimeSeconds = streamPositionSeconds();
+			if (durationSeconds > 0 && currentTimeSeconds >= durationSeconds - 0.001) {
+				playing = false;
+			}
+		}
+	}
+
+	private void stopStreamPlayback(boolean resetPosition) {
+		Thread t = streamThread;
+		streamThread = null;
+		SourceDataLine line = streamLine;
+		streamLine = null;
+		if (line != null) {
+			try {
+				line.stop();
+				line.flush();
+			} catch (Exception ignored) {
+			}
+			try {
+				line.close();
+			} catch (Exception ignored) {
+			}
+		}
+		if (t != null && t != Thread.currentThread()) {
+			try {
+				t.join(100);
+			} catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
+			}
+		}
+		if (resetPosition) {
+			streamBytePosition = 0;
+			streamStartBytePosition = 0;
+		}
+	}
+
+	private int secondsToStreamBytePosition(double seconds) {
+		if (!hasStreamBackend()) return 0;
+		double bytesPerSecond = streamPcmFormat.getFrameRate() * streamPcmFormat.getFrameSize();
+		int raw = (int) Math.max(0, Math.round(seconds * bytesPerSecond));
+		int frame = Math.max(1, streamPcmFormat.getFrameSize());
+		raw -= (raw % frame);
+		return Math.max(0, Math.min(raw, streamPcmData.length));
+	}
+
+	private double streamPositionSeconds() {
+		if (!hasStreamBackend()) return currentTimeSeconds;
+		double bytesPerSecond = streamPcmFormat.getFrameRate() * streamPcmFormat.getFrameSize();
+		if (bytesPerSecond <= 0.0) return 0.0;
+		int pos = streamBytePosition;
+		if (streamLine != null) {
+			long lineFrames = streamLine.getLongFramePosition();
+			int lineBytes = (int) Math.max(0, Math.min((long) Integer.MAX_VALUE, lineFrames * streamPcmFormat.getFrameSize()));
+			pos = Math.max(pos, Math.min(streamStartBytePosition + lineBytes, streamPcmData.length));
+		}
+		return Math.max(0, pos / bytesPerSecond);
+	}
+
+	private byte[] readAllBytes(AudioInputStream stream) throws IOException {
+		ByteArrayOutputStream out = new ByteArrayOutputStream(1 << 20);
+		byte[] buf = new byte[8192];
+		int n;
+		while ((n = stream.read(buf)) != -1) {
+			out.write(buf, 0, n);
+			if (out.size() > 256 * 1024 * 1024) {
+				throw new IOException("音频过长，解码后内存占用过大");
+			}
+		}
+		return out.toByteArray();
+	}
+
+	private Clip acquireClip(AudioFormat preferredFormat) throws LineUnavailableException {
 		try {
 			return AudioSystem.getClip();
 		} catch (NoSuchMethodError | SecurityException | IllegalArgumentException ignored) {
-			DataLine.Info info = new DataLine.Info(Clip.class, null);
+			AudioFormat safeFormat = preferredFormat != null
+				? preferredFormat
+				: new AudioFormat(AudioFormat.Encoding.PCM_SIGNED, 44_100, 16, 2, 4, 44_100, false);
+			DataLine.Info info = new DataLine.Info(Clip.class, safeFormat);
 			Line line = AudioSystem.getLine(info);
 			if (line instanceof Clip clip) {
 				return clip;
@@ -380,6 +596,10 @@ public class MusicPlayer implements IAudioPlayer {
 	 */
 	public void tick(double deltaSeconds) {
 		if (audioClip != null) {
+			syncClipState();
+			return;
+		}
+		if (hasStreamBackend()) {
 			syncClipState();
 			return;
 		}
