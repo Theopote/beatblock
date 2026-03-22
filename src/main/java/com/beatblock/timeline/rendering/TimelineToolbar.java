@@ -5,7 +5,6 @@ import com.beatblock.automap.AutoMapConfig;
 import com.beatblock.automap.AutoMapGenerator;
 import com.beatblock.client.BeatBlockClientDriver;
 import com.beatblock.timeline.Clip;
-import com.beatblock.timeline.IAudioPlayer;
 import com.beatblock.timeline.Timeline;
 import com.beatblock.timeline.TimelineEditor;
 import com.beatblock.timeline.TimelineEvent;
