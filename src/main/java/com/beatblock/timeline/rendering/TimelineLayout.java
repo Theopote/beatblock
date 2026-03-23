@@ -80,6 +80,8 @@ public final class TimelineLayout {
 	private final float[] rowHeights = new float[CONTENT_ROW_COUNT];
 	/** 逻辑行对应的可见行序号（0-based），不可见为 -1 */
 	private final int[] logicalToVisibleIndex = new int[CONTENT_ROW_COUNT];
+	/** 可见行序号（0-based）对应的逻辑行索引，不可用槽位为 -1 */
+	private final int[] visibleToLogicalRow = new int[CONTENT_ROW_COUNT];
 	/** 当前可见行数（考虑折叠） */
 	private int visibleRowCount;
 
@@ -123,6 +125,9 @@ public final class TimelineLayout {
 		for (int i = 0; i < CONTENT_ROW_COUNT; i++) {
 			rowHeights[i] = ROW_HEIGHT;
 			rowCursorY[i] = -1f;
+			rowScreenY[i] = -1f;
+			logicalToVisibleIndex[i] = -1;
+			visibleToLogicalRow[i] = -1;
 		}
 
 		ImGui.setCursorPos(0f, startY);
@@ -155,6 +160,7 @@ public final class TimelineLayout {
 			rowHeights[i] = h;
 			if (visible) {
 				logicalToVisibleIndex[i] = v;
+				visibleToLogicalRow[v] = i;
 				rowCursorY[i] = cursorY;
 				rowScreenY[i] = trackHeaderTop + cursorY;
 				cursorY += h + ROW_GAP;
@@ -226,11 +232,22 @@ public final class TimelineLayout {
 
 	/** 根据屏幕 Y 命中可见行，未命中返回 -1。 */
 	public int findRowAtScreenY(float screenY) {
-		for (int i = 0; i < CONTENT_ROW_COUNT; i++) {
-			if (!isRowVisible(i)) continue;
-			float y = rowScreenY[i];
-			float h = getRowHeight(i);
-			if (screenY >= y && screenY <= y + h) return i;
+		if (visibleRowCount <= 0) return -1;
+		int lo = 0;
+		int hi = visibleRowCount - 1;
+		while (lo <= hi) {
+			int mid = (lo + hi) >>> 1;
+			int logicalRow = visibleToLogicalRow[mid];
+			if (logicalRow < 0) return -1;
+			float y = rowScreenY[logicalRow];
+			float h = getRowHeight(logicalRow);
+			if (screenY < y) {
+				hi = mid - 1;
+			} else if (screenY > y + h) {
+				lo = mid + 1;
+			} else {
+				return logicalRow;
+			}
 		}
 		return -1;
 	}

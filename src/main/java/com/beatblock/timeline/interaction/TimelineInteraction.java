@@ -184,7 +184,8 @@ public final class TimelineInteraction {
 		if (!ImGui.isWindowHovered(ImGuiHoveredFlags.AllowWhenBlockedByActiveItem | ImGuiHoveredFlags.AllowWhenBlockedByPopup)) return;
 		boolean alt = ImGui.getIO().getKeyAlt();
 
-		if (ImGui.isKeyPressed(ImGuiKey.Delete)) {
+		if (ImGui.isKeyPressed(ImGuiKey.Delete)
+				&& hasDeletableSelectedEvents(timeline, selectionState, trackListState)) {
 			deleteSelectedEvents(timeline, selectionState, trackListState);
 		}
 		if (ImGui.getIO().getKeyCtrl() && ImGui.isKeyPressed(ImGuiKey.C)) {
@@ -663,6 +664,7 @@ public final class TimelineInteraction {
 			TimelineTrackListState trackListState) {
 		if (!ImGui.beginPopup(POPUP_EVENT_CONTEXT)) return;
 		boolean hasSelection = selectionState != null && !selectionState.getSelectedEvents().isEmpty();
+		boolean canDeleteSelection = hasDeletableSelectedEvents(timeline, selectionState, trackListState);
 		boolean hasClipboard = !clipboardEvents.isEmpty();
 		EventRef propertiesRef = resolvePropertiesEventRef(timeline, selectionState);
 		boolean canOpenProperties = propertiesRef != null && !isTrackLocked(trackListState, propertiesRef.track.getId());
@@ -672,7 +674,8 @@ public final class TimelineInteraction {
 		if (ImGui.menuItem("Paste", "Ctrl+V", false, hasClipboard)) {
 			pasteClipboardEvents(timeline, selectionState, contextTimeSeconds, trackListState);
 		}
-		if (ImGui.menuItem("Delete", "Del", false, hasSelection)) {
+		String deleteLabel = hasSelection && !canDeleteSelection ? "Delete (Locked)" : "Delete";
+		if (ImGui.menuItem(deleteLabel, "Del", false, canDeleteSelection)) {
 			deleteSelectedEvents(timeline, selectionState, trackListState);
 		}
 		ImGui.separator();
@@ -1073,6 +1076,18 @@ public final class TimelineInteraction {
 				}
 			}
 		}
+	}
+
+	private static boolean hasDeletableSelectedEvents(Timeline timeline, SelectionState selectionState,
+			TimelineTrackListState trackListState) {
+		if (timeline == null || selectionState == null || selectionState.getSelectedEvents().isEmpty()) return false;
+		for (String eventId : selectionState.getSelectedEvents()) {
+			EventRef ref = findEventRef(timeline, eventId);
+			if (ref != null && !isTrackLocked(trackListState, ref.track.getId())) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	private static boolean isTrackLocked(TimelineTrackListState trackListState, String trackId) {
