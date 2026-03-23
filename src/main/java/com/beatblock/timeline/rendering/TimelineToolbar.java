@@ -52,6 +52,7 @@ public final class TimelineToolbar {
 	private static final String TOOLTIP_ZOOM = "时间线横向缩放";
 	private static final String TOOLTIP_TRACK_HEIGHT = "调整音频轨（波形/低中高频）高度，便于看清节奏细节";
 	private static final String TOOLTIP_TRACK_HEIGHT_RESET = "恢复音频轨默认高度";
+	private static final String TOOLTIP_DEMUCS_PRESET = "Demucs 映射预设：Drive=更强律动，Detail=更细节，Balanced=平衡";
 
 	/** Zoom 预设：显示名与对应的缩放倍数（相对基准 1x） */
 	private static final String[] ZOOM_PRESET_LABELS = { "0.25x", "0.5x", "1x", "2x", "3x", "4x" };
@@ -59,6 +60,8 @@ public final class TimelineToolbar {
 	private static final float[] ZOOM_PRESET_VALUES = { 0.25f * ZOOM_BASE, 0.5f * ZOOM_BASE, ZOOM_BASE, 2f * ZOOM_BASE, 3f * ZOOM_BASE, 4f * ZOOM_BASE };
 	private static final String[] SPEED_LABELS = { "0.5x", "0.75x", "1x", "1.25x", "1.5x", "2x" };
 	private static final double[] SPEED_VALUES = { 0.5, 0.75, 1.0, 1.25, 1.5, 2.0 };
+	private static final String[] DEMUCS_PRESET_LABELS = { "Drive", "Balanced", "Detail" };
+	private static final String[] DEMUCS_PRESET_VALUES = { "drive", "balanced", "detail" };
 	private static final float TOOLBAR_ITEM_SPACING = 4f;
 	private static final float TOOLBAR_GROUP_SPACING = 8f;
 
@@ -67,6 +70,7 @@ public final class TimelineToolbar {
 	/** Zoom 下拉当前选中索引（由 Combo 更新） */
 	private final ImInt zoomComboIndex = new ImInt(2); // 默认 1x
 	private final ImInt speedComboIndex = new ImInt(2); // 默认 1x
+	private final ImInt demucsPresetComboIndex = new ImInt(1); // 默认 balanced
 
 	public void render(TimelineEditor editor, TimelineToolbarState toolbarState) {
 		if (editor == null) return;
@@ -282,6 +286,9 @@ public final class TimelineToolbar {
 			ImGui.textDisabled("(" + lastAutoMapCount + " events)");
 		}
 
+		nextGroup();
+		renderDemucsMappingPresetControl(false);
+
 	}
 
 	private void renderOverflowMenu(TimelineEditor editor, TimelineToolbarState toolbarState, double seekStep) {
@@ -394,6 +401,8 @@ public final class TimelineToolbar {
 			ImGui.textDisabled("(" + lastAutoMapCount + " events)");
 		}
 
+		renderDemucsMappingPresetControl(true);
+
 		ImGui.endPopup();
 	}
 
@@ -487,6 +496,56 @@ public final class TimelineToolbar {
 			trackState.resetAudioRowHeight();
 		}
 		if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_TRACK_HEIGHT_RESET);
+	}
+
+	private void renderDemucsMappingPresetControl(boolean compactMode) {
+		if (BeatBlock.timeline == null) return;
+		Object separationMode = BeatBlock.timeline.getMetadata("separationMode");
+		if (separationMode == null || !"demucs".equalsIgnoreCase(separationMode.toString().trim())) return;
+
+		int currentIndex = indexOfDemucsPresetValue(readDemucsPresetFromTimeline());
+		demucsPresetComboIndex.set(currentIndex);
+
+		if (compactMode) {
+			ImGui.separator();
+			ImGui.textDisabled("Demucs Mapping");
+			ImGui.setNextItemWidth(comboWidthForLabels(DEMUCS_PRESET_LABELS));
+			if (ImGui.combo("Preset##tlMoreDemucsPreset", demucsPresetComboIndex, DEMUCS_PRESET_LABELS)) {
+				writeDemucsPresetToTimeline(DEMUCS_PRESET_VALUES[demucsPresetComboIndex.get()]);
+			}
+			if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_DEMUCS_PRESET);
+			return;
+		}
+
+		ImGui.setNextItemWidth(comboWidthForLabels(DEMUCS_PRESET_LABELS));
+		if (ImGui.combo("Demucs", demucsPresetComboIndex, DEMUCS_PRESET_LABELS)) {
+			writeDemucsPresetToTimeline(DEMUCS_PRESET_VALUES[demucsPresetComboIndex.get()]);
+		}
+		if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_DEMUCS_PRESET);
+	}
+
+	private String readDemucsPresetFromTimeline() {
+		if (BeatBlock.timeline == null) return "balanced";
+		Object preset = BeatBlock.timeline.getMetadata("demucsMappingPreset");
+		if (preset == null) return "balanced";
+		String value = preset.toString().trim().toLowerCase();
+		if ("drive".equals(value) || "detail".equals(value) || "balanced".equals(value)) {
+			return value;
+		}
+		return "balanced";
+	}
+
+	private void writeDemucsPresetToTimeline(String preset) {
+		if (BeatBlock.timeline == null) return;
+		BeatBlock.timeline.setMetadata("demucsMappingPreset", preset);
+	}
+
+	private static int indexOfDemucsPresetValue(String value) {
+		if (value == null || value.isBlank()) return 1;
+		for (int i = 0; i < DEMUCS_PRESET_VALUES.length; i++) {
+			if (DEMUCS_PRESET_VALUES[i].equalsIgnoreCase(value)) return i;
+		}
+		return 1;
 	}
 
 	private static void nextItemInGroup() {
