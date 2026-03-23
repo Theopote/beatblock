@@ -324,6 +324,24 @@ public final class AudioAssetManager {
 					case "DEMUCS_DEP_INSTALL_SUCCESS" -> {
 						asset.setInfoMessage("Demucs 依赖已就绪，继续进行分轨分析");
 					}
+					case "DEMUCS_DEP_INSTALL_FAILED_NETWORK" -> {
+						asset.setInfoMessage("Demucs 自动安装失败：网络或证书问题");
+					}
+					case "DEMUCS_DEP_INSTALL_FAILED_PERMISSION" -> {
+						asset.setInfoMessage("Demucs 自动安装失败：权限不足");
+					}
+					case "DEMUCS_DEP_INSTALL_FAILED_VERSION" -> {
+						asset.setInfoMessage("Demucs 自动安装失败：Python 版本/平台不匹配");
+					}
+					case "DEMUCS_DEP_INSTALL_FAILED_PIP" -> {
+						asset.setInfoMessage("Demucs 自动安装失败：当前 Python 缺少 pip");
+					}
+					case "DEMUCS_DEP_INSTALL_FAILED_DLL" -> {
+						asset.setInfoMessage("Demucs 自动安装失败：二进制依赖加载失败");
+					}
+					case "DEMUCS_DEP_INSTALL_FAILED_UNKNOWN" -> {
+						asset.setInfoMessage("Demucs 自动安装失败：未知原因");
+					}
 					case "DEMUCS_DEP_INSTALL_FAILED" -> {
 						asset.setInfoMessage("Demucs 依赖自动安装失败");
 					}
@@ -409,6 +427,12 @@ public final class AudioAssetManager {
 			case "DEMUCS_DEP_CHECK" -> "检查 Demucs 依赖";
 			case "DEMUCS_DEP_INSTALL" -> "自动安装 Demucs 依赖";
 			case "DEMUCS_DEP_INSTALL_SUCCESS" -> "Demucs 依赖就绪";
+			case "DEMUCS_DEP_INSTALL_FAILED_NETWORK" -> "Demucs 安装失败（网络/证书）";
+			case "DEMUCS_DEP_INSTALL_FAILED_PERMISSION" -> "Demucs 安装失败（权限不足）";
+			case "DEMUCS_DEP_INSTALL_FAILED_VERSION" -> "Demucs 安装失败（版本不匹配）";
+			case "DEMUCS_DEP_INSTALL_FAILED_PIP" -> "Demucs 安装失败（缺少 pip）";
+			case "DEMUCS_DEP_INSTALL_FAILED_DLL" -> "Demucs 安装失败（二进制依赖）";
+			case "DEMUCS_DEP_INSTALL_FAILED_UNKNOWN" -> "Demucs 安装失败（未知原因）";
 			case "DEMUCS_DEP_INSTALL_FAILED" -> "Demucs 依赖安装失败";
 			case "BPM_DETECTION" -> "BPM 检测";
 			case "BEAT_DETECTION" -> "踩点检测";
