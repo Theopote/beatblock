@@ -164,6 +164,21 @@ public final class AudioAssetManager {
 		assets.removeIf(a -> id.equals(a.getId()));
 	}
 
+	/**
+	 * 删除当前音频对应的 basic/demucs 缓存后重新分析。
+	 *
+	 * @return 用户可读结果信息
+	 */
+	public String clearCacheAndReanalyze(AudioAsset asset) {
+		if (asset == null || asset.getPath() == null) return "无效音频资产";
+		AudioAnalysisService service = BeatBlock.externalAudioAnalyzer;
+		if (service == null) return "外部音频分析器未初始化";
+
+		int removed = service.clearBeatmapCacheForAudio(asset.getPath());
+		startAnalysis(asset);
+		return "已清理 " + removed + " 个缓存文件，开始重新解析";
+	}
+
 	public int getQueuePosition(String assetId) {
 		if (assetId == null || assetId.isBlank()) return -1;
 		AudioAsset target = findById(assetId);

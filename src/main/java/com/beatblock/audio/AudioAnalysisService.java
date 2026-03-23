@@ -119,6 +119,29 @@ public final class AudioAnalysisService {
 	}
 
 	/**
+	 * 删除指定音频对应的 basic/demucs 两类 beatmap 缓存。
+	 *
+	 * @return 删除的缓存文件数量
+	 */
+	public int clearBeatmapCacheForAudio(Path audioPath) {
+		if (audioPath == null) return 0;
+		Path outputDir;
+		try {
+			outputDir = AnalyzerInstaller.getBeatmapOutputDir();
+		} catch (Exception e) {
+			LOGGER.warn("BeatBlock AudioAnalysis: cannot resolve beatmap output dir for cache clear reason={}", e.toString());
+			return 0;
+		}
+
+		Path basic = buildBeatmapPath(outputDir, audioPath, false);
+		Path demucs = buildBeatmapPath(outputDir, audioPath, true);
+		int removed = 0;
+		removed += deleteIfExists(basic);
+		removed += deleteIfExists(demucs);
+		return removed;
+	}
+
+	/**
 	 * 返回当前 Python 运行时信息（带 5 秒缓存，避免 UI 每帧触发外部进程）。
 	 */
 	public String getPythonRuntimeSummary() {
@@ -195,12 +218,7 @@ public final class AudioAnalysisService {
 		}
 
 		// 输出文件名：带路径指纹，避免不同目录同名音频互相覆盖
-		String baseName = sanitizeBeatmapBaseName(audioPath.getFileName().toString()
-			.replaceAll("\\.[^.]+$", ""));
-		String audioFingerprint = Integer.toHexString(
-			audioPath.toAbsolutePath().normalize().toString().toLowerCase().hashCode());
-		String separationTag = analysisUseDemucs ? "demucs" : "basic";
-		Path beatmapPath = outputDir.resolve(baseName + "-" + audioFingerprint + "-" + separationTag + ".beatmap");
+		Path beatmapPath = buildBeatmapPath(outputDir, audioPath, analysisUseDemucs);
 
 		// 若 beatmap 文件已存在且可读，直接加载，跳过 Python 分析（避免重复运行耗时分析）
 		// 若 analyzerVersion 低于当前最低兼容版本（2.0），则废弃缓存并重新分析
@@ -431,6 +449,29 @@ public final class AudioAnalysisService {
 		String sanitized = baseName.replaceAll("[^A-Za-z0-9._-]", "_").replaceAll("_+", "_");
 		if (sanitized.isBlank()) return "audio";
 		return sanitized;
+	}
+
+	private Path buildBeatmapPath(Path outputDir, Path audioPath, boolean demucsMode) {
+		String fileName = audioPath != null && audioPath.getFileName() != null
+			? audioPath.getFileName().toString()
+			: "audio";
+		String baseName = sanitizeBeatmapBaseName(fileName.replaceAll("\\.[^.]+$", ""));
+		String normalized = audioPath == null
+			? "audio"
+			: audioPath.toAbsolutePath().normalize().toString().toLowerCase();
+		String audioFingerprint = Integer.toHexString(normalized.hashCode());
+		String separationTag = demucsMode ? "demucs" : "basic";
+		return outputDir.resolve(baseName + "-" + audioFingerprint + "-" + separationTag + ".beatmap");
+	}
+
+	private int deleteIfExists(Path p) {
+		if (p == null) return 0;
+		try {
+			return Files.deleteIfExists(p) ? 1 : 0;
+		} catch (IOException e) {
+			LOGGER.warn("BeatBlock AudioAnalysis: failed to delete cache file={} reason={}", p.getFileName(), e.toString());
+			return 0;
+		}
 	}
 
 	private AnalysisSummary parseResultSummary(String resultJson) {
