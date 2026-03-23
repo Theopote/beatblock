@@ -676,7 +676,10 @@ public final class TimelineInteraction {
 			deleteSelectedEvents(timeline, selectionState, trackListState);
 		}
 		ImGui.separator();
-		if (ImGui.menuItem("Properties", null, false, canOpenProperties)) {
+		String propertiesLabel = propertiesRef != null && !canOpenProperties
+			? "Properties (Locked)"
+			: "Properties";
+		if (ImGui.menuItem(propertiesLabel, null, false, canOpenProperties)) {
 			openPropertiesPopup(timeline, selectionState, trackListState);
 		}
 		ImGui.endPopup();
