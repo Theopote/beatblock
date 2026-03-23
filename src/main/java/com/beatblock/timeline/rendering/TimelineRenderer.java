@@ -38,6 +38,8 @@ import java.util.concurrent.Executors;
  */
 public final class TimelineRenderer {
 	private static final Logger LOGGER = LoggerFactory.getLogger(TimelineRenderer.class);
+	private static final long DENSE_FAILURE_COOLDOWN_MS = 30_000L;
+	private static final long PENDING_DENSE_PAYLOAD_TTL_MS = 120_000L;
 
 	private static final int PLAYHEAD_COLOR = 0xFF_FF_66_66;
 	private static final int SELECTED_BORDER_COLOR = 0xFF_FF_FF_00;
@@ -64,6 +66,7 @@ public final class TimelineRenderer {
 	});
 	private final ConcurrentMap<String, DenseApplyPayload> pendingDenseApplies = new ConcurrentHashMap<>();
 	private final ConcurrentMap<String, Boolean> denseAnalysisInFlight = new ConcurrentHashMap<>();
+	private final ConcurrentMap<String, Long> denseAnalysisFailureUntilMs = new ConcurrentHashMap<>();
 
 	/**
 	 * 本帧计算出的音频子轨定义列表（由 TrackRegistry.buildAudioSubTracks 生成）。
@@ -652,9 +655,13 @@ public final class TimelineRenderer {
 
 		String audioKey = buildAudioAssetKey(asset);
 		if (audioKey == null) return;
+		long now = System.currentTimeMillis();
+		Long failureUntil = denseAnalysisFailureUntilMs.get(audioKey);
+		if (failureUntil != null && failureUntil > now) return;
 
 		AudioFeatureTimeline cachedFeature = asset.getFeatureTimeline();
 		if (cachedFeature != null) {
+			denseAnalysisFailureUntilMs.remove(audioKey);
 			applyDenseFeatureData(timeline, asset, cachedFeature, audioKey);
 			return;
 		}
@@ -666,10 +673,17 @@ public final class TimelineRenderer {
 		denseFeatureExecutor.submit(() -> {
 			try {
 				AudioFeatureTimeline analyzed = BeatBlock.audioAnalysisEngine.analyze(audioPath);
-				if (analyzed == null) return;
+				if (analyzed == null) {
+					denseAnalysisFailureUntilMs.put(audioKey, System.currentTimeMillis() + DENSE_FAILURE_COOLDOWN_MS);
+					LOGGER.warn("BeatBlock Timeline: dense feature enrichment returned null path={} (cooldown={}ms)",
+						audioPath, DENSE_FAILURE_COOLDOWN_MS);
+					return;
+				}
 				asset.setFeatureTimeline(analyzed);
-				pendingDenseApplies.put(audioKey, new DenseApplyPayload(asset, analyzed));
+				denseAnalysisFailureUntilMs.remove(audioKey);
+				pendingDenseApplies.put(audioKey, new DenseApplyPayload(asset, analyzed, System.currentTimeMillis()));
 			} catch (Exception e) {
+				denseAnalysisFailureUntilMs.put(audioKey, System.currentTimeMillis() + DENSE_FAILURE_COOLDOWN_MS);
 				LOGGER.warn("BeatBlock Timeline: dense feature enrichment failed path={} reason={}", audioPath, e.toString());
 			} finally {
 				denseAnalysisInFlight.remove(audioKey);
@@ -678,6 +692,8 @@ public final class TimelineRenderer {
 	}
 
 	private void applyPendingDenseUpdates(Timeline timeline) {
+		if (pendingDenseApplies.isEmpty()) return;
+		pruneStalePendingDenseApplies();
 		if (timeline == null || pendingDenseApplies.isEmpty()) return;
 		String timelineAudioKey = getTimelineAudioPathKey(timeline);
 		if (timelineAudioKey == null) return;
@@ -685,6 +701,11 @@ public final class TimelineRenderer {
 		if (payload != null) {
 			applyDenseFeatureData(timeline, payload.asset(), payload.feature(), timelineAudioKey);
 		}
+	}
+
+	private void pruneStalePendingDenseApplies() {
+		long now = System.currentTimeMillis();
+		pendingDenseApplies.entrySet().removeIf(e -> now - e.getValue().createdAtMs() > PENDING_DENSE_PAYLOAD_TTL_MS);
 	}
 
 	private void applyDenseFeatureData(Timeline timeline, AudioAsset asset, AudioFeatureTimeline feature, String expectedAudioKey) {
@@ -719,7 +740,7 @@ public final class TimelineRenderer {
 		return rawPath.trim().toLowerCase();
 	}
 
-	private record DenseApplyPayload(AudioAsset asset, AudioFeatureTimeline feature) {}
+	private record DenseApplyPayload(AudioAsset asset, AudioFeatureTimeline feature, long createdAtMs) {}
 
 	private record AnimationMappingRule(
 		String animationType,
