@@ -28,6 +28,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * 时间线顶部工具栏：播放控制、吸附选项、Beat 网格、Auto Map。
@@ -71,6 +72,12 @@ public final class TimelineToolbar {
 	private static final double[] SPEED_VALUES = { 0.5, 0.75, 1.0, 1.25, 1.5, 2.0 };
 	private static final String[] DEMUCS_PRESET_LABELS = { "Drive", "Balanced", "Detail" };
 	private static final String[] DEMUCS_PRESET_VALUES = { "drive", "balanced", "detail" };
+	private static final String[] DEMUCS_FEATURE_KEYS = {
+		"kick", "snare", "hihat", "hihat_open", "snare_hi", "bass", "vocals", "other"
+	};
+	private static final String[] DEMUCS_FEATURE_LABELS = {
+		"Kick", "Snare", "HiHat", "HiHat Open", "Snare Hi", "Bass", "Vocals", "Other"
+	};
 	private static final String DEMUCS_ADVANCED_POPUP_ID = "tlDemucsMappingAdvanced";
 	private static final Gson UI_CONFIG_GSON = new GsonBuilder().setPrettyPrinting().create();
 	private static final float TOOLBAR_ITEM_SPACING = 4f;
@@ -582,6 +589,58 @@ public final class TimelineToolbar {
 			persistDemucsMappingConfig();
 		}
 
+		ImGui.separator();
+		if (ImGui.treeNode("Per-Feature Overrides##demucsFeatureOverrides")) {
+			boolean featureChanged = false;
+			for (int i = 0; i < DEMUCS_FEATURE_KEYS.length; i++) {
+				String featureKey = DEMUCS_FEATURE_KEYS[i];
+				String label = DEMUCS_FEATURE_LABELS[i];
+				if (ImGui.treeNode(label + "##demucsFeatureNode_" + featureKey)) {
+					boolean nodeChanged = false;
+					float[] fDur = new float[] {
+						(float) readTimelineScale(featureMetadataKey(featureKey, "duration"), 1.0, DEMUCS_SCALE_MIN, DEMUCS_SCALE_MAX)
+					};
+					float[] fEnergy = new float[] {
+						(float) readTimelineScale(featureMetadataKey(featureKey, "energy"), 1.0, DEMUCS_ENERGY_SCALE_MIN, DEMUCS_ENERGY_SCALE_MAX)
+					};
+					float[] fGap = new float[] {
+						(float) readTimelineScale(featureMetadataKey(featureKey, "gap"), 1.0, DEMUCS_SCALE_MIN, DEMUCS_SCALE_MAX)
+					};
+
+					ImGui.setNextItemWidth(220f);
+					nodeChanged |= ImGui.sliderFloat("Duration##demucsFeatDur_" + featureKey, fDur, (float) DEMUCS_SCALE_MIN, (float) DEMUCS_SCALE_MAX, "%.2f");
+					ImGui.setNextItemWidth(220f);
+					nodeChanged |= ImGui.sliderFloat("Energy##demucsFeatEnergy_" + featureKey, fEnergy, (float) DEMUCS_ENERGY_SCALE_MIN, (float) DEMUCS_ENERGY_SCALE_MAX, "%.2f");
+					ImGui.setNextItemWidth(220f);
+					nodeChanged |= ImGui.sliderFloat("Gap##demucsFeatGap_" + featureKey, fGap, (float) DEMUCS_SCALE_MIN, (float) DEMUCS_SCALE_MAX, "%.2f");
+
+					if (nodeChanged) {
+						writeTimelineScale(featureMetadataKey(featureKey, "duration"), fDur[0]);
+						writeTimelineScale(featureMetadataKey(featureKey, "energy"), fEnergy[0]);
+						writeTimelineScale(featureMetadataKey(featureKey, "gap"), fGap[0]);
+						featureChanged = true;
+					}
+
+					ImGui.treePop();
+				}
+			}
+
+			if (featureChanged) {
+				persistDemucsMappingConfig();
+			}
+
+			if (ImGui.button("Reset Feature Overrides##demucsFeatReset")) {
+				for (String featureKey : DEMUCS_FEATURE_KEYS) {
+					writeTimelineScale(featureMetadataKey(featureKey, "duration"), 1.0f);
+					writeTimelineScale(featureMetadataKey(featureKey, "energy"), 1.0f);
+					writeTimelineScale(featureMetadataKey(featureKey, "gap"), 1.0f);
+				}
+				persistDemucsMappingConfig();
+			}
+
+			ImGui.treePop();
+		}
+
 		ImGui.endPopup();
 	}
 
@@ -624,6 +683,17 @@ public final class TimelineToolbar {
 			applyDefaultScaleFromJson(dm, "durationScale", "demucsMapDurationScale", 1.0, DEMUCS_SCALE_MIN, DEMUCS_SCALE_MAX);
 			applyDefaultScaleFromJson(dm, "energyScale", "demucsMapEnergyScale", 1.0, DEMUCS_ENERGY_SCALE_MIN, DEMUCS_ENERGY_SCALE_MAX);
 			applyDefaultScaleFromJson(dm, "gapScale", "demucsMapGapScale", 1.0, DEMUCS_SCALE_MIN, DEMUCS_SCALE_MAX);
+
+			if (dm.has("featureScale") && dm.get("featureScale").isJsonObject()) {
+				JsonObject featureScale = dm.getAsJsonObject("featureScale");
+				for (String featureKey : DEMUCS_FEATURE_KEYS) {
+					if (!featureScale.has(featureKey) || !featureScale.get(featureKey).isJsonObject()) continue;
+					JsonObject featureObj = featureScale.getAsJsonObject(featureKey);
+					applyDefaultScaleFromJson(featureObj, "durationScale", featureMetadataKey(featureKey, "duration"), 1.0, DEMUCS_SCALE_MIN, DEMUCS_SCALE_MAX);
+					applyDefaultScaleFromJson(featureObj, "energyScale", featureMetadataKey(featureKey, "energy"), 1.0, DEMUCS_ENERGY_SCALE_MIN, DEMUCS_ENERGY_SCALE_MAX);
+					applyDefaultScaleFromJson(featureObj, "gapScale", featureMetadataKey(featureKey, "gap"), 1.0, DEMUCS_SCALE_MIN, DEMUCS_SCALE_MAX);
+				}
+			}
 		} catch (Exception e) {
 			LOGGER.debug("BeatBlock TimelineToolbar: failed to read ui.json demucs mapping config reason={}", e.toString());
 		}
@@ -664,6 +734,16 @@ public final class TimelineToolbar {
 			dm.addProperty("energyScale", readTimelineScale("demucsMapEnergyScale", 1.0, DEMUCS_ENERGY_SCALE_MIN, DEMUCS_ENERGY_SCALE_MAX));
 			dm.addProperty("gapScale", readTimelineScale("demucsMapGapScale", 1.0, DEMUCS_SCALE_MIN, DEMUCS_SCALE_MAX));
 
+			JsonObject featureScale = new JsonObject();
+			for (String featureKey : DEMUCS_FEATURE_KEYS) {
+				JsonObject featureObj = new JsonObject();
+				featureObj.addProperty("durationScale", readTimelineScale(featureMetadataKey(featureKey, "duration"), 1.0, DEMUCS_SCALE_MIN, DEMUCS_SCALE_MAX));
+				featureObj.addProperty("energyScale", readTimelineScale(featureMetadataKey(featureKey, "energy"), 1.0, DEMUCS_ENERGY_SCALE_MIN, DEMUCS_ENERGY_SCALE_MAX));
+				featureObj.addProperty("gapScale", readTimelineScale(featureMetadataKey(featureKey, "gap"), 1.0, DEMUCS_SCALE_MIN, DEMUCS_SCALE_MAX));
+				featureScale.add(featureKey, featureObj);
+			}
+			dm.add("featureScale", featureScale);
+
 			root.add("demucsMapping", dm);
 			Files.createDirectories(configPath.getParent());
 			Files.writeString(configPath, UI_CONFIG_GSON.toJson(root), StandardCharsets.UTF_8);
@@ -693,6 +773,18 @@ public final class TimelineToolbar {
 	private void writeTimelineScale(String key, float value) {
 		if (BeatBlock.timeline == null || key == null || key.isBlank()) return;
 		BeatBlock.timeline.setMetadata(key, value);
+	}
+
+	private static String featureMetadataKey(String featureKey, String metric) {
+		if (featureKey == null || featureKey.isBlank() || metric == null || metric.isBlank()) return "";
+		String normalizedFeature = featureKey.trim().toLowerCase(Locale.ROOT);
+		String normalizedMetric = metric.trim().toLowerCase(Locale.ROOT);
+		return switch (normalizedMetric) {
+			case "duration" -> "demucsFeatDuration_" + normalizedFeature;
+			case "energy" -> "demucsFeatEnergy_" + normalizedFeature;
+			case "gap" -> "demucsFeatGap_" + normalizedFeature;
+			default -> "";
+		};
 	}
 
 	private static Path getUiConfigPath() {

@@ -206,7 +206,7 @@ public final class TimelineRenderer {
 			TrackDefinition td = currentAudioSubTracks.get(slot);
 			renderAudioGroupDropTarget(rowIndex, rowY, rowHeight, timeline, layout);
 			// 静音/独奏：有效静音时跳过内容渲染（保留拖放目标区）
-			if (trackListState != null && isAudioRowEffectivelyMuted(trackListState, rowIndex)) return;
+			if (isAudioRowEffectivelyMuted(trackListState, rowIndex)) return;
 			renderAudioSubTrack(td, rowY, rowHeight, timeline, layout, viewState);
 			return;
 		}
@@ -457,23 +457,34 @@ public final class TimelineRenderer {
 		double minGapScale
 	) {
 		if (rule == null) return 0;
+		double featureDurationScale = readFeatureScaleMetadata(timeline, sourceFeature, "duration", 1.0, 0.5, 2.0);
+		float featureEnergyScale = (float) readFeatureScaleMetadata(timeline, sourceFeature, "energy", 1.0, 0.6, 1.6);
+		double featureGapScale = readFeatureScaleMetadata(timeline, sourceFeature, "gap", 1.0, 0.5, 2.0);
+
+		double effectiveDurationScale = durationScale * featureDurationScale;
+		float effectiveEnergyThresholdScale = energyThresholdScale * featureEnergyScale;
+		double effectiveMinGapScale = minGapScale * featureGapScale;
+
 		float energy = Math.max(0f, Math.min(1f, rawEnergy));
-		float minEnergy = Math.max(0f, Math.min(1f, rule.minEnergy() * energyThresholdScale));
+		float minEnergy = Math.max(0f, Math.min(1f, rule.minEnergy() * effectiveEnergyThresholdScale));
 		if (energy < minEnergy) return 0;
-		double minGap = Math.max(0.02, rule.minGapSeconds() * minGapScale);
+		double minGap = Math.max(0.02, rule.minGapSeconds() * effectiveMinGapScale);
 
 		Double lastAccepted = lastAcceptedTimeByFeature.get(sourceFeature);
 		if (lastAccepted != null && timeSeconds < lastAccepted + minGap) {
 			return 0;
 		}
 
-		double duration = Math.max(0.05, rule.baseDurationSeconds() * durationScale * (0.70 + energy * 0.75));
+		double duration = Math.max(0.05, rule.baseDurationSeconds() * effectiveDurationScale * (0.70 + energy * 0.75));
 		Map<String, Object> params = new HashMap<>();
 		params.put("energy", energy);
 		params.put("sourceFeature", sourceFeature);
 		params.put("sourceStem", rule.sourceStem());
 		params.put("mappingProfile", "demucs-aware");
 		params.put("mappingPreset", resolvePresetLabel(durationScale, energyThresholdScale, minGapScale));
+		params.put("featureDurationScale", featureDurationScale);
+		params.put("featureEnergyScale", featureEnergyScale);
+		params.put("featureGapScale", featureGapScale);
 		params.put("generatedBy", "audio-asset-drop");
 
 		TimelineAnimationEvent ev = new TimelineAnimationEvent(
@@ -608,6 +619,29 @@ public final class TimelineRenderer {
 		if (durationScale > 1.05 && energyThresholdScale < 0.95f && minGapScale < 0.95) return "drive";
 		if (durationScale < 0.97 && energyThresholdScale > 1.05f && minGapScale > 1.05) return "detail";
 		return "balanced";
+	}
+
+	private double readFeatureScaleMetadata(
+		Timeline timeline,
+		String featureKey,
+		String scaleType,
+		double defaultValue,
+		double min,
+		double max
+	) {
+		if (timeline == null || featureKey == null || featureKey.isBlank() || scaleType == null || scaleType.isBlank()) {
+			return defaultValue;
+		}
+		String normalizedFeature = featureKey.trim().toLowerCase().replaceAll("[^a-z0-9_]+", "_");
+		String normalizedScale = scaleType.trim().toLowerCase();
+		String metadataKey = "demucsFeat" + capitalize(normalizedScale) + "_" + normalizedFeature;
+		return readScaleMetadata(timeline, metadataKey, defaultValue, min, max);
+	}
+
+	private String capitalize(String s) {
+		if (s == null || s.isBlank()) return "";
+		if (s.length() == 1) return s.toUpperCase();
+		return Character.toUpperCase(s.charAt(0)) + s.substring(1);
 	}
 
 	/**
