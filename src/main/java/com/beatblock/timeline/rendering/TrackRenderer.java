@@ -24,8 +24,10 @@ public final class TrackRenderer {
 	private static final float ICON_GAP = 2f;
 	/** 左侧安全内边距，避免折叠按钮贴边被窗口裁剪。 */
 	private static final float LEFT_INSET = 8f;
+	private static final String[] TYPE_LABELS = {"音频", "动画", "摄像机", "事件"};
 
 	private static final int MICRO_SEP_COLOR = 0x55_66_66_66; // ABGR
+	private float cachedTypeColumnWidth = -1f;
 
 	/**
 	 * @param trackHeaderWidth 左侧轨道头总宽（与可拖动分割线一致）
@@ -49,13 +51,7 @@ public final class TrackRenderer {
 		float iconBtn = rowH;
 
 		// 类型列宽：取四种类型里“最宽”的文字宽度（加右内边距）
-		float maxTypeW = 0f;
-		for (int i = 0; i < TimelineLayout.CONTENT_ROW_COUNT; i++) {
-			String t = TimelineTrackMeta.getCategoryTypeLabel(i);
-			if (t == null || t.isBlank()) continue;
-			maxTypeW = Math.max(maxTypeW, ImGui.calcTextSize(t).x);
-		}
-		float typeColW = Math.max(MIN_TYPE_COL_W, maxTypeW + TYPE_COL_RIGHT_PAD);
+		float typeColW = resolveTypeColumnWidth();
 
 		// 列边界（内部坐标：以“轨道头内部局部 X=0”为基准）
 		float foldColLeft = LEFT_INSET;
@@ -230,6 +226,17 @@ public final class TrackRenderer {
 		}
 
 		return rowY + rowH;
+	}
+
+	private float resolveTypeColumnWidth() {
+		if (cachedTypeColumnWidth > 0f) return cachedTypeColumnWidth;
+		float maxTypeW = 0f;
+		for (String label : TYPE_LABELS) {
+			if (label == null || label.isBlank()) continue;
+			maxTypeW = Math.max(maxTypeW, ImGui.calcTextSize(label).x);
+		}
+		cachedTypeColumnWidth = Math.max(MIN_TYPE_COL_W, maxTypeW + TYPE_COL_RIGHT_PAD);
+		return cachedTypeColumnWidth;
 	}
 }
 
