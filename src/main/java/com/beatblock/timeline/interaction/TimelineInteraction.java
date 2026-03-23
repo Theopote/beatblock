@@ -781,12 +781,8 @@ public final class TimelineInteraction {
 			return;
 		}
 		boolean trackLocked = isTrackLocked(trackListState, ref.track.getId());
-
-		boolean applyRequested = ImGui.isKeyPressed(ImGuiKey.Enter);
+		boolean applyRequested = !trackLocked && ImGui.isKeyPressed(ImGuiKey.Enter);
 		boolean closeRequested = ImGui.isKeyPressed(ImGuiKey.Escape);
-		if (trackLocked) {
-			applyRequested = false;
-		}
 
 		ImGui.text("Event ID: " + ref.event.getId());
 		ImGui.text("Type: " + ref.event.getType().name());
@@ -812,91 +808,94 @@ public final class TimelineInteraction {
 			List<String> removedKeys = new ArrayList<>();
 			for (String key : keys) {
 				ImString buf = propertiesParamBuffers.computeIfAbsent(key, k -> new ImString(256));
-				String key = propertiesNewParamKey.get() != null ? propertiesNewParamKey.get().trim() : "";
-				if (key.isEmpty()) {
-					propertiesError = "Parameter key cannot be empty";
-				} else {
-					ImString valueBuf = propertiesParamBuffers.computeIfAbsent(key, k -> new ImString(PARAM_INPUT_BUFFER_SIZE));
-					valueBuf.set(propertiesNewParamValue.get() == null ? "" : propertiesNewParamValue.get());
-					propertiesParamAsNumber.put(key, propertiesNewParamAsNumber);
-					propertiesError = null;
-				if (!trackLocked && ImGui.smallButton("X##param_remove_" + key)) {
+				Boolean asNumber = propertiesParamAsNumber.computeIfAbsent(key,
+					k -> ref.event.getParameters().get(k) instanceof Number);
+				ImGui.text(key);
+				ImGui.sameLine();
+				ImGui.setNextItemWidth(130f);
+				ImGui.inputText("##param_" + key, buf);
+				ImGui.sameLine();
+				boolean numberFlag = asNumber;
+				if (ImGui.checkbox("Number##param_type_" + key, numberFlag)) {
+					propertiesParamAsNumber.put(key, !numberFlag);
+				}
+				ImGui.sameLine();
+				if (ImGui.smallButton("X##param_remove_" + key)) {
 					removedKeys.add(key);
 				}
 			}
-				String raw = propertiesTimeBuffer.get();
-				try {
-					double t = Math.max(0, Double.parseDouble(raw.trim()));
-					ref.event.setTimeSeconds(t);
-					Set<String> existing = new HashSet<>(ref.event.getParameters().keySet());
-					for (String key : existing) {
-						if (!propertiesParamBuffers.containsKey(key)) {
-							ref.event.removeParameter(key);
-				String key = propertiesNewParamKey.get() != null ? propertiesNewParamKey.get().trim() : "";
-					}
-					for (Map.Entry<String, ImString> entry : propertiesParamBuffers.entrySet()) {
-						String key = entry.getKey();
-						String valueRaw = entry.getValue().get();
-						boolean asNumber = propertiesParamAsNumber.getOrDefault(key, false);
-						if (asNumber) {
-							ref.event.setParameter(key, Double.parseDouble(valueRaw.trim()));
-						} else {
-							ref.event.setParameter(key, valueRaw);
-					propertiesError = null;
+			for (String key : removedKeys) {
+				propertiesParamBuffers.remove(key);
+				propertiesParamAsNumber.remove(key);
+			}
+		}
 
-					timeline.markAnimationEventsDirty(ref.track.getId());
-					propertiesOriginalTime = String.format(java.util.Locale.ROOT, "%.6f", ref.event.getTimeSeconds());
-					for (Map.Entry<String, ImString> entry : propertiesParamBuffers.entrySet()) {
-						String key = entry.getKey();
-						propertiesOriginalParamValues.put(key, entry.getValue().get());
-						propertiesOriginalParamAsNumber.put(key, propertiesParamAsNumber.getOrDefault(key, false));
+		ImGui.separator();
+		ImGui.text("Add Parameter");
+		ImGui.setNextItemWidth(120f);
+		ImGui.inputText("Key##param_add_key", propertiesNewParamKey);
+		ImGui.sameLine();
+		ImGui.setNextItemWidth(120f);
+		ImGui.inputText("Value##param_add_value", propertiesNewParamValue);
+		ImGui.sameLine();
+		if (ImGui.checkbox("Number##param_add_type", propertiesNewParamAsNumber)) {
+			propertiesNewParamAsNumber = !propertiesNewParamAsNumber;
+		}
+		ImGui.sameLine();
+		if (ImGui.button("Add/Update##param_add")) {
+			String key = propertiesNewParamKey.get() != null ? propertiesNewParamKey.get().trim() : "";
+			if (key.isEmpty()) {
+				propertiesError = "Parameter key cannot be empty";
+			} else {
+				ImString valueBuf = propertiesParamBuffers.computeIfAbsent(key, k -> new ImString(PARAM_INPUT_BUFFER_SIZE));
+				valueBuf.set(propertiesNewParamValue.get() == null ? "" : propertiesNewParamValue.get());
+				propertiesParamAsNumber.put(key, propertiesNewParamAsNumber);
+				propertiesError = null;
+			}
+		}
+
 		if (ImGui.button("Apply") || applyRequested) {
-					propertiesError = null;
-				} catch (Exception ex) {
-					propertiesError = "Invalid number in time/parameter";
+			String raw = propertiesTimeBuffer.get();
+			try {
+				double t = Math.max(0, Double.parseDouble(raw.trim()));
+				ref.event.setTimeSeconds(t);
+				Set<String> existing = new HashSet<>(ref.event.getParameters().keySet());
+				for (String key : existing) {
+					if (!propertiesParamBuffers.containsKey(key)) {
+						ref.event.removeParameter(key);
+					}
 				}
+				for (Map.Entry<String, ImString> entry : propertiesParamBuffers.entrySet()) {
+					String key = entry.getKey();
+					String valueRaw = entry.getValue().get();
+					boolean asNumber = propertiesParamAsNumber.getOrDefault(key, false);
+					if (asNumber) {
+						ref.event.setParameter(key, Double.parseDouble(valueRaw.trim()));
+					} else {
+						ref.event.setParameter(key, valueRaw);
+					}
+				}
+				timeline.markAnimationEventsDirty(ref.track.getId());
+				propertiesOriginalTime = String.format(java.util.Locale.ROOT, "%.6f", ref.event.getTimeSeconds());
+				for (Map.Entry<String, ImString> entry : propertiesParamBuffers.entrySet()) {
+					String key = entry.getKey();
+					propertiesOriginalParamValues.put(key, entry.getValue().get());
+					propertiesOriginalParamAsNumber.put(key, propertiesParamAsNumber.getOrDefault(key, false));
+				}
+				propertiesError = null;
+			} catch (Exception ex) {
+				propertiesError = "Invalid number in time/parameter";
 			}
-			ImGui.sameLine();
-			if (ImGui.button("Reset")) {
-				resetPropertiesBuffers();
-			}
-			if (trackLocked) {
-				ImGui.endDisabled();
-			if (trackLocked) {
-					ref.event.setTimeSeconds(t);
-					Set<String> existing = new HashSet<>(ref.event.getParameters().keySet());
-					for (String key : existing) {
-						if (!propertiesParamBuffers.containsKey(key)) {
-							ref.event.removeParameter(key);
-						}
-					}
-					for (Map.Entry<String, ImString> entry : propertiesParamBuffers.entrySet()) {
-						String key = entry.getKey();
-						String valueRaw = entry.getValue().get();
-						boolean asNumber = propertiesParamAsNumber.getOrDefault(key, false);
-						if (asNumber) {
-							ref.event.setParameter(key, Double.parseDouble(valueRaw.trim()));
-						} else {
-							ref.event.setParameter(key, valueRaw);
-						}
-					}
-					timeline.markAnimationEventsDirty(ref.track.getId());
-					propertiesOriginalTime = String.format(java.util.Locale.ROOT, "%.6f", ref.event.getTimeSeconds());
-					for (Map.Entry<String, ImString> entry : propertiesParamBuffers.entrySet()) {
-						String key = entry.getKey();
-						propertiesOriginalParamValues.put(key, entry.getValue().get());
-						propertiesOriginalParamAsNumber.put(key, propertiesParamAsNumber.getOrDefault(key, false));
-					}
-					propertiesError = null;
-				} catch (Exception ex) {
-					propertiesError = "Invalid number in time/parameter";
-				}
-				}
 		}
 		ImGui.sameLine();
 		if (ImGui.button("Reset")) {
 			resetPropertiesBuffers();
 		}
+
+		if (trackLocked) {
+			ImGui.endDisabled();
+		}
+
 		ImGui.sameLine();
 		if (ImGui.button("Close") || closeRequested) {
 			ImGui.closeCurrentPopup();
