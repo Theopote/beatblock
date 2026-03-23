@@ -189,7 +189,7 @@ public final class AudioAnalysisPanel {
             importPath.set("");
             ImGui.openPopup("##AddAudioPopup");
         }
-        if (ImGui.isItemHovered()) setTooltipWithDefaultFont("选择音频文件");
+        if (ImGui.isItemHovered()) setTooltipWithDefaultFont();
 
         ImGui.sameLine();
 
@@ -1120,13 +1120,13 @@ public final class AudioAnalysisPanel {
         return icon;
     }
 
-    private static void setTooltipWithDefaultFont(String text) {
+    private static void setTooltipWithDefaultFont() {
         if (ImGuiFontManager.getIconButtonFont() == null) {
-            ImGui.setTooltip(text);
+            ImGui.setTooltip("选择音频文件");
             return;
         }
         ImGui.popFont();
-        ImGui.setTooltip(text);
+        ImGui.setTooltip("选择音频文件");
         ImGui.pushFont(ImGuiFontManager.getIconButtonFont());
     }
 
