@@ -24,9 +24,12 @@ import imgui.type.ImString;
 import java.awt.EventQueue;
 import java.awt.FileDialog;
 import java.awt.Frame;
+import java.awt.HeadlessException;
+import java.awt.Toolkit;
 import javax.swing.JFileChooser;
 import javax.swing.SwingUtilities;
 import javax.swing.filechooser.FileNameExtensionFilter;
+import java.awt.datatransfer.StringSelection;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
@@ -747,8 +750,8 @@ public final class AudioAnalysisPanel {
             detailRowColored("队列位次", "#" + pos, new ImVec4(0.95f, 0.78f, 0.38f, 1f));
         }
         ImGui.spacing();
-        ImGui.textDisabled("当前分析器为串行执行，前序任务完成后将自动开始。\n你可以继续添加文件，系统会按顺序处理。");
-        ImGui.textDisabled("提示：左侧列表支持拖动队列项直接改顺序。");
+        textDisabledWrapped("当前分析器为串行执行，前序任务完成后将自动开始。你可以继续添加文件，系统会按顺序处理。");
+        textDisabledWrapped("提示：左侧列表支持拖动队列项直接改顺序。");
         ImGui.spacing();
 
         boolean canMoveUp = manager.canMoveQueueUp(asset.getId());
@@ -818,7 +821,7 @@ public final class AudioAnalysisPanel {
             detailRowColored("贝斯（bass）",  stemStateLabel(detailBm, "bass"),  new ImVec4(0.27f, 0.60f, 0.87f, 1f));
             detailRowColored("人声（vocals）", stemStateLabel(detailBm, "vocals"), new ImVec4(0.67f, 0.38f, 0.84f, 1f));
             detailRowColored("其他（other）",  stemStateLabel(detailBm, "other"),  new ImVec4(0.58f, 0.72f, 0.30f, 1f));
-            ImGui.textDisabled("提示：静音/独奏请在时间线音频子轨上操作。\n鼓类特征轨(kick/snare/hihat)会共同影响 drums 茎。" );
+            textDisabledWrapped("提示：静音/独奏请在时间线音频子轨上操作。鼓类特征轨(kick/snare/hihat)会共同影响 drums 茎。");
         }
 
         if (asset.getInfoMessage() != null && !asset.getInfoMessage().isBlank()) {
@@ -836,12 +839,15 @@ public final class AudioAnalysisPanel {
         if (hasStemSeparation) {
             ImGui.spacing();
             sectionHeader("Demucs 拆分结果");
-            String separationMode = detailBm.meta.separationMode();
-            detailRowColored("分离模式", separationMode != null && !separationMode.isBlank() ? separationMode : "demucs", new ImVec4(0.22f, 0.78f, 0.82f, 1f));
-            renderStemDetailRow(detailBm, "drums", "鼓组（drums）", new ImVec4(0.87f, 0.53f, 0.25f, 1f));
-            renderStemDetailRow(detailBm, "bass", "贝斯（bass）", new ImVec4(0.27f, 0.60f, 0.87f, 1f));
-            renderStemDetailRow(detailBm, "vocals", "人声（vocals）", new ImVec4(0.67f, 0.38f, 0.84f, 1f));
-            renderStemDetailRow(detailBm, "other", "其他（other）", new ImVec4(0.58f, 0.72f, 0.30f, 1f));
+            if (ImGui.treeNodeEx("查看拆分明细##demucsSplitDetails")) {
+                String separationMode = detailBm.meta.separationMode();
+                detailRowColored("分离模式", separationMode != null && !separationMode.isBlank() ? separationMode : "demucs", new ImVec4(0.22f, 0.78f, 0.82f, 1f));
+                renderStemDetailRow(detailBm, "drums", "鼓组（drums）", new ImVec4(0.87f, 0.53f, 0.25f, 1f));
+                renderStemDetailRow(detailBm, "bass", "贝斯（bass）", new ImVec4(0.27f, 0.60f, 0.87f, 1f));
+                renderStemDetailRow(detailBm, "vocals", "人声（vocals）", new ImVec4(0.67f, 0.38f, 0.84f, 1f));
+                renderStemDetailRow(detailBm, "other", "其他（other）", new ImVec4(0.58f, 0.72f, 0.30f, 1f));
+                ImGui.treePop();
+            }
         }
 
         ImGui.spacing();
@@ -1099,6 +1105,28 @@ public final class AudioAnalysisPanel {
         boolean fileExists = new File(path).isFile();
         detailRowColored(label, fileExists ? "已生成" : "路径存在但文件缺失", color);
         detailRow(label + " 路径", path);
+        renderCopyPathAction(path, stemKey, label);
+    }
+
+    private void renderCopyPathAction(String path, String stemKey, String label) {
+        if (path == null || path.isBlank()) return;
+        ImGui.setCursorPosX(ImGui.getCursorPosX() + 14f);
+        if (ImGui.smallButton(Icons.Action.COPY + " 复制路径##copyStemPath_" + stemKey)) {
+            if (copyToClipboard(path)) {
+                setPanelHint("已复制 " + label + " 路径", false);
+            } else {
+                setPanelHint("复制失败：系统剪贴板不可用", true);
+            }
+        }
+    }
+
+    private boolean copyToClipboard(String text) {
+        try {
+            Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(text), null);
+            return true;
+        } catch (IllegalStateException | HeadlessException e) {
+            return false;
+        }
     }
 
     /** AudioAnalysisStep → 人类可读标签。 */
