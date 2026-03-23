@@ -859,6 +859,15 @@ public final class AudioAnalysisPanel {
         ImGui.separator();
         ImGui.spacing();
 
+        if (ImGui.button("清缓存并重解析（优先 Demucs）##detailReanalyzeFresh", ImGui.getContentRegionAvailX(), 26f)) {
+            String result = AudioAssetManager.getInstance().clearCacheAndReanalyze(asset);
+            setPanelHint(result, result.contains("未初始化") || result.contains("无效"));
+        }
+        if (ImGui.isItemHovered()) {
+            ImGui.setTooltip("删除该音频对应的 basic/demucs 缓存后重新分析，避免命中旧缓存");
+        }
+        ImGui.spacing();
+
         // ── 拖拽到时间线 ──────────────────────────────────────────────
         float btnW = ImGui.getContentRegionAvailX();
         ImGui.pushStyleColor(ImGuiCol.Button,        0.28f, 0.26f, 0.45f, 1f);
