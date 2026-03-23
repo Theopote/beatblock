@@ -200,13 +200,13 @@ public final class TrackRenderer {
 			}
 
 			// ── 可见按钮 ────────────────────────────────────────────
-			boolean vis = listState.isVisible(rowIndex);
+			boolean vis = true;
 			ImGui.setCursorScreenPos(baseX + visX, rowOriginScreenY);
-			if (ImGui.button((vis ? Icons.EYE : Icons.Action.HIDDEN) + "##vis" + rowIndex, iconBtn, iconBtn)) {
-				listState.toggleVisible(rowIndex);
-			}
+			ImGui.beginDisabled();
+			ImGui.button((vis ? Icons.EYE : Icons.Action.HIDDEN) + "##vis" + rowIndex, iconBtn, iconBtn);
+			ImGui.endDisabled();
 			if (ImGui.isItemHovered()) {
-				visTooltip = vis ? "可见 (点击隐藏)" : "隐藏 (点击显示)";
+				visTooltip = "轨道可见性暂未接入时间线；后续与 Minecraft 场景交互时实现";
 			}
 
 			boolean lock = listState.isLocked(rowIndex);

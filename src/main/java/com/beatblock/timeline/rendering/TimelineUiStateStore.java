@@ -157,7 +157,7 @@ public final class TimelineUiStateStore {
 				state.applyPersistedState(
 					d.trackHeaderWidthPx,
 					d.audioRowHeightPx,
-					d.visible,
+					null,
 					d.locked,
 					d.customNames,
 					d.collapsedGroupRows
@@ -171,7 +171,6 @@ public final class TimelineUiStateStore {
 	private static int hashState(TimelineTrackListState state) {
 		int h = Float.hashCode(state.getTrackHeaderWidth());
 		h = 31 * h + Float.hashCode(state.getAudioRowHeight());
-		h = 31 * h + Arrays.hashCode(state.copyVisibleStates());
 		h = 31 * h + Arrays.hashCode(state.copyLockedStates());
 		h = 31 * h + state.copyCustomNames().hashCode();
 		h = 31 * h + state.copyCollapsedGroupRows().hashCode();
@@ -200,7 +199,6 @@ public final class TimelineUiStateStore {
 			TrackListData d = new TrackListData();
 			d.trackHeaderWidthPx = state.getTrackHeaderWidth();
 			d.audioRowHeightPx = state.getAudioRowHeight();
-			d.visible = state.copyVisibleStates();
 			d.locked = state.copyLockedStates();
 			d.customNames = state.copyCustomNames();
 			d.collapsedGroupRows = state.copyCollapsedGroupRows();

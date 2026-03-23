@@ -191,10 +191,8 @@ public final class TimelineLayout {
 			if (slot >= activeAudioSubRowCount) return false;
 		}
 		if (state == null) return true;
-		if (!state.isVisible(rowIndex)) return false;
 		int parent = TimelineTrackMeta.getParentRowIndex(rowIndex);
 		if (parent == TimelineTrackMeta.NO_PARENT) return true;
-		if (!state.isVisible(parent)) return false;
 		return !state.isGroupCollapsed(parent);
 	}
 
