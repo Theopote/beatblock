@@ -386,6 +386,10 @@ public final class TimelineRenderer {
 		boolean toAutoTrack = targetRowIndex == TimelineTrackMeta.ROW_ANIM_AUTO;
 		if (!toBlockTrack && !toAutoTrack) return;
 		boolean demucsSeparated = isDemucsSeparatedTimeline(timeline);
+		String mappingPreset = resolveDemucsMappingPreset(timeline, toBlockTrack);
+		double durationScale = durationScaleForPreset(mappingPreset);
+		float energyThresholdScale = energyThresholdScaleForPreset(mappingPreset);
+		double minGapScale = minGapScaleForPreset(mappingPreset);
 
 		if (toBlockTrack) {
 			timeline.clearBlockAnimationEvents();
@@ -408,7 +412,8 @@ public final class TimelineRenderer {
 				added += addAnimationEventFromSource(
 					timeline, toBlockTrack, event.getTimeSeconds(),
 					event.getEnergy(), rule,
-					targetObjectId, featureKey, lastAcceptedTimeByFeature
+					targetObjectId, featureKey, lastAcceptedTimeByFeature,
+					durationScale, energyThresholdScale, minGapScale
 				);
 			}
 		}
@@ -424,14 +429,15 @@ public final class TimelineRenderer {
 				if (rule == null) continue;
 				added += addAnimationEventFromSource(
 					timeline, toBlockTrack, fe.getTimeSeconds(),
-					fe.getEnergy(), rule, targetObjectId, featureKey, lastAcceptedTimeByFeature
+					fe.getEnergy(), rule, targetObjectId, featureKey, lastAcceptedTimeByFeature,
+					durationScale, energyThresholdScale, minGapScale
 				);
 			}
 		}
 
 		timeline.sortAll();
-		LOGGER.info("BeatBlock Timeline: mapped dropped audio into {} animation events on {} track",
-			added, toBlockTrack ? "block" : "auto");
+		LOGGER.info("BeatBlock Timeline: mapped dropped audio into {} animation events on {} track (preset={})",
+			added, toBlockTrack ? "block" : "auto", mappingPreset);
 	}
 
 	private int addAnimationEventFromSource(
@@ -442,23 +448,29 @@ public final class TimelineRenderer {
 		AnimationMappingRule rule,
 		String targetObjectId,
 		String sourceFeature,
-		Map<String, Double> lastAcceptedTimeByFeature
+		Map<String, Double> lastAcceptedTimeByFeature,
+		double durationScale,
+		float energyThresholdScale,
+		double minGapScale
 	) {
 		if (rule == null) return 0;
 		float energy = Math.max(0f, Math.min(1f, rawEnergy));
-		if (energy < rule.minEnergy()) return 0;
+		float minEnergy = Math.max(0f, Math.min(1f, rule.minEnergy() * energyThresholdScale));
+		if (energy < minEnergy) return 0;
+		double minGap = Math.max(0.02, rule.minGapSeconds() * minGapScale);
 
 		Double lastAccepted = lastAcceptedTimeByFeature.get(sourceFeature);
-		if (lastAccepted != null && timeSeconds < lastAccepted + rule.minGapSeconds()) {
+		if (lastAccepted != null && timeSeconds < lastAccepted + minGap) {
 			return 0;
 		}
 
-		double duration = Math.max(0.05, rule.baseDurationSeconds() * (0.70 + energy * 0.75));
+		double duration = Math.max(0.05, rule.baseDurationSeconds() * durationScale * (0.70 + energy * 0.75));
 		Map<String, Object> params = new HashMap<>();
 		params.put("energy", energy);
 		params.put("sourceFeature", sourceFeature);
 		params.put("sourceStem", rule.sourceStem());
 		params.put("mappingProfile", "demucs-aware");
+		params.put("mappingPreset", resolvePresetLabel(durationScale, energyThresholdScale, minGapScale));
 		params.put("generatedBy", "audio-asset-drop");
 
 		TimelineAnimationEvent ev = new TimelineAnimationEvent(
@@ -532,6 +544,49 @@ public final class TimelineRenderer {
 		if (timeline == null) return false;
 		Object value = timeline.getMetadata("separationMode");
 		return value != null && "demucs".equalsIgnoreCase(value.toString().trim());
+	}
+
+	private String resolveDemucsMappingPreset(Timeline timeline, boolean toBlockTrack) {
+		if (timeline != null) {
+			Object configured = timeline.getMetadata("demucsMappingPreset");
+			if (configured != null) {
+				String v = configured.toString().trim().toLowerCase();
+				if ("drive".equals(v) || "detail".equals(v) || "balanced".equals(v)) {
+					return v;
+				}
+			}
+		}
+		return toBlockTrack ? "drive" : "detail";
+	}
+
+	private double durationScaleForPreset(String preset) {
+		return switch (preset) {
+			case "drive" -> 1.18;
+			case "detail" -> 0.92;
+			default -> 1.0;
+		};
+	}
+
+	private float energyThresholdScaleForPreset(String preset) {
+		return switch (preset) {
+			case "drive" -> 0.88f;
+			case "detail" -> 1.10f;
+			default -> 1.0f;
+		};
+	}
+
+	private double minGapScaleForPreset(String preset) {
+		return switch (preset) {
+			case "drive" -> 0.85;
+			case "detail" -> 1.18;
+			default -> 1.0;
+		};
+	}
+
+	private String resolvePresetLabel(double durationScale, float energyThresholdScale, double minGapScale) {
+		if (durationScale > 1.05 && energyThresholdScale < 0.95f && minGapScale < 0.95) return "drive";
+		if (durationScale < 0.97 && energyThresholdScale > 1.05f && minGapScale > 1.05) return "detail";
+		return "balanced";
 	}
 
 	/**

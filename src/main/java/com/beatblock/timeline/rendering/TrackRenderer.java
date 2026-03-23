@@ -139,11 +139,17 @@ public final class TrackRenderer {
 			ImGui.pushClipRect(clipX1, clipY1, clipX1 + nameW, clipY1 + rowH, true);
 
 			ImGui.setCursorScreenPos(clipX1, rowOriginScreenY + textOffsetY);
+			boolean isAudioControlLane = displayName != null && (displayName.contains("主混音") || displayName.contains("音频"));
+			boolean isReferenceLane = displayName != null && displayName.contains("参考");
 			if (isGroup) {
 				ImGui.pushStyleColor(ImGuiCol.Text, 0.9f, 0.85f, 0.7f, 1f);
+			} else if (isAudioControlLane) {
+				ImGui.pushStyleColor(ImGuiCol.Text, 0.70f, 0.86f, 0.78f, 1f);
+			} else if (isReferenceLane) {
+				ImGui.pushStyleColor(ImGuiCol.Text, 0.66f, 0.76f, 0.92f, 1f);
 			}
 			ImGui.text(displayName);
-			if (isGroup) {
+			if (isGroup || isAudioControlLane || isReferenceLane) {
 				ImGui.popStyleColor();
 			}
 			ImGui.popClipRect();
