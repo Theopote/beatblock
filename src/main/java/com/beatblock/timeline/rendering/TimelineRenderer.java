@@ -64,6 +64,7 @@ public final class TimelineRenderer {
 		t.setDaemon(true);
 		return t;
 	});
+	private volatile boolean denseFeatureExecutorShutdown;
 	private final ConcurrentMap<String, DenseApplyPayload> pendingDenseApplies = new ConcurrentHashMap<>();
 	private final ConcurrentMap<String, Boolean> denseAnalysisInFlight = new ConcurrentHashMap<>();
 	private final ConcurrentMap<String, Long> denseAnalysisFailureUntilMs = new ConcurrentHashMap<>();
@@ -652,6 +653,7 @@ public final class TimelineRenderer {
 	 */
 	private void requestDenseFeatureEnrichment(Timeline timeline, AudioAsset asset) {
 		if (timeline == null || asset == null || BeatBlock.audioAnalysisEngine == null) return;
+		if (denseFeatureExecutorShutdown) return;
 
 		String audioKey = buildAudioAssetKey(asset);
 		if (audioKey == null) return;
@@ -689,6 +691,18 @@ public final class TimelineRenderer {
 				denseAnalysisInFlight.remove(audioKey);
 			}
 		});
+	}
+
+	/**
+	 * 释放后台资源，避免客户端退出后残留分析线程。
+	 */
+	public void shutdown() {
+		if (denseFeatureExecutorShutdown) return;
+		denseFeatureExecutorShutdown = true;
+		pendingDenseApplies.clear();
+		denseAnalysisInFlight.clear();
+		denseAnalysisFailureUntilMs.clear();
+		denseFeatureExecutor.shutdownNow();
 	}
 
 	private void applyPendingDenseUpdates(Timeline timeline) {

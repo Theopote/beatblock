@@ -6,6 +6,7 @@ import com.beatblock.ui.EditorScreen;
 import com.beatblock.ui.HUD;
 import com.beatblock.ui.ImportScreen;
 import net.fabricmc.api.ClientModInitializer;
+import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.minecraft.client.MinecraftClient;
@@ -45,6 +46,18 @@ public class BeatBlockClient implements ClientModInitializer {
 		ClientTickEvents.END_CLIENT_TICK.register(client -> {
 			while (keyTogglePlayback.wasPressed()) {
 				BeatBlockClientDriver.togglePlayback();
+			}
+		});
+		
+		ClientLifecycleEvents.CLIENT_STOPPING.register(client -> {
+			if (BeatBlock.timelineEditor != null) {
+				BeatBlock.timelineEditor.shutdown();
+			}
+			if (BeatBlock.externalAudioAnalyzer != null) {
+				BeatBlock.externalAudioAnalyzer.shutdown();
+			}
+			if (BeatBlock.audioConversionService != null) {
+				BeatBlock.audioConversionService.shutdown();
 			}
 		});
 

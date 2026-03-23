@@ -228,4 +228,11 @@ public final class TimelineEditor {
 		);
 		uiStateStore.syncAndFlush(timeline, trackListState);
 	}
+
+	/**
+	 * 编辑器生命周期结束时释放后台资源。
+	 */
+	public void shutdown() {
+		renderer.shutdown();
+	}
 }
