@@ -10,13 +10,21 @@ import com.beatblock.timeline.TimelineEditor;
 import com.beatblock.timeline.TimelineEvent;
 import com.beatblock.timeline.TimelineMarker;
 import com.beatblock.timeline.Track;
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import com.beatblock.ui.icons.Icons;
 import com.beatblock.ui.imgui.IconButtonStyle;
 import imgui.ImGui;
 import imgui.type.ImInt;
+import net.fabricmc.loader.api.FabricLoader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -53,6 +61,7 @@ public final class TimelineToolbar {
 	private static final String TOOLTIP_TRACK_HEIGHT = "调整音频轨（波形/低中高频）高度，便于看清节奏细节";
 	private static final String TOOLTIP_TRACK_HEIGHT_RESET = "恢复音频轨默认高度";
 	private static final String TOOLTIP_DEMUCS_PRESET = "Demucs 映射预设：Drive=更强律动，Detail=更细节，Balanced=平衡";
+	private static final String TOOLTIP_DEMUCS_ADVANCED = "高级参数：时长/能量阈值/最小间隔";
 
 	/** Zoom 预设：显示名与对应的缩放倍数（相对基准 1x） */
 	private static final String[] ZOOM_PRESET_LABELS = { "0.25x", "0.5x", "1x", "2x", "3x", "4x" };
@@ -62,8 +71,14 @@ public final class TimelineToolbar {
 	private static final double[] SPEED_VALUES = { 0.5, 0.75, 1.0, 1.25, 1.5, 2.0 };
 	private static final String[] DEMUCS_PRESET_LABELS = { "Drive", "Balanced", "Detail" };
 	private static final String[] DEMUCS_PRESET_VALUES = { "drive", "balanced", "detail" };
+	private static final String DEMUCS_ADVANCED_POPUP_ID = "tlDemucsMappingAdvanced";
+	private static final Gson UI_CONFIG_GSON = new GsonBuilder().setPrettyPrinting().create();
 	private static final float TOOLBAR_ITEM_SPACING = 4f;
 	private static final float TOOLBAR_GROUP_SPACING = 8f;
+	private static final double DEMUCS_SCALE_MIN = 0.5;
+	private static final double DEMUCS_SCALE_MAX = 2.0;
+	private static final double DEMUCS_ENERGY_SCALE_MIN = 0.6;
+	private static final double DEMUCS_ENERGY_SCALE_MAX = 1.6;
 
 	/** 上次 Auto Map 生成数量，用于提示 */
 	private int lastAutoMapCount = -1;
@@ -71,6 +86,7 @@ public final class TimelineToolbar {
 	private final ImInt zoomComboIndex = new ImInt(2); // 默认 1x
 	private final ImInt speedComboIndex = new ImInt(2); // 默认 1x
 	private final ImInt demucsPresetComboIndex = new ImInt(1); // 默认 balanced
+	private boolean demucsMappingConfigLoaded;
 
 	public void render(TimelineEditor editor, TimelineToolbarState toolbarState) {
 		if (editor == null) return;
@@ -502,6 +518,7 @@ public final class TimelineToolbar {
 		if (BeatBlock.timeline == null) return;
 		Object separationMode = BeatBlock.timeline.getMetadata("separationMode");
 		if (separationMode == null || !"demucs".equalsIgnoreCase(separationMode.toString().trim())) return;
+		ensureDemucsMappingConfigLoaded();
 
 		int currentIndex = indexOfDemucsPresetValue(readDemucsPresetFromTimeline());
 		demucsPresetComboIndex.set(currentIndex);
@@ -514,6 +531,11 @@ public final class TimelineToolbar {
 				writeDemucsPresetToTimeline(DEMUCS_PRESET_VALUES[demucsPresetComboIndex.get()]);
 			}
 			if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_DEMUCS_PRESET);
+			if (ImGui.button("Advanced##tlMoreDemucsAdvanced")) {
+				ImGui.openPopup(DEMUCS_ADVANCED_POPUP_ID);
+			}
+			if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_DEMUCS_ADVANCED);
+			renderDemucsAdvancedPopup();
 			return;
 		}
 
@@ -522,6 +544,45 @@ public final class TimelineToolbar {
 			writeDemucsPresetToTimeline(DEMUCS_PRESET_VALUES[demucsPresetComboIndex.get()]);
 		}
 		if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_DEMUCS_PRESET);
+		nextItemInGroup();
+		if (ImGui.button("Map...##tlDemucsAdvanced")) {
+			ImGui.openPopup(DEMUCS_ADVANCED_POPUP_ID);
+		}
+		if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_DEMUCS_ADVANCED);
+		renderDemucsAdvancedPopup();
+	}
+
+	private void renderDemucsAdvancedPopup() {
+		if (!ImGui.beginPopup(DEMUCS_ADVANCED_POPUP_ID)) return;
+		ImGui.textDisabled("Demucs Mapping Advanced");
+
+		float[] durationScale = new float[] { (float) readTimelineScale("demucsMapDurationScale", 1.0, DEMUCS_SCALE_MIN, DEMUCS_SCALE_MAX) };
+		float[] energyScale = new float[] { (float) readTimelineScale("demucsMapEnergyScale", 1.0, DEMUCS_ENERGY_SCALE_MIN, DEMUCS_ENERGY_SCALE_MAX) };
+		float[] gapScale = new float[] { (float) readTimelineScale("demucsMapGapScale", 1.0, DEMUCS_SCALE_MIN, DEMUCS_SCALE_MAX) };
+
+		boolean changed = false;
+		ImGui.setNextItemWidth(220f);
+		changed |= ImGui.sliderFloat("Duration Scale##demucsDur", durationScale, (float) DEMUCS_SCALE_MIN, (float) DEMUCS_SCALE_MAX, "%.2f");
+		ImGui.setNextItemWidth(220f);
+		changed |= ImGui.sliderFloat("Energy Threshold##demucsEnergy", energyScale, (float) DEMUCS_ENERGY_SCALE_MIN, (float) DEMUCS_ENERGY_SCALE_MAX, "%.2f");
+		ImGui.setNextItemWidth(220f);
+		changed |= ImGui.sliderFloat("Min Gap Scale##demucsGap", gapScale, (float) DEMUCS_SCALE_MIN, (float) DEMUCS_SCALE_MAX, "%.2f");
+
+		if (changed) {
+			writeTimelineScale("demucsMapDurationScale", durationScale[0]);
+			writeTimelineScale("demucsMapEnergyScale", energyScale[0]);
+			writeTimelineScale("demucsMapGapScale", gapScale[0]);
+			persistDemucsMappingConfig();
+		}
+
+		if (ImGui.button("Reset to 1.0##demucsScaleReset")) {
+			writeTimelineScale("demucsMapDurationScale", 1.0f);
+			writeTimelineScale("demucsMapEnergyScale", 1.0f);
+			writeTimelineScale("demucsMapGapScale", 1.0f);
+			persistDemucsMappingConfig();
+		}
+
+		ImGui.endPopup();
 	}
 
 	private String readDemucsPresetFromTimeline() {
@@ -538,6 +599,104 @@ public final class TimelineToolbar {
 	private void writeDemucsPresetToTimeline(String preset) {
 		if (BeatBlock.timeline == null) return;
 		BeatBlock.timeline.setMetadata("demucsMappingPreset", preset);
+		persistDemucsMappingConfig();
+	}
+
+	private void ensureDemucsMappingConfigLoaded() {
+		if (demucsMappingConfigLoaded || BeatBlock.timeline == null) return;
+		demucsMappingConfigLoaded = true;
+		Path configPath = getUiConfigPath();
+		if (!Files.isRegularFile(configPath)) return;
+		try {
+			String txt = Files.readString(configPath, StandardCharsets.UTF_8);
+			if (txt == null || txt.isBlank()) return;
+			JsonObject root = JsonParser.parseString(txt).getAsJsonObject();
+			if (!root.has("demucsMapping") || !root.get("demucsMapping").isJsonObject()) return;
+			JsonObject dm = root.getAsJsonObject("demucsMapping");
+
+			if (BeatBlock.timeline.getMetadata("demucsMappingPreset") == null && dm.has("preset")) {
+				String preset = dm.get("preset").getAsString();
+				if ("drive".equalsIgnoreCase(preset) || "detail".equalsIgnoreCase(preset) || "balanced".equalsIgnoreCase(preset)) {
+					BeatBlock.timeline.setMetadata("demucsMappingPreset", preset.toLowerCase());
+				}
+			}
+
+			applyDefaultScaleFromJson(dm, "durationScale", "demucsMapDurationScale", 1.0, DEMUCS_SCALE_MIN, DEMUCS_SCALE_MAX);
+			applyDefaultScaleFromJson(dm, "energyScale", "demucsMapEnergyScale", 1.0, DEMUCS_ENERGY_SCALE_MIN, DEMUCS_ENERGY_SCALE_MAX);
+			applyDefaultScaleFromJson(dm, "gapScale", "demucsMapGapScale", 1.0, DEMUCS_SCALE_MIN, DEMUCS_SCALE_MAX);
+		} catch (Exception e) {
+			LOGGER.debug("BeatBlock TimelineToolbar: failed to read ui.json demucs mapping config reason={}", e.toString());
+		}
+	}
+
+	private void applyDefaultScaleFromJson(JsonObject dm, String jsonKey, String metadataKey,
+	                                     double defaultValue, double min, double max) {
+		if (BeatBlock.timeline == null) return;
+		if (BeatBlock.timeline.getMetadata(metadataKey) != null) return;
+		double v = defaultValue;
+		if (dm.has(jsonKey)) {
+			try {
+				v = dm.get(jsonKey).getAsDouble();
+			} catch (Exception ignored) {}
+		}
+		v = Math.max(min, Math.min(max, v));
+		BeatBlock.timeline.setMetadata(metadataKey, v);
+	}
+
+	private void persistDemucsMappingConfig() {
+		if (BeatBlock.timeline == null) return;
+		Path configPath = getUiConfigPath();
+		try {
+			JsonObject root = new JsonObject();
+			if (Files.isRegularFile(configPath)) {
+				String existing = Files.readString(configPath, StandardCharsets.UTF_8);
+				if (existing != null && !existing.isBlank()) {
+					root = JsonParser.parseString(existing).getAsJsonObject();
+				}
+			}
+
+			JsonObject dm = root.has("demucsMapping") && root.get("demucsMapping").isJsonObject()
+				? root.getAsJsonObject("demucsMapping")
+				: new JsonObject();
+
+			dm.addProperty("preset", readDemucsPresetFromTimeline());
+			dm.addProperty("durationScale", readTimelineScale("demucsMapDurationScale", 1.0, DEMUCS_SCALE_MIN, DEMUCS_SCALE_MAX));
+			dm.addProperty("energyScale", readTimelineScale("demucsMapEnergyScale", 1.0, DEMUCS_ENERGY_SCALE_MIN, DEMUCS_ENERGY_SCALE_MAX));
+			dm.addProperty("gapScale", readTimelineScale("demucsMapGapScale", 1.0, DEMUCS_SCALE_MIN, DEMUCS_SCALE_MAX));
+
+			root.add("demucsMapping", dm);
+			Files.createDirectories(configPath.getParent());
+			Files.writeString(configPath, UI_CONFIG_GSON.toJson(root), StandardCharsets.UTF_8);
+		} catch (Exception e) {
+			LOGGER.debug("BeatBlock TimelineToolbar: failed to persist ui.json demucs mapping config reason={}", e.toString());
+		}
+	}
+
+	private double readTimelineScale(String key, double defaultValue, double min, double max) {
+		if (BeatBlock.timeline == null || key == null || key.isBlank()) return defaultValue;
+		Object raw = BeatBlock.timeline.getMetadata(key);
+		if (raw == null) return defaultValue;
+		double value;
+		if (raw instanceof Number n) {
+			value = n.doubleValue();
+		} else {
+			try {
+				value = Double.parseDouble(raw.toString().trim());
+			} catch (Exception e) {
+				return defaultValue;
+			}
+		}
+		if (Double.isNaN(value) || Double.isInfinite(value)) return defaultValue;
+		return Math.max(min, Math.min(max, value));
+	}
+
+	private void writeTimelineScale(String key, float value) {
+		if (BeatBlock.timeline == null || key == null || key.isBlank()) return;
+		BeatBlock.timeline.setMetadata(key, value);
+	}
+
+	private static Path getUiConfigPath() {
+		return FabricLoader.getInstance().getGameDir().resolve("config").resolve("beatblock").resolve("ui.json");
 	}
 
 	private static int indexOfDemucsPresetValue(String value) {

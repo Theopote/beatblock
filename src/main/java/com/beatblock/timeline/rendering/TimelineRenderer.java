@@ -390,6 +390,9 @@ public final class TimelineRenderer {
 		double durationScale = durationScaleForPreset(mappingPreset);
 		float energyThresholdScale = energyThresholdScaleForPreset(mappingPreset);
 		double minGapScale = minGapScaleForPreset(mappingPreset);
+		durationScale *= readScaleMetadata(timeline, "demucsMapDurationScale", 1.0, 0.5, 2.0);
+		energyThresholdScale *= (float) readScaleMetadata(timeline, "demucsMapEnergyScale", 1.0, 0.6, 1.6);
+		minGapScale *= readScaleMetadata(timeline, "demucsMapGapScale", 1.0, 0.5, 2.0);
 
 		if (toBlockTrack) {
 			timeline.clearBlockAnimationEvents();
@@ -557,6 +560,24 @@ public final class TimelineRenderer {
 			}
 		}
 		return toBlockTrack ? "drive" : "detail";
+	}
+
+	private double readScaleMetadata(Timeline timeline, String key, double defaultValue, double min, double max) {
+		if (timeline == null || key == null || key.isBlank()) return defaultValue;
+		Object raw = timeline.getMetadata(key);
+		if (raw == null) return defaultValue;
+		double v;
+		if (raw instanceof Number n) {
+			v = n.doubleValue();
+		} else {
+			try {
+				v = Double.parseDouble(raw.toString().trim());
+			} catch (Exception e) {
+				return defaultValue;
+			}
+		}
+		if (Double.isNaN(v) || Double.isInfinite(v)) return defaultValue;
+		return Math.max(min, Math.min(max, v));
 	}
 
 	private double durationScaleForPreset(String preset) {
