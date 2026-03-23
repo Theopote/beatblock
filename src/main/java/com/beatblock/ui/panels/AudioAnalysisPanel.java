@@ -469,7 +469,7 @@ public final class AudioAnalysisPanel {
 
         if (asset.getInfoMessage() != null && !asset.getInfoMessage().isBlank()) {
             ImGui.spacing();
-            ImGui.textDisabled(asset.getInfoMessage());
+            textDisabledWrapped(asset.getInfoMessage());
         }
 
         if (statusText != null && !statusText.isBlank()) {
@@ -835,20 +835,13 @@ public final class AudioAnalysisPanel {
         // ── Demucs 茎分离详情 ─────────────────────────────────────────────
         if (hasStemSeparation) {
             ImGui.spacing();
-            sectionHeader("茎分离 (Demucs)");
-            detailRowColored("分离模式", detailBm.meta.separationMode(), new ImVec4(0.22f, 0.78f, 0.82f, 1f));
-            if (detailBm.meta.stems() != null && !detailBm.meta.stems().isEmpty()) {
-                detailRow("茎数量", detailBm.meta.stems().size() + " 条");
-                ImGui.spacing();
-                ImGui.textDisabled("茎文件路径：");
-                for (var entry : detailBm.meta.stems().entrySet()) {
-                    ImGui.pushStyleColor(ImGuiCol.Text, 0.22f, 0.78f, 0.82f, 0.85f);
-                    ImGui.text("  " + entry.getKey());
-                    ImGui.popStyleColor();
-                    ImGui.sameLine();
-                    ImGui.textDisabled(entry.getValue());
-                }
-            }
+            sectionHeader("Demucs 拆分结果");
+            String separationMode = detailBm.meta.separationMode();
+            detailRowColored("分离模式", separationMode != null && !separationMode.isBlank() ? separationMode : "demucs", new ImVec4(0.22f, 0.78f, 0.82f, 1f));
+            renderStemDetailRow(detailBm, "drums", "鼓组（drums）", new ImVec4(0.87f, 0.53f, 0.25f, 1f));
+            renderStemDetailRow(detailBm, "bass", "贝斯（bass）", new ImVec4(0.27f, 0.60f, 0.87f, 1f));
+            renderStemDetailRow(detailBm, "vocals", "人声（vocals）", new ImVec4(0.67f, 0.38f, 0.84f, 1f));
+            renderStemDetailRow(detailBm, "other", "其他（other）", new ImVec4(0.58f, 0.72f, 0.30f, 1f));
         }
 
         ImGui.spacing();
@@ -900,7 +893,7 @@ public final class AudioAnalysisPanel {
 
         if (asset.getInfoMessage() != null && !asset.getInfoMessage().isBlank()) {
             ImGui.spacing();
-            ImGui.textDisabled(asset.getInfoMessage());
+            textDisabledWrapped(asset.getInfoMessage());
         }
 
         if (statusText != null && !statusText.isBlank()) {
@@ -949,7 +942,7 @@ public final class AudioAnalysisPanel {
         ImGui.popStyleColor();
         if (asset.getInfoMessage() != null && !asset.getInfoMessage().isBlank()) {
             ImGui.spacing();
-            ImGui.textDisabled(asset.getInfoMessage());
+            textDisabledWrapped(asset.getInfoMessage());
         }
         ImGui.spacing();
         ImGui.textDisabled("支持格式：MP3 · WAV · OGG · FLAC");
@@ -1066,7 +1059,10 @@ public final class AudioAnalysisPanel {
         ImGui.textDisabled(key + "：");
         ImGui.sameLine();
         ImGui.setCursorPosX(ImGui.getCursorPosX() + 4f);
-        ImGui.text(value);
+        float wrapPos = ImGui.getCursorPosX() + Math.max(64f, ImGui.getContentRegionAvailX());
+        ImGui.pushTextWrapPos(wrapPos);
+        ImGui.text(value != null ? value : "-");
+        ImGui.popTextWrapPos();
     }
 
     /** 同 detailRow，但 value 使用指定颜色。 */
@@ -1075,8 +1071,34 @@ public final class AudioAnalysisPanel {
         ImGui.sameLine();
         ImGui.setCursorPosX(ImGui.getCursorPosX() + 4f);
         ImGui.pushStyleColor(ImGuiCol.Text, color.x, color.y, color.z, color.w);
-        ImGui.text(value);
+        float wrapPos = ImGui.getCursorPosX() + Math.max(64f, ImGui.getContentRegionAvailX());
+        ImGui.pushTextWrapPos(wrapPos);
+        ImGui.text(value != null ? value : "-");
+        ImGui.popTextWrapPos();
         ImGui.popStyleColor();
+    }
+
+    private void textDisabledWrapped(String text) {
+        if (text == null || text.isBlank()) return;
+        float wrapPos = ImGui.getCursorPosX() + Math.max(64f, ImGui.getContentRegionAvailX());
+        ImGui.pushTextWrapPos(wrapPos);
+        ImGui.textDisabled(text);
+        ImGui.popTextWrapPos();
+    }
+
+    private void renderStemDetailRow(Beatmap bm, String stemKey, String label, ImVec4 color) {
+        if (bm == null || bm.meta == null || bm.meta.stems() == null) {
+            detailRowColored(label, "未生成", color);
+            return;
+        }
+        String path = bm.meta.stems().get(stemKey);
+        if (path == null || path.isBlank()) {
+            detailRowColored(label, "未生成", color);
+            return;
+        }
+        boolean fileExists = new File(path).isFile();
+        detailRowColored(label, fileExists ? "已生成" : "路径存在但文件缺失", color);
+        detailRow(label + " 路径", path);
     }
 
     /** AudioAnalysisStep → 人类可读标签。 */
