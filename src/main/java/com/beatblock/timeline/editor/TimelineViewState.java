@@ -62,10 +62,15 @@ public class TimelineViewState {
 	/** 以鼠标所在时间为锚点缩放，保持该时间在屏幕上的位置不变 */
 	public void zoomAt(double anchorTimeSeconds, float anchorScreenX, float newZoom) {
 		if (newZoom <= 0) return;
+		double oldViewStart = viewStartTimeSeconds;
 		double prevTimeAtAnchor = screenToTime(anchorScreenX);
 		this.zoom = Math.max(0.5f, Math.min(1000f, newZoom));
 		viewStartTimeSeconds += prevTimeAtAnchor - screenToTime(anchorScreenX);
-		viewStartTimeSeconds = Math.max(0, viewStartTimeSeconds);
+		if (oldViewStart <= 1e-6) {
+			viewStartTimeSeconds = 0;
+		} else {
+			viewStartTimeSeconds = Math.max(0, viewStartTimeSeconds);
+		}
 	}
 
 	public float getScrollY() {

@@ -3,7 +3,6 @@ package com.beatblock.ui.panels;
 import com.beatblock.BeatBlock;
 import com.beatblock.ui.layout.BeatBlockDockSpaceLayoutBuilder;
 import com.beatblock.timeline.TimelineEditor;
-import com.beatblock.timeline.rendering.TimelineRenderer;
 import com.beatblock.timeline.rendering.TimelineToolbar;
 import com.beatblock.timeline.util.MusicTimeFormatter;
 import imgui.ImGui;
@@ -64,16 +63,6 @@ public class TimelinePanel {
 			}
 		}
 		ImGui.endChild();
-
-		// 轨道头 / 时间轴 竖向分割线：自标尺顶贯通到子窗口底（与拖动宽度一致）
-		if (editor != null) {
-			float divX = editor.getCachedDividerScreenX();
-			float y0 = editor.getCachedDividerTopScreenY();
-			float y1 = editor.getCachedDividerContentBottomScreenY();
-			if (y1 > y0) {
-				ImGui.getWindowDrawList().addLine(divX, y0, divX, y1, TimelineRenderer.TIMELINE_DIVIDER_COLOR, 1f);
-			}
-		}
 
 		ImGui.end();
 	}

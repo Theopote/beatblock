@@ -28,6 +28,7 @@ public final class TrackRenderer {
 	 * 让折叠按钮、类型列、名称列整体向右偏移。
 	 */
 	private static final float LEFT_INSET = 0f;
+	private static final float TEXT_INSET = 4f;
 	private static final String[] TYPE_LABELS = {"音频", "动画", "摄像机", "事件"};
 
 	private static final int MICRO_SEP_COLOR = 0x55_66_66_66; // ABGR
@@ -110,7 +111,7 @@ public final class TrackRenderer {
 		}
 
 		// —— 类型：左缘对齐（上下一致）—— //
-		ImGui.setCursorScreenPos(baseX + typeStartX, rowOriginScreenY + textOffsetY);
+		ImGui.setCursorScreenPos(baseX + typeStartX + TEXT_INSET, rowOriginScreenY + textOffsetY);
 		ImGui.pushStyleColor(ImGuiCol.Text, 0.55f, 0.52f, 0.62f, 1f);
 		ImGui.text(TimelineTrackMeta.getCategoryTypeLabel(rowIndex));
 		ImGui.popStyleColor();
@@ -118,9 +119,11 @@ public final class TrackRenderer {
 		boolean isEditing = listState != null && listState.getEditingRowIndex() == rowIndex;
 
 		// —— 名称：左右边界固定（上下用文本居中偏移）—— //
+		float nameTextX = baseX + nameX + TEXT_INSET;
+		float nameTextW = Math.max(8f, nameW - TEXT_INSET);
 		if (isEditing && listState != null) {
-			ImGui.setCursorScreenPos(baseX + nameX, rowOriginScreenY);
-			ImGui.setNextItemWidth(nameW);
+			ImGui.setCursorScreenPos(nameTextX, rowOriginScreenY);
+			ImGui.setNextItemWidth(nameTextW);
 			if (ImGui.inputText("##name" + rowIndex, listState.getRenameBuffer(), ImGuiInputTextFlags.EnterReturnsTrue)) {
 				listState.finishEditing(true);
 			}
@@ -129,14 +132,14 @@ public final class TrackRenderer {
 			}
 		} else {
 			// 命中区：名称区内全区域可双击改名
-			ImGui.setCursorScreenPos(baseX + nameX, rowOriginScreenY);
-			ImGui.invisibleButton("##nameHit" + rowIndex, nameW, rowH);
+			ImGui.setCursorScreenPos(nameTextX, rowOriginScreenY);
+			ImGui.invisibleButton("##nameHit" + rowIndex, nameTextW, rowH);
 			boolean nameHovered = ImGui.isItemHovered();
 
 			// 裁剪：确保文字在名称区内展示，不会“跑出去”
-			float clipX1 = baseX + nameX;
+			float clipX1 = nameTextX;
 			float clipY1 = rowOriginScreenY;
-			ImGui.pushClipRect(clipX1, clipY1, clipX1 + nameW, clipY1 + rowH, true);
+			ImGui.pushClipRect(clipX1, clipY1, clipX1 + nameTextW, clipY1 + rowH, true);
 
 			ImGui.setCursorScreenPos(clipX1, rowOriginScreenY + textOffsetY);
 			boolean isAudioControlLane = displayName != null && (displayName.contains("主混音") || displayName.contains("音频"));

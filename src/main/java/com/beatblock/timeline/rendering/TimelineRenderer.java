@@ -93,6 +93,7 @@ public final class TimelineRenderer {
 		ImGui.setCursorScreenPos(layout.trackHeaderLeft + 4f, layout.rulerTop + 4f);
 		ImGui.textDisabled("时间");
 		gridRenderer.renderRuler(layout.startY, viewState, layout, bpm, toolbarState, timeline);
+		drawDivider(layout, layout.rulerTop, layout.rulerTop + layout.rulerHeight);
 		// 竖向分割线在 TimelinePanel 中自标尺顶贯通画到子窗口底，避免与滚动区重复/断层
 		ImGui.setCursorPosY(layout.startY + TimelineLayout.RULER_HEIGHT);
 	}
@@ -152,8 +153,6 @@ public final class TimelineRenderer {
 			ImGui.getWindowDrawList().addRectFilled(x0, rowScreenY, x1, rowScreenY + rowH, bg);
 		}
 
-		// 竖向分割线由 TimelinePanel 统一绘制（标尺—轨道区贯通）
-
 		// 网格竖线（仅时间轴方向，不画行间线）
 		gridRenderer.render(viewState, layout, layout.contentHeight);
 
@@ -174,6 +173,9 @@ public final class TimelineRenderer {
 		// 音频组拖放高亮（在所有行内容绘制后叠加边框）
 		drawAudioGroupDropHighlight(layout);
 
+		// 分割线：位于轨道背景/内容之上，但低于播放头。
+		drawDivider(layout, layout.contentTop, layout.contentTop + layout.contentHeight);
+
 		// 播放头（仅限轨道区高度）
 		if (clock != null) {
 			double currentTime = clock.getCurrentTimeSeconds();
@@ -190,6 +192,11 @@ public final class TimelineRenderer {
 		if (selectionBox != null && selectionBox.isActive()) {
 			ImGui.getWindowDrawList().addRect(selectionBox.getMinX(), selectionBox.getMinY(), selectionBox.getMaxX(), selectionBox.getMaxY(), SELECTED_BORDER_COLOR, 0f, 0, 1.5f);
 		}
+	}
+
+	private void drawDivider(TimelineLayout layout, float y0, float y1) {
+		if (layout == null || y1 <= y0) return;
+		ImGui.getWindowDrawList().addLine(layout.contentLeft, y0, layout.contentLeft, y1, TIMELINE_DIVIDER_COLOR, 1f);
 	}
 
 	private void drawRowContent(int rowIndex, float rowY, Timeline timeline, TimelineViewState viewState,
