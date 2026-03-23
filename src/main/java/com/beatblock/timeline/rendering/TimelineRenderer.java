@@ -385,6 +385,7 @@ public final class TimelineRenderer {
 		boolean toBlockTrack = targetRowIndex == TimelineTrackMeta.ROW_ANIM_BLOCK;
 		boolean toAutoTrack = targetRowIndex == TimelineTrackMeta.ROW_ANIM_AUTO;
 		if (!toBlockTrack && !toAutoTrack) return;
+		boolean demucsSeparated = isDemucsSeparatedTimeline(timeline);
 
 		if (toBlockTrack) {
 			timeline.clearBlockAnimationEvents();
@@ -394,19 +395,20 @@ public final class TimelineRenderer {
 
 		String targetObjectId = resolveDefaultTargetObjectId();
 		int added = 0;
+		Map<String, Double> lastAcceptedTimeByFeature = new HashMap<>();
 
 		for (Map.Entry<String, FeatureTrack> entry : timeline.getFeatureTracks().entrySet()) {
 			String featureKey = entry.getKey();
 			FeatureTrack track = entry.getValue();
 			if (track == null || track.getEvents().isEmpty()) continue;
 
-			String animationType = animationTypeForFeature(featureKey);
-			double baseDuration = durationForFeature(featureKey);
+			AnimationMappingRule rule = selectAnimationRule(featureKey, demucsSeparated, toBlockTrack);
+			if (rule == null) continue;
 			for (FeatureEvent event : track.getEvents()) {
 				added += addAnimationEventFromSource(
 					timeline, toBlockTrack, event.getTimeSeconds(),
-					event.getEnergy(), animationType, baseDuration,
-					targetObjectId, featureKey
+					event.getEnergy(), rule,
+					targetObjectId, featureKey, lastAcceptedTimeByFeature
 				);
 			}
 		}
@@ -418,10 +420,11 @@ public final class TimelineRenderer {
 					case MID -> "snare";
 					case HIGH -> "hihat";
 				};
+				AnimationMappingRule rule = selectAnimationRule(featureKey, false, toBlockTrack);
+				if (rule == null) continue;
 				added += addAnimationEventFromSource(
 					timeline, toBlockTrack, fe.getTimeSeconds(),
-					fe.getEnergy(), animationTypeForFeature(featureKey),
-					durationForFeature(featureKey), targetObjectId, featureKey
+					fe.getEnergy(), rule, targetObjectId, featureKey, lastAcceptedTimeByFeature
 				);
 			}
 		}
@@ -436,23 +439,33 @@ public final class TimelineRenderer {
 		boolean toBlockTrack,
 		double timeSeconds,
 		float rawEnergy,
-		String animationType,
-		double baseDuration,
+		AnimationMappingRule rule,
 		String targetObjectId,
-		String sourceFeature
+		String sourceFeature,
+		Map<String, Double> lastAcceptedTimeByFeature
 	) {
+		if (rule == null) return 0;
 		float energy = Math.max(0f, Math.min(1f, rawEnergy));
-		double duration = Math.max(0.05, baseDuration * (0.65 + energy * 0.8));
+		if (energy < rule.minEnergy()) return 0;
+
+		Double lastAccepted = lastAcceptedTimeByFeature.get(sourceFeature);
+		if (lastAccepted != null && timeSeconds < lastAccepted + rule.minGapSeconds()) {
+			return 0;
+		}
+
+		double duration = Math.max(0.05, rule.baseDurationSeconds() * (0.70 + energy * 0.75));
 		Map<String, Object> params = new HashMap<>();
 		params.put("energy", energy);
 		params.put("sourceFeature", sourceFeature);
+		params.put("sourceStem", rule.sourceStem());
+		params.put("mappingProfile", "demucs-aware");
 		params.put("generatedBy", "audio-asset-drop");
 
 		TimelineAnimationEvent ev = new TimelineAnimationEvent(
 			"",
 			timeSeconds,
 			duration,
-			animationType,
+			rule.animationType(),
 			targetObjectId,
 			energy,
 			params
@@ -462,6 +475,7 @@ public final class TimelineRenderer {
 		} else {
 			timeline.addAutoAnimationEvent(ev);
 		}
+		lastAcceptedTimeByFeature.put(sourceFeature, timeSeconds);
 		return 1;
 	}
 
@@ -476,24 +490,48 @@ public final class TimelineRenderer {
 		return "default";
 	}
 
-	private String animationTypeForFeature(String featureKey) {
-		if (featureKey == null || featureKey.isBlank()) return "pulse";
-		return switch (featureKey.toLowerCase()) {
-			case "kick", "bass", "drums" -> "jump";
-			case "snare", "snare_hi", "vocals" -> "explosion";
-			case "hihat", "hihat_open", "other" -> "pulse";
-			default -> "pulse";
+	private AnimationMappingRule selectAnimationRule(String featureKey, boolean demucsSeparated, boolean toBlockTrack) {
+		if (featureKey == null || featureKey.isBlank()) return null;
+		String key = featureKey.toLowerCase();
+
+		if (demucsSeparated) {
+			if (toBlockTrack) {
+				return switch (key) {
+					case "kick" -> new AnimationMappingRule("bounce", 0.46, 0.18f, 0.18, "drums");
+					case "snare" -> new AnimationMappingRule("slide", 0.34, 0.16f, 0.24, "drums");
+					case "bass" -> new AnimationMappingRule("bounce", 0.58, 0.20f, 0.32, "bass");
+					default -> null;
+				};
+			}
+			return switch (key) {
+				case "hihat" -> new AnimationMappingRule("pulse", 0.20, 0.12f, 0.10, "drums");
+				case "hihat_open" -> new AnimationMappingRule("pulse", 0.28, 0.16f, 0.16, "drums");
+				case "snare_hi" -> new AnimationMappingRule("slide", 0.26, 0.16f, 0.20, "drums");
+				case "vocals" -> new AnimationMappingRule("slide", 0.52, 0.20f, 0.48, "vocals");
+				case "other" -> new AnimationMappingRule("pulse", 0.34, 0.18f, 0.30, "other");
+				case "bass" -> new AnimationMappingRule("pulse", 0.40, 0.24f, 0.42, "bass");
+				default -> null;
+			};
+		}
+
+		if (toBlockTrack) {
+			return switch (key) {
+				case "kick", "low" -> new AnimationMappingRule("bounce", 0.48, 0.18f, 0.20, "mix");
+				case "snare", "mid" -> new AnimationMappingRule("slide", 0.36, 0.16f, 0.24, "mix");
+				default -> null;
+			};
+		}
+		return switch (key) {
+			case "hihat", "high" -> new AnimationMappingRule("pulse", 0.24, 0.12f, 0.12, "mix");
+			case "snare_hi", "mid" -> new AnimationMappingRule("slide", 0.30, 0.16f, 0.22, "mix");
+			default -> null;
 		};
 	}
 
-	private double durationForFeature(String featureKey) {
-		if (featureKey == null || featureKey.isBlank()) return 0.35;
-		return switch (featureKey.toLowerCase()) {
-			case "kick", "bass", "drums" -> 0.50;
-			case "snare", "snare_hi", "vocals" -> 0.40;
-			case "hihat", "hihat_open", "other" -> 0.28;
-			default -> 0.35;
-		};
+	private boolean isDemucsSeparatedTimeline(Timeline timeline) {
+		if (timeline == null) return false;
+		Object value = timeline.getMetadata("separationMode");
+		return value != null && "demucs".equalsIgnoreCase(value.toString().trim());
 	}
 
 	/**
@@ -573,6 +611,14 @@ public final class TimelineRenderer {
 
 	private record DenseApplyPayload(AudioAsset asset, AudioFeatureTimeline feature) {}
 
+	private record AnimationMappingRule(
+		String animationType,
+		double baseDurationSeconds,
+		float minEnergy,
+		double minGapSeconds,
+		String sourceStem
+	) {}
+
 	/**
 	 * 将 trackListState 的茎轨道静音/独奏状态同步到 {@link BeatBlock#stemMixer}。
 	 * 仅影响 key 为 "stem_wf_*" 的音频子轨对应的茎。
@@ -591,10 +637,10 @@ public final class TimelineRenderer {
 		for (int slot = 0; slot < currentAudioSubTracks.size(); slot++) {
 			TrackDefinition td = currentAudioSubTracks.get(slot);
 			String key = td.getKey();
-			if (!mapsToStem(key, stemName)) continue;
+			if (!mapsToStemAudioControl(key, stemName)) continue;
 			hasMappedRow = true;
 			int rowIndex = TimelineTrackMeta.ROW_AUDIO_SUBS_START + slot;
-			if (!isAudioRowEffectivelyMuted(trackListState, rowIndex)) {
+			if (!isStemControlRowEffectivelyMuted(trackListState, rowIndex)) {
 				anyAudibleMappedRow = true;
 			}
 		}
@@ -604,16 +650,33 @@ public final class TimelineRenderer {
 		BeatBlock.stemMixer.setStemMuted(stemName, muted);
 	}
 
-	private boolean mapsToStem(String trackKey, String stemName) {
+	private boolean mapsToStemAudioControl(String trackKey, String stemName) {
 		if (trackKey == null || stemName == null) return false;
 		if (trackKey.startsWith("stem_wf_")) {
 			return stemName.equals(trackKey.substring("stem_wf_".length()));
 		}
-		return switch (trackKey) {
-			case "bass", "vocals", "other", "drums" -> stemName.equals(trackKey);
-			case "kick", "snare", "snare_hi", "hihat", "hihat_open" -> "drums".equals(stemName);
-			default -> false;
-		};
+		return false;
+	}
+
+	private boolean isStemControlRowEffectivelyMuted(TimelineTrackListState trackListState, int rowIndex) {
+		if (trackListState == null) return false;
+		if (trackListState.isMuted(rowIndex)) return true;
+
+		boolean groupSoloed = trackListState.isSoloed(TimelineTrackMeta.ROW_AUDIO_GROUP);
+		boolean anyStemControlSolo = groupSoloed;
+		for (int slot = 0; slot < currentAudioSubTracks.size(); slot++) {
+			TrackDefinition td = currentAudioSubTracks.get(slot);
+			if (!td.getKey().startsWith("stem_wf_")) continue;
+			int candidateRowIndex = TimelineTrackMeta.ROW_AUDIO_SUBS_START + slot;
+			if (trackListState.isSoloed(candidateRowIndex)) {
+				anyStemControlSolo = true;
+				break;
+			}
+		}
+
+		if (!anyStemControlSolo) return false;
+		if (groupSoloed) return false;
+		return !trackListState.isSoloed(rowIndex);
 	}
 
 	private boolean isAudioRowEffectivelyMuted(TimelineTrackListState trackListState, int rowIndex) {
@@ -646,8 +709,10 @@ public final class TimelineRenderer {
 
 		boolean anyAudioRowAudible = false;
 		for (int slot = 0; slot < currentAudioSubTracks.size(); slot++) {
+			TrackDefinition td = currentAudioSubTracks.get(slot);
+			if (!"waveform".equals(td.getKey())) continue;
 			int rowIndex = TimelineTrackMeta.ROW_AUDIO_SUBS_START + slot;
-			if (!isAudioRowEffectivelyMuted(trackListState, rowIndex)) {
+			if (!isMainMixRowEffectivelyMuted(trackListState, rowIndex)) {
 				anyAudioRowAudible = true;
 				break;
 			}
@@ -655,6 +720,18 @@ public final class TimelineRenderer {
 
 		// 没有任何可听音频子轨时静音主播放器。
 		BeatBlock.musicPlayer.setMuted(!anyAudioRowAudible);
+	}
+
+	private boolean isMainMixRowEffectivelyMuted(TimelineTrackListState trackListState, int rowIndex) {
+		if (trackListState == null) return false;
+		if (trackListState.isMuted(rowIndex)) return true;
+
+		boolean groupSoloed = trackListState.isSoloed(TimelineTrackMeta.ROW_AUDIO_GROUP);
+		boolean rowSoloed = trackListState.isSoloed(rowIndex);
+		boolean anyMainMixSolo = groupSoloed || rowSoloed;
+		if (!anyMainMixSolo) return false;
+		if (groupSoloed) return false;
+		return !rowSoloed;
 	}
 
 	/**

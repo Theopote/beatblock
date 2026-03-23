@@ -64,14 +64,14 @@ public final class TrackRegistry {
 	 * 调用方应在每帧 Timeline 数据变化时重新调用（开销很低，仅遍历 key set）。
 	 *
 	 * @param timeline 当前时间线，可为 null（返回只含波形的最小列表）
-	 * @return 不可变的轨道定义列表，按「波形 → 节奏组 → 扩展组」顺序排列
+	 * @return 不可变的轨道定义列表，按「主混音 → Demucs 音频茎 → librosa 参考轨」顺序排列
 	 */
 	public static List<TrackDefinition> buildAudioSubTracks(Timeline timeline) {
 		List<TrackDefinition> result = new ArrayList<>();
 
-		// 1. 波形行（始终有）
+		// 1. 主混音波形（非 Demucs 模式下为唯一可听音轨）
 		result.add(new TrackDefinition(
-			"waveform", "波形",
+			"waveform", "主混音",
 			TrackDefinition.VisualType.WAVEFORM,
 			TrackDefinition.GROUP_NONE
 		));
@@ -84,7 +84,7 @@ public final class TrackRegistry {
 			if (stemWaveformKeys.contains(stemKey)) {
 				result.add(new TrackDefinition(
 					"stem_wf_" + stemKey,
-					localizedName(stemKey) + " 波形",
+					audioDisplayName(stemKey),
 					TrackDefinition.VisualType.WAVEFORM,
 					TrackDefinition.GROUP_STEMS,
 					colorForKey(stemKey, 0)
@@ -101,7 +101,7 @@ public final class TrackRegistry {
 				if (featureKeys.contains(key)) {
 					result.add(new TrackDefinition(
 						key,
-						localizedName(key),
+						referenceDisplayName(key),
 						TrackDefinition.VisualType.IMPULSE,
 						TrackDefinition.GROUP_RHYTHM,
 						colorForKey(key, 0)
@@ -114,7 +114,7 @@ public final class TrackRegistry {
 				if (featureKeys.contains(key)) {
 					result.add(new TrackDefinition(
 						key,
-						localizedName(key),
+						referenceDisplayName(key),
 						TrackDefinition.VisualType.IMPULSE,
 						TrackDefinition.GROUP_STEMS,
 						colorForKey(key, 0)
@@ -131,7 +131,7 @@ public final class TrackRegistry {
 			for (String key : extKeys) {
 				result.add(new TrackDefinition(
 					key,
-					localizedName(key),
+					referenceDisplayName(key),
 					TrackDefinition.VisualType.IMPULSE,
 					TrackDefinition.GROUP_EXTENDED,
 					EXTENDED_COLORS[extIdx % EXTENDED_COLORS.length]
@@ -140,11 +140,11 @@ public final class TrackRegistry {
 			}
 		} else {
 			// ── 遗留回退：生成 low/mid/high 三条轨道 ────────────────
-			result.add(new TrackDefinition("low",  "低频", TrackDefinition.VisualType.IMPULSE,
+			result.add(new TrackDefinition("low",  "低频 参考", TrackDefinition.VisualType.IMPULSE,
 				TrackDefinition.GROUP_RHYTHM, COLOR_LOW));
-			result.add(new TrackDefinition("mid",  "中频", TrackDefinition.VisualType.IMPULSE,
+			result.add(new TrackDefinition("mid",  "中频 参考", TrackDefinition.VisualType.IMPULSE,
 				TrackDefinition.GROUP_RHYTHM, COLOR_MID));
-			result.add(new TrackDefinition("high", "高频", TrackDefinition.VisualType.IMPULSE,
+			result.add(new TrackDefinition("high", "高频 参考", TrackDefinition.VisualType.IMPULSE,
 				TrackDefinition.GROUP_RHYTHM, COLOR_HIGH));
 		}
 
@@ -168,6 +168,14 @@ public final class TrackRegistry {
 			case "high"         -> "高频";
 			default             -> key;
 		};
+	}
+
+	private static String audioDisplayName(String key) {
+		return localizedName(key) + " 音频";
+	}
+
+	private static String referenceDisplayName(String key) {
+		return localizedName(key) + " 参考";
 	}
 
 	/** 根据 key 选取预设颜色；extFallbackIndex 用于扩展 key 时循环色板。 */
