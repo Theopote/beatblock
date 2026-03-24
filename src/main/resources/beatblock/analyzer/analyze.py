@@ -435,15 +435,27 @@ def heuristic_label(idx: int, total: int, energy: float,
 # ── Demucs 茎分离模式 ────────────────────────────────────────────────────────
 
 _DEMUCS_STEMS = ["drums", "bass", "vocals", "other"]
+_DEMUCS_MODEL = None
 
 def _ensure_demucs():
     """检查 demucs 是否可用，不可用则报友好错误。"""
     try:
-        import demucs.api
+        from demucs import pretrained
+        from demucs.apply import apply_model
+        import torch
         return True
-    except ImportError:
-        fatal("缺少 demucs 依赖。请运行：pip install demucs torch")
+    except ImportError as e:
+        fatal(f"缺少 demucs 依赖：{e}。请运行：pip install demucs torch")
         return False
+
+
+def _get_demucs_model():
+    """懒加载 Demucs 模型，避免单次分析内重复初始化。"""
+    global _DEMUCS_MODEL
+    if _DEMUCS_MODEL is None:
+        from demucs import pretrained
+        _DEMUCS_MODEL = pretrained.get_model("htdemucs")
+    return _DEMUCS_MODEL
 
 
 def _run_demucs(input_path: str, stems_dir: str) -> dict[str, str]:
@@ -452,7 +464,8 @@ def _run_demucs(input_path: str, stems_dir: str) -> dict[str, str]:
     返回 {stem_name: wav_path} 字典。
     如果茎文件已存在则跳过分离（利用缓存）。
     """
-    import demucs.api
+    import torch
+    from demucs.apply import apply_model
 
     # 检查缓存：所有 4 条茎的 wav 文件都存在且有效才直接返回
     # 最小有效大小 4096 字节，过滤中断产生的空文件或损坏文件
@@ -474,19 +487,47 @@ def _run_demucs(input_path: str, stems_dir: str) -> dict[str, str]:
     progress("DEMUCS_SEPARATE", 10)
     os.makedirs(stems_dir, exist_ok=True)
 
-    separator = demucs.api.Separator(model="htdemucs", segment=None)
+    model = _get_demucs_model()
     progress("DEMUCS_SEPARATE", 20)
 
-    _, outputs = separator.separate_audio_file(input_path)
+    mix_np, sample_rate = librosa.load(input_path, sr=None, mono=False)
+    mix_np = np.asarray(mix_np, dtype=np.float32)
+    if mix_np.ndim == 1:
+        mix_np = np.expand_dims(mix_np, axis=0)
+
+    target_rate = int(getattr(model, "samplerate", sample_rate))
+    if sample_rate != target_rate:
+        mix_np = librosa.resample(mix_np, orig_sr=sample_rate, target_sr=target_rate, axis=-1)
+        sample_rate = target_rate
+
+    if mix_np.shape[0] == 1:
+        mix_np = np.repeat(mix_np, 2, axis=0)
+    elif mix_np.shape[0] > 2:
+        mix_np = mix_np[:2, :]
+
+    mix = torch.from_numpy(np.ascontiguousarray(mix_np))
+
+    with torch.no_grad():
+        estimates = apply_model(model, mix[None], device="cpu", progress=False, num_workers=0)
+
     progress("DEMUCS_SEPARATE", 35)
 
     # 将分离结果保存为 wav
+    source_names = list(getattr(model, "sources", _DEMUCS_STEMS))
+    estimates = estimates[0].cpu()
+    source_to_tensor = {
+        source_name: estimates[idx]
+        for idx, source_name in enumerate(source_names)
+        if idx < estimates.shape[0]
+    }
+
     for stem_name in _DEMUCS_STEMS:
-        if stem_name in outputs:
-            tensor = outputs[stem_name]
-            # demucs 输出 shape: (channels, samples)，采样率来自 separator
-            audio_np = tensor.numpy()
-            sf.write(stem_paths[stem_name], audio_np.T, separator.samplerate)
+        tensor = source_to_tensor.get(stem_name)
+        if tensor is None:
+            continue
+        # apply_model 输出 shape: (sources, channels, samples)
+        audio_np = tensor.numpy()
+        sf.write(stem_paths[stem_name], audio_np.T, sample_rate)
 
     progress("DEMUCS_SEPARATE", 40)
     return stem_paths
