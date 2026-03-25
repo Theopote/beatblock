@@ -101,10 +101,6 @@ public final class TimelineRenderer {
 		ImGui.setCursorPosY(layout.startY + TimelineLayout.RULER_HEIGHT);
 	}
 
-	public void renderRulerRow(TimelineLayout layout, TimelineViewState viewState, double bpm) {
-		renderRulerRow(layout, viewState, bpm, null, null);
-	}
-
 	/** 可滚动区域：轨道区（左侧轨道列表 + 竖线分隔 + 网格 + 一行一行轨道 + 播放头 + 框选）。 */
 	public void renderTrackArea(
 		Timeline timeline,
