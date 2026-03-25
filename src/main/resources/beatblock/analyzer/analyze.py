@@ -526,8 +526,9 @@ def _run_demucs(input_path: str, stems_dir: str) -> dict[str, str]:
         if tensor is None:
             continue
         # apply_model 输出 shape: (sources, channels, samples)
+        # 为 JavaSound 兼容性，显式写出 PCM_16 WAV（避免 float WAV 被部分后端拒绝）。
         audio_np = tensor.numpy()
-        sf.write(stem_paths[stem_name], audio_np.T, sample_rate)
+        sf.write(stem_paths[stem_name], audio_np.T, sample_rate, format="WAV", subtype="PCM_16")
 
     progress("DEMUCS_SEPARATE", 40)
     return stem_paths

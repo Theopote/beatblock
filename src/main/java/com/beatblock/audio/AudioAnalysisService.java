@@ -8,6 +8,8 @@ import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.sound.sampled.AudioSystem;
+import javax.sound.sampled.UnsupportedAudioFileException;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
@@ -227,7 +229,7 @@ public final class AudioAnalysisService {
 				long fileSize = Files.size(beatmapPath);
 				if (fileSize > 16) {
 					Beatmap cached = BeatmapReader.read(beatmapPath);
-					if (isBeatmapVersionCompatible(cached, analysisUseDemucs)) {
+					if (isBeatmapVersionCompatible(cached, analysisUseDemucs, beatmapPath)) {
 						LOGGER.info("BeatBlock AudioAnalysis: beatmap cache hit, skipping Python path={} beatmap={}",
 							audioPath.getFileName(), beatmapPath.getFileName());
 						onComplete.accept(cached);
@@ -423,7 +425,7 @@ public final class AudioAnalysisService {
 	 * v2.x: HPSS + 固定 kick/snare/hihat 三轨道
 	 * v3.x: HPSS + 谱聚类自适应轨道（当前）
 	 */
-	private static boolean isBeatmapVersionCompatible(Beatmap beatmap, boolean expectDemucs) {
+	private static boolean isBeatmapVersionCompatible(Beatmap beatmap, boolean expectDemucs, Path beatmapPath) {
 		if (beatmap == null || beatmap.meta == null) return false;
 		String ver = beatmap.meta.analyzerVersion();
 		if (ver == null || ver.isBlank()) return false;
@@ -439,9 +441,36 @@ public final class AudioAnalysisService {
 
 		boolean hasStemSeparation = beatmap.meta.hasStemSeparation();
 		if (expectDemucs) {
-			return hasStemSeparation;
+			return hasStemSeparation && areDemucsStemsCacheCompatible(beatmap, beatmapPath);
 		}
 		return !hasStemSeparation;
+	}
+
+	private static boolean areDemucsStemsCacheCompatible(Beatmap beatmap, Path beatmapPath) {
+		if (beatmap == null || beatmap.meta == null || beatmap.meta.stems() == null || beatmapPath == null) {
+			return false;
+		}
+		Path parent = beatmapPath.getParent();
+		if (parent == null) return false;
+
+		for (Map.Entry<String, String> entry : beatmap.meta.stems().entrySet()) {
+			String stemKey = entry.getKey();
+			String relPath = entry.getValue();
+			if (relPath == null || relPath.isBlank()) return false;
+			Path stemPath = parent.resolve(relPath).normalize();
+			try {
+				if (!Files.isRegularFile(stemPath) || Files.size(stemPath) <= 44) {
+					LOGGER.info("BeatBlock AudioAnalysis: demucs cache stale, missing/short stem key={} path={}", stemKey, stemPath);
+					return false;
+				}
+				AudioSystem.getAudioFileFormat(stemPath.toFile());
+			} catch (UnsupportedAudioFileException | IOException ex) {
+				LOGGER.info("BeatBlock AudioAnalysis: demucs cache stale, unreadable stem key={} path={} reason={}",
+					stemKey, stemPath, ex.getMessage());
+				return false;
+			}
+		}
+		return true;
 	}
 
 	private String sanitizeBeatmapBaseName(String baseName) {
