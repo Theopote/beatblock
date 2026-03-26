@@ -42,6 +42,7 @@ public final class TimelineInteraction {
 	private static final String POPUP_EVENT_CONTEXT = "##TimelineEventContextPopup";
 	private static final String POPUP_EVENT_PROPERTIES = "##TimelineEventPropertiesPopup";
 	private static final String POPUP_MARKER_CONTEXT = "##TimelineMarkerContextPopup";
+	private static final String POPUP_DELETE_CONFIRM = "##TimelineDeleteConfirmPopup";
 	private static final int TIME_INPUT_BUFFER_SIZE = 64;
 	private static final int PARAM_INPUT_BUFFER_SIZE = 256;
 	private static final int MARKER_NAME_BUFFER_SIZE = 128;
@@ -195,7 +196,7 @@ public final class TimelineInteraction {
 
 		if (ImGui.isKeyPressed(ImGuiKey.Delete)
 				&& hasDeletableSelection(timeline, selectionState, trackListState)) {
-			deleteSelectedEntries(timeline, selectionState, trackListState);
+			ImGui.openPopup(POPUP_DELETE_CONFIRM);
 		}
 		if (ImGui.getIO().getKeyCtrl() && ImGui.isKeyPressed(ImGuiKey.C)) {
 			copySelectedEvents(timeline, selectionState);
@@ -293,6 +294,7 @@ public final class TimelineInteraction {
 		renderContextMenu(timeline, selectionState, trackListState);
 		renderPropertiesPopup(timeline, trackListState);
 		renderMarkerContextPopup(timeline, clock);
+		renderDeleteConfirmPopup(timeline, selectionState, trackListState);
 
 		if (ImGui.isMouseReleased(0)) {
 			if (interactionState.getMode() == InteractionMode.DRAG_EVENT && interactionState.getActiveEventId() != null) {
@@ -672,7 +674,8 @@ public final class TimelineInteraction {
 	private void renderContextMenu(Timeline timeline, SelectionState selectionState,
 			TimelineTrackListState trackListState) {
 		if (!ImGui.beginPopup(POPUP_EVENT_CONTEXT)) return;
-		boolean hasSelection = selectionState != null && !selectionState.getSelectedEvents().isEmpty();
+		boolean hasSelection = selectionState != null
+			&& (!selectionState.getSelectedEvents().isEmpty() || !selectionState.getSelectedClips().isEmpty());
 		boolean canDeleteSelection = hasDeletableSelection(timeline, selectionState, trackListState);
 		boolean hasClipboard = !clipboardEvents.isEmpty();
 		EventRef propertiesRef = resolvePropertiesEventRef(timeline, selectionState);
@@ -685,7 +688,7 @@ public final class TimelineInteraction {
 		}
 		String deleteLabel = hasSelection && !canDeleteSelection ? "Delete (Locked)" : "Delete";
 		if (ImGui.menuItem(deleteLabel, "Del", false, canDeleteSelection)) {
-			deleteSelectedEntries(timeline, selectionState, trackListState);
+			ImGui.openPopup(POPUP_DELETE_CONFIRM);
 		}
 		ImGui.separator();
 		String propertiesLabel = propertiesRef != null && !canOpenProperties
@@ -695,6 +698,55 @@ public final class TimelineInteraction {
 			openPropertiesPopup(timeline, selectionState, trackListState);
 		}
 		ImGui.endPopup();
+	}
+
+	private void renderDeleteConfirmPopup(
+		Timeline timeline,
+		SelectionState selectionState,
+		TimelineTrackListState trackListState
+	) {
+		if (!ImGui.beginPopup(POPUP_DELETE_CONFIRM)) return;
+		int selectedEventCount = selectionState != null ? selectionState.getSelectedEvents().size() : 0;
+		int selectedClipCount = selectionState != null ? selectionState.getSelectedClips().size() : 0;
+		boolean canDelete = hasDeletableSelection(timeline, selectionState, trackListState);
+
+		ImGui.text("Delete Confirmation");
+		ImGui.separator();
+		ImGui.textWrapped(String.format(java.util.Locale.ROOT,
+			"将删除选中的内容：%d 个片段，%d 个事件。",
+			selectedClipCount,
+			selectedEventCount));
+
+		if (containsAudioRootSelectedClip(timeline, selectionState)) {
+			ImGui.spacing();
+			ImGui.textColored(1f, 0.45f, 0.45f, 1f,
+				"警告：本次删除包含顶部音频片段，将同步清理对应音频波形与分析数据。");
+		}
+
+		ImGui.spacing();
+		if (ImGui.button("Confirm Delete##timelineDeleteConfirm", 150f, 0f)) {
+			if (canDelete) {
+				deleteSelectedEntries(timeline, selectionState, trackListState);
+			}
+			ImGui.closeCurrentPopup();
+		}
+		ImGui.sameLine();
+		if (ImGui.button("Cancel##timelineDeleteCancel", 120f, 0f)) {
+			ImGui.closeCurrentPopup();
+		}
+
+		ImGui.endPopup();
+	}
+
+	private boolean containsAudioRootSelectedClip(Timeline timeline, SelectionState selectionState) {
+		if (timeline == null || selectionState == null || selectionState.getSelectedClips().isEmpty()) return false;
+		Object rootClipId = timeline.getMetadata("audioRootClipId");
+		if (rootClipId == null) return false;
+		String rootId = rootClipId.toString();
+		for (String clipId : selectionState.getSelectedClips()) {
+			if (rootId.equals(clipId)) return true;
+		}
+		return false;
 	}
 
 	private void renderMarkerContextPopup(Timeline timeline, TimelineClock clock) {
