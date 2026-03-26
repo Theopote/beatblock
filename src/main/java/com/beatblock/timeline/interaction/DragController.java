@@ -40,6 +40,36 @@ public final class DragController {
 		}
 	}
 
+	/**
+	 * 拖动音频片段到新位置，返回实际生效的新起始时间（吸附 + 夹取后）。
+	 * 调用方可用 (返回值 - dragInitialClipStart) 计算实际 delta，然后同步其他轨道上的关联事件。
+	 *
+	 * @param mouseTimeSeconds     当前鼠标对应的时间轴时间
+	 * @param dragInitialMouseTime 拖拽开始时鼠标对应的时间轴时间
+	 * @param dragInitialClipStart 拖拽开始时该片段的 startTimeSeconds
+	 * @param clipDuration         片段时长（固定，拖拽中不变）
+	 * @param maxDuration          时间轴总时长上限
+	 */
+	public static double dragClip(Timeline timeline, String trackId, String clipId,
+			double mouseTimeSeconds, double dragInitialMouseTime,
+			double dragInitialClipStart, double clipDuration,
+			double maxDuration, TimelineToolbarState toolbarState, TimelineViewState viewState) {
+		if (timeline == null || trackId == null || clipId == null) return dragInitialClipStart;
+		Track track = timeline.getTrack(trackId);
+		if (track == null) return dragInitialClipStart;
+		Clip clip = track.getClip(clipId);
+		if (clip == null) return dragInitialClipStart;
+
+		double rawNewStart = dragInitialClipStart + (mouseTimeSeconds - dragInitialMouseTime);
+		double snappedStart = applySnap(rawNewStart, null, timeline, toolbarState, viewState);
+		double clampedStart = Math.max(0.0,
+			Math.min(snappedStart, maxDuration > 0 ? maxDuration - clipDuration : rawNewStart));
+
+		clip.setStartTimeSeconds(clampedStart);
+		clip.setEndTimeSeconds(clampedStart + clipDuration);
+		return clampedStart;
+	}
+
 	private static double applySnap(double timeSeconds, String excludeEventId, Timeline timeline,
 			TimelineToolbarState toolbarState, TimelineViewState viewState) {
 		if (toolbarState == null) return timeSeconds;

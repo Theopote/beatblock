@@ -94,6 +94,16 @@ public final class TimelineInteraction {
 	private String contextMarkerId;
 	private final ImString markerNameBuffer = new ImString(MARKER_NAME_BUFFER_SIZE);
 
+	// ── 音频片段拖拽快照（DRAG_CLIP 模式使用） ────────────────────────────────
+	/** 拖拽开始时片段的 startTimeSeconds */
+	private double dragClipInitialStart;
+	/** 拖拽开始时片段的 endTimeSeconds */
+	private double dragClipInitialEnd;
+	/** 拖拽开始时鼠标对应的时间轴时间 */
+	private double dragClipInitialMouseTime;
+	/** 其他轨道上需要联动的事件：eventId → 拖拽开始时的 timeSeconds */
+	private final Map<String, Double> dragLinkedEventOriginalTimes = new HashMap<>();
+
 	public void setAudioPlayer(IAudioPlayer audioPlayer) {
 		this.audioPlayer = audioPlayer;
 	}
@@ -191,6 +201,13 @@ public final class TimelineInteraction {
 			return;
 		}
 
+		// 右键菜单等 popup 必须在 isWindowHovered 检查之前每帧调用，
+		// 否则鼠标移入弹出窗口时 isWindowHovered 返回 false 导致 beginPopup 未被调用，ImGui 会关闭弹窗。
+		renderContextMenu(timeline, selectionState, trackListState);
+		renderPropertiesPopup(timeline, trackListState);
+		renderMarkerContextPopup(timeline, clock);
+		renderDeleteConfirmPopup(timeline, selectionState, trackListState);
+
 		if (!ImGui.isWindowHovered(ImGuiHoveredFlags.AllowWhenBlockedByActiveItem | ImGuiHoveredFlags.AllowWhenBlockedByPopup)) return;
 		boolean alt = ImGui.getIO().getKeyAlt();
 
@@ -286,17 +303,29 @@ public final class TimelineInteraction {
 			HitResult hit = hitContentAtMouse(timeline, viewState, layout, mx, my);
 			contextTrackId = hit.getTrackId();
 			contextClipId = hit.getClipId();
+			// 右键命中片段时自动将其加入选中，确保右键菜单的 Delete 项可用
+			if (selectionState != null && hit.getClipId() != null && !selectionState.isClipSelected(hit.getClipId())) {
+				selectionState.clearEvents();
+				selectionState.clearClips();
+				selectionState.selectClip(hit.getClipId());
+			}
 			if (hit.getEventId() != null) {
 				propertiesEventId = hit.getEventId();
 			}
 			ImGui.openPopup(POPUP_EVENT_CONTEXT);
 		}
-		renderContextMenu(timeline, selectionState, trackListState);
-		renderPropertiesPopup(timeline, trackListState);
-		renderMarkerContextPopup(timeline, clock);
-		renderDeleteConfirmPopup(timeline, selectionState, trackListState);
 
 		if (ImGui.isMouseReleased(0)) {
+			if (interactionState.getMode() == InteractionMode.DRAG_CLIP && interactionState.getActiveClipId() != null) {
+				float dx = mx - interactionState.getMouseStartX();
+				float dy = my - interactionState.getMouseStartY();
+				if (dx * dx + dy * dy < DRAG_THRESHOLD_PX * DRAG_THRESHOLD_PX) {
+					// 鼠标未移动超过阈值 → 视为点击，只做选中
+					selectionState.clearClips();
+					selectionState.selectClip(interactionState.getActiveClipId());
+				}
+				dragLinkedEventOriginalTimes.clear();
+			}
 			if (interactionState.getMode() == InteractionMode.DRAG_EVENT && interactionState.getActiveEventId() != null) {
 				float dx = mx - interactionState.getMouseStartX();
 				float dy = my - interactionState.getMouseStartY();
@@ -339,6 +368,37 @@ public final class TimelineInteraction {
 			if (interactionState.getMode() == InteractionMode.SCRUB_TIME && clock != null) {
 				double t = viewState.screenToTime(mx - layout.contentLeft);
 				seekClockAndMusic(clock, Math.max(0, Math.min(t, duration)));
+				return;
+			}
+			if (interactionState.getMode() == InteractionMode.DRAG_CLIP
+					&& interactionState.getActiveClipId() != null && interactionState.getActiveTrackId() != null) {
+				if (isTrackLocked(trackListState, interactionState.getActiveTrackId())) return;
+				double mouseTime = viewState.screenToTime(mx - layout.contentLeft);
+				double clipDuration = dragClipInitialEnd - dragClipInitialStart;
+				double newStart = DragController.dragClip(timeline, interactionState.getActiveTrackId(),
+					interactionState.getActiveClipId(), mouseTime, dragClipInitialMouseTime,
+					dragClipInitialStart, clipDuration, duration, toolbarState, viewState);
+				double actualDelta = newStart - dragClipInitialStart;
+				// 联动：将其他轨道上快照的事件按同样 delta 移动
+				String[] syncTrackIds = {
+					Timeline.TRACK_ID_ANIMATION_BLOCK, Timeline.TRACK_ID_ANIMATION_AUTO,
+					Timeline.TRACK_ID_CAMERA, Timeline.TRACK_ID_GLOBAL
+				};
+				for (String sid : syncTrackIds) {
+					Track st = timeline.getTrack(sid);
+					if (st == null) continue;
+					boolean dirtied = false;
+					for (Clip sc : st.getClips()) {
+						for (TimelineEvent se : sc.getEvents()) {
+							Double orig = dragLinkedEventOriginalTimes.get(se.getId());
+							if (orig != null) {
+								se.setTimeSeconds(Math.max(0.0, orig + actualDelta));
+								dirtied = true;
+							}
+						}
+					}
+					if (dirtied) timeline.markAnimationEventsDirty(sid);
+				}
 				return;
 			}
 			if (interactionState.getMode() == InteractionMode.DRAG_EVENT && interactionState.getActiveEventId() != null
@@ -416,6 +476,44 @@ public final class TimelineInteraction {
 				HitResult hit = HitTestSystem.hitTestTrackContent(timeline, INTERACTIVE_TRACK_IDS[i], mx, my,
 					layout.contentLeft, rowScreenY, rowH, layout.contentWidth, viewState);
 				if (hit.isEmpty()) continue;
+				// 音频轨上的纯片段命中 → 进入 DRAG_CLIP 模式（可左右拖动片段并联动其他轨道事件）
+				if (hit.getHitType() == HitType.CLIP && hit.getEventId() == null
+						&& Timeline.TRACK_ID_AUDIO.equals(hit.getTrackId())) {
+					Track audioTrack = timeline.getTrack(Timeline.TRACK_ID_AUDIO);
+					Clip hitClip = audioTrack != null ? audioTrack.getClip(hit.getClipId()) : null;
+					if (hitClip != null) {
+						interactionState.setMode(InteractionMode.DRAG_CLIP);
+						interactionState.setMouseStart(mx, my);
+						interactionState.setActiveClipId(hit.getClipId());
+						interactionState.setActiveTrackId(hit.getTrackId());
+						dragClipInitialStart = hitClip.getStartTimeSeconds();
+						dragClipInitialEnd = hitClip.getEndTimeSeconds();
+						dragClipInitialMouseTime = viewState.screenToTime(mx - layout.contentLeft);
+						// 快照其他轨道上位于该片段时间范围内的所有事件的原始时间
+						dragLinkedEventOriginalTimes.clear();
+						double cs = dragClipInitialStart;
+						double ce = dragClipInitialEnd;
+						String[] syncTrackIds = {
+							Timeline.TRACK_ID_ANIMATION_BLOCK, Timeline.TRACK_ID_ANIMATION_AUTO,
+							Timeline.TRACK_ID_CAMERA, Timeline.TRACK_ID_GLOBAL
+						};
+						for (String sid : syncTrackIds) {
+							Track st = timeline.getTrack(sid);
+							if (st == null) continue;
+							for (Clip sc : st.getClips()) {
+								for (TimelineEvent se : sc.getEvents()) {
+									double et = se.getTimeSeconds();
+									if (et >= cs && et <= ce) {
+										dragLinkedEventOriginalTimes.put(se.getId(), et);
+									}
+								}
+							}
+						}
+						if (!ctrl) selectionState.clearClips();
+						selectionState.selectClip(hit.getClipId());
+					}
+					return;
+				}
 				if (hit.getHitType() == HitType.EVENT || hit.getHitType() == HitType.CLIP) {
 					interactionState.setMode(InteractionMode.DRAG_EVENT);
 					interactionState.setMouseStart(mx, my);
@@ -717,10 +815,10 @@ public final class TimelineInteraction {
 			selectedClipCount,
 			selectedEventCount));
 
-		if (containsAudioRootSelectedClip(timeline, selectionState)) {
+		if (containsSelectedAudioTrackClip(timeline, selectionState)) {
 			ImGui.spacing();
 			ImGui.textColored(1f, 0.45f, 0.45f, 1f,
-				"警告：本次删除包含顶部音频片段，将同步清理对应音频波形与分析数据。");
+				"警告：本次删除包含顶部音频片段。若删除后音频轨为空，将同步清理音频波形与分析数据。");
 		}
 
 		ImGui.spacing();
@@ -738,13 +836,12 @@ public final class TimelineInteraction {
 		ImGui.endPopup();
 	}
 
-	private boolean containsAudioRootSelectedClip(Timeline timeline, SelectionState selectionState) {
+	private boolean containsSelectedAudioTrackClip(Timeline timeline, SelectionState selectionState) {
 		if (timeline == null || selectionState == null || selectionState.getSelectedClips().isEmpty()) return false;
-		Object rootClipId = timeline.getMetadata("audioRootClipId");
-		if (rootClipId == null) return false;
-		String rootId = rootClipId.toString();
+		Track audioTrack = timeline.getTrack(Timeline.TRACK_ID_AUDIO);
+		if (audioTrack == null) return false;
 		for (String clipId : selectionState.getSelectedClips()) {
-			if (rootId.equals(clipId)) return true;
+			if (clipId != null && audioTrack.getClip(clipId) != null) return true;
 		}
 		return false;
 	}
@@ -998,8 +1095,8 @@ public final class TimelineInteraction {
 
 	private static HitResult hitContentAtMouse(Timeline timeline, TimelineViewState viewState,
 			TimelineLayout layout, float mx, float my) {
-		for (int i = 0; i < layout.getInteractiveRowCount() && i < INTERACTIVE_TRACK_IDS.length; i++) {
-			int logicalRow = TimelineLayout.INTERACTIVE_ROW_INDICES[i];
+		for (int i = 0; i < INTERACTIVE_ROW_INDICES.length && i < INTERACTIVE_TRACK_IDS.length; i++) {
+			int logicalRow = INTERACTIVE_ROW_INDICES[i];
 			if (!layout.isRowVisible(logicalRow)) continue;
 			float rowScreenY = layout.getRowScreenY(logicalRow);
 			float rowH = layout.getRowHeight(logicalRow);
@@ -1200,10 +1297,12 @@ public final class TimelineInteraction {
 
 	private static void onAudioRootClipDeleted(Timeline timeline, String deletedClipId) {
 		if (timeline == null || deletedClipId == null || deletedClipId.isBlank()) return;
-		Object rootClipId = timeline.getMetadata("audioRootClipId");
-		if (rootClipId == null || !deletedClipId.equals(rootClipId.toString())) return;
-
 		Track audioTrack = timeline.getTrack(Timeline.TRACK_ID_AUDIO);
+		if (audioTrack == null) return;
+
+		// 多段音频模式：仅在音频轨已无任何片段时，才清理全局音频分析/波形数据。
+		if (!audioTrack.getClips().isEmpty()) return;
+
 		if (audioTrack != null && audioTrack.getAudioData() != null) {
 			audioTrack.getAudioData().setWaveform(null);
 			audioTrack.getAudioData().clearAll();

@@ -19,6 +19,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.Collections;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -322,7 +323,15 @@ public final class TimelineRenderer {
 			if (selectionState != null && selectionState.isClipSelected(clip.getId())) {
 				ImGui.getWindowDrawList().addRect(x0 - 1f, y0 - 1f, x1 + 1f, y1 + 1f, SELECTED_BORDER_COLOR, 3f, 0, 2f);
 			}
+
+			// 在片段条上显示音频文件名（仅当宽度足够时）
+			Object labelObj = timeline.getMetadata("clipLabel_" + clip.getId());
+			if (labelObj != null && x1 - x0 > 16f) {
+				float textY = y0 + Math.max(2f, (y1 - y0 - 13f) / 2f);
+				ImGui.getWindowDrawList().addText(x0 + 5f, textY, 0xFF_FF_FF_BB, labelObj.toString());
+			}
 		}
+
 
 		ImGui.setCursorPosY(rowY + rowHeight);
 	}
@@ -439,9 +448,15 @@ public final class TimelineRenderer {
 	private void handleDroppedAudioAsset(Timeline timeline, AudioAsset asset, int dropTargetRowIndex) {
 		if (asset == null || BeatBlock.audioAnalysisEngine == null) return;
 
+		// 计算新片段起始偏移（必须在 upsertAudioRootClip 之前，避免计入将要创建的片段）
+		double startOffset = computeNextClipStartOffset(timeline);
 		bindDroppedAudioToPlayback(timeline, asset);
 		upsertAudioRootClip(timeline, asset);
 		String droppedAudioKey = buildAudioAssetKey(asset);
+		// 持久化偏移，供后台分析完成后的延迟填充使用
+		if (startOffset > 0) {
+			timeline.setMetadata("audioClipOffset_" + droppedAudioKey, startOffset);
+		}
 		lastAutoAppliedBeatmapSignature = null;
 		boolean canUseBeatmapNow = asset.getStatus() == AudioAssetStatus.COMPLETED && asset.getBeatmap() != null;
 		if (canUseBeatmapNow && !isBeatmapReadyForImmediateApply(asset.getBeatmap())) {
@@ -451,7 +466,12 @@ public final class TimelineRenderer {
 		}
 		if (canUseBeatmapNow) {
 			timeline.setMetadata("awaitingAnalyzedBeatmap", null);
+			double prevDuration = timeline.getDurationSeconds();
+			Map<String, SavedFeatureTrack> savedFeatureEvents = saveFeatureEvents(timeline);
 			BeatBlock.audioAnalysisEngine.fillTimelineFromBeatmap(timeline, asset.getBeatmap());
+			shiftFeatureEventsByOffset(timeline, startOffset);
+			restoreFeatureEvents(timeline, savedFeatureEvents);
+			timeline.setDurationSeconds(prevDuration);
 			requestDenseFeatureEnrichment(timeline, asset);
 			BeatBlockRuntime.getInstance().loadBeatmap(asset.getBeatmap());
 			// 若是 Demucs 模式，加载茎音频到 StemMixer
@@ -460,7 +480,12 @@ public final class TimelineRenderer {
 			timeline.setMetadata("awaitingAnalyzedBeatmap", droppedAudioKey);
 			LOGGER.info("BeatBlock Timeline: dropped asset not completed yet, using feature timeline temporarily path={} status={}",
 				asset.getPath(), asset.getStatus());
+			double prevDuration = timeline.getDurationSeconds();
+			Map<String, SavedFeatureTrack> savedFeatureEvents = saveFeatureEvents(timeline);
 			BeatBlock.audioAnalysisEngine.fillTimelineFromFeature(timeline, asset.getFeatureTimeline(), asset.getSampleRate());
+			shiftFeatureEventsByOffset(timeline, startOffset);
+			restoreFeatureEvents(timeline, savedFeatureEvents);
+			timeline.setDurationSeconds(prevDuration);
 		} else {
 			timeline.setMetadata("awaitingAnalyzedBeatmap", droppedAudioKey);
 			LOGGER.info("BeatBlock Timeline: dropped asset pending analysis, waiting for auto-apply path={} status={}",
@@ -859,7 +884,13 @@ public final class TimelineRenderer {
 		String timelineAudioKey = getTimelineAudioPathKey(timeline);
 		if (!Objects.equals(timelineAudioKey, expectedAudioKey)) return;
 
+		double startOffset = readClipOffset(timeline, expectedAudioKey);
+		double prevDuration = timeline.getDurationSeconds();
+		Map<String, SavedFeatureTrack> savedFeatureEvents = saveFeatureEvents(timeline);
 		BeatBlock.audioAnalysisEngine.fillTimelineFromFeature(timeline, feature, asset.getSampleRate());
+		shiftFeatureEventsByOffset(timeline, startOffset);
+		restoreFeatureEvents(timeline, savedFeatureEvents);
+		timeline.setDurationSeconds(prevDuration);
 		if (asset.getBeatmap() != null && asset.getBeatmap().meta != null) {
 			timeline.setMetadata("bpm", asset.getBeatmap().meta.bpm());
 			timeline.setMetadata("beatCount", asset.getBeatmap().beats.size());
@@ -884,7 +915,13 @@ public final class TimelineRenderer {
 		String signature = buildBeatmapApplySignature(timelineAudioKey, matched.getBeatmap());
 		if (Objects.equals(signature, lastAutoAppliedBeatmapSignature)) return;
 
+		double startOffset = readClipOffset(timeline, timelineAudioKey);
+		double prevDuration = timeline.getDurationSeconds();
+		Map<String, SavedFeatureTrack> savedFeatureEvents = saveFeatureEvents(timeline);
 		BeatBlock.audioAnalysisEngine.fillTimelineFromBeatmap(timeline, matched.getBeatmap());
+		shiftFeatureEventsByOffset(timeline, startOffset);
+		restoreFeatureEvents(timeline, savedFeatureEvents);
+		timeline.setDurationSeconds(prevDuration);
 		requestDenseFeatureEnrichment(timeline, matched);
 		BeatBlockRuntime.getInstance().loadBeatmap(matched.getBeatmap());
 		bindStemAudioIfDemucs(matched.getBeatmap());
@@ -928,8 +965,69 @@ public final class TimelineRenderer {
 
 	private String normalizeAudioPath(String rawPath) {
 		if (rawPath == null || rawPath.isBlank()) return null;
+
+	// ── 多段音频偏移支持辅助方法 ──────────────────────────────────────────
 		return rawPath.trim().toLowerCase();
 	}
+
+	// ── 多段音频偏移支持辅助方法 ─────────────────────────────────────────
+	/** 计算下一个音频片段应放置的时间起点（所有已有片段最大结束时间）。 */
+	private double computeNextClipStartOffset(Timeline timeline) {
+		if (timeline == null) return 0.0;
+		Track audioTrack = timeline.getTrack(Timeline.TRACK_ID_AUDIO);
+		if (audioTrack == null || audioTrack.getClips().isEmpty()) return 0.0;
+		double maxEnd = 0.0;
+		for (Clip c : audioTrack.getClips()) {
+			if (c != null) maxEnd = Math.max(maxEnd, c.getEndTimeSeconds());
+		}
+		return maxEnd;
+	}
+
+	/** 保存当前所有特征轨道的事件（用于填充前的快照）。 */
+	private Map<String, SavedFeatureTrack> saveFeatureEvents(Timeline timeline) {
+		if (timeline == null) return Map.of();
+		java.util.Map<String, FeatureTrack> tracks = timeline.getFeatureTracks();
+		if (tracks == null || tracks.isEmpty()) return Map.of();
+		Map<String, SavedFeatureTrack> result = new HashMap<>();
+		for (Map.Entry<String, FeatureTrack> e : tracks.entrySet()) {
+			result.put(e.getKey(), new SavedFeatureTrack(e.getValue().getLabel(), new ArrayList<>(e.getValue().getEvents())));
+		}
+		return result;
+	}
+
+	/** 将当前所有特征轨道的事件时间整体偏移 offset 秒（就地修改）。 */
+	private void shiftFeatureEventsByOffset(Timeline timeline, double offset) {
+		if (offset <= 0 || timeline == null) return;
+		java.util.Map<String, FeatureTrack> tracks = timeline.getFeatureTracks();
+		if (tracks == null || tracks.isEmpty()) return;
+		for (FeatureTrack ft : tracks.values()) {
+			List<FeatureEvent> evts = new ArrayList<>(ft.getEvents());
+			ft.clear();
+			for (FeatureEvent e : evts) {
+				ft.addEvent(new FeatureEvent(e.getTimeSeconds() + offset, e.getEnergy()));
+			}
+		}
+	}
+
+	/** 将快照中的事件重新写入对应特征轨道（合并到当前数据中）。 */
+	private void restoreFeatureEvents(Timeline timeline, Map<String, SavedFeatureTrack> saved) {
+		if (timeline == null || saved == null || saved.isEmpty()) return;
+		for (Map.Entry<String, SavedFeatureTrack> e : saved.entrySet()) {
+			for (FeatureEvent fe : e.getValue().events()) {
+				timeline.addFeatureEvent(e.getKey(), e.getValue().label(), fe);
+			}
+		}
+	}
+
+	/** 从 Timeline 元数据读取指定音频的片段起始偏移。 */
+	private double readClipOffset(Timeline timeline, String audioKey) {
+		if (timeline == null || audioKey == null) return 0.0;
+		Object raw = timeline.getMetadata("audioClipOffset_" + audioKey);
+		if (raw instanceof Number n) return n.doubleValue();
+		return 0.0;
+	}
+
+	private record SavedFeatureTrack(String label, List<FeatureEvent> events) {}
 
 	private record DenseApplyPayload(AudioAsset asset, AudioFeatureTimeline feature, long createdAtMs) {}
 
@@ -1067,9 +1165,6 @@ public final class TimelineRenderer {
 	private void bindDroppedAudioToPlayback(Timeline timeline, AudioAsset asset) {
 		String audioPath = asset.getPath().toAbsolutePath().normalize().toString();
 		timeline.setMetadata("audioPath", audioPath);
-		if (asset.getDurationSeconds() > 0) {
-			timeline.setDurationSeconds(asset.getDurationSeconds());
-		}
 		if (BeatBlock.musicPlayer != null) {
 			boolean loaded = BeatBlock.musicPlayer.loadAudio(audioPath);
 			BeatBlock.musicPlayer.setCurrentTimeSeconds(0);
@@ -1084,28 +1179,35 @@ public final class TimelineRenderer {
 	}
 
 	/**
-	 * 每次拖拽新音频到时间线时，在顶部音频轨创建（或替换）一个整段片段，支持点选与删除。
+	 * 每次拖拽新音频到时间线时，在顶部音频轨追加一个整段片段。
+	 * 若已存在片段，则将新片段放在最右侧（时间上紧接最后一个片段）。
 	 */
 	private void upsertAudioRootClip(Timeline timeline, AudioAsset asset) {
 		if (timeline == null || asset == null) return;
 		Track audioTrack = timeline.getTrack(Timeline.TRACK_ID_AUDIO);
 		if (audioTrack == null) return;
 
-		java.util.List<String> clipIds = new java.util.ArrayList<>();
+		double start = 0.0;
 		for (Clip c : audioTrack.getClips()) {
-			if (c != null && c.getId() != null && !c.getId().isBlank()) clipIds.add(c.getId());
-		}
-		for (String clipId : clipIds) {
-			audioTrack.removeClip(clipId);
+			if (c == null) continue;
+			start = Math.max(start, c.getEndTimeSeconds());
 		}
 
-		double end = asset.getDurationSeconds();
-		if (end <= 0) end = timeline.getDurationSeconds();
-		end = Math.max(0.1, end);
-		Clip rootClip = TimelineOperations.addClip(audioTrack, 0.0, end);
+		double duration = asset.getDurationSeconds();
+		if (duration <= 0) duration = timeline.getDurationSeconds();
+		duration = Math.max(0.1, duration);
+		double end = start + duration;
+
+		Clip rootClip = TimelineOperations.addClip(audioTrack, start, end);
 		if (rootClip != null) {
+			timeline.setDurationSeconds(Math.max(timeline.getDurationSeconds(), end));
 			timeline.setMetadata("audioRootClipId", rootClip.getId());
 			timeline.setMetadata("audioAssetId", asset.getId());
+			// 存储音频文件名（无扩展名），供片段条渲染时显示
+			String fn = asset.getPath().getFileName().toString();
+			int dot = fn.lastIndexOf('.');
+			if (dot > 0) fn = fn.substring(0, dot);
+			timeline.setMetadata("clipLabel_" + rootClip.getId(), fn);
 		}
 	}
 
