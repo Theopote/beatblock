@@ -1,6 +1,7 @@
 package com.beatblock.timeline.interaction;
 
 import com.beatblock.BeatBlock;
+import com.beatblock.BeatBlockClient;
 import com.beatblock.timeline.Clip;
 import com.beatblock.timeline.FeatureEvent;
 import com.beatblock.timeline.FeatureTrack;
@@ -308,8 +309,16 @@ public final class TimelineInteraction {
 			HitResult hit = hitContentAtMouse(timeline, viewState, layout, mx, my);
 			contextTrackId = hit.getTrackId();
 			contextClipId = hit.getClipId();
+			BeatBlockClient.LOGGER.info(String.format(
+				"[TimelineInteraction.handleMouse] Right-click detected: contextTrackId=%s, contextClipId=%s, hitTrackId=%s, hitClipId=%s, hitEventId=%s",
+				contextTrackId, contextClipId, hit.getTrackId(), hit.getClipId(), hit.getEventId()
+			));
 			// 右键命中片段时自动将其加入选中，确保右键菜单的 Delete 项可用
 			if (hit.getClipId() != null && !selectionState.isClipSelected(hit.getClipId())) {
+				BeatBlockClient.LOGGER.info(String.format(
+					"[TimelineInteraction.handleMouse] Auto-selecting context clip: %s",
+					hit.getClipId()
+				));
 				selectionState.clearEvents();
 				selectionState.clearClips();
 				selectionState.selectClip(hit.getClipId());
@@ -873,28 +882,50 @@ public final class TimelineInteraction {
 	private void renderContextMenu(Timeline timeline, SelectionState selectionState,
 			TimelineTrackListState trackListState) {
 		if (!ImGui.beginPopup(POPUP_EVENT_CONTEXT)) return;
+		boolean requestDeleteConfirmPopup = false;
 		boolean hasSelection = selectionState != null
 			&& (!selectionState.getSelectedEvents().isEmpty() || !selectionState.getSelectedClips().isEmpty());
 		boolean canDeleteSelection = hasDeletableSelection(timeline, selectionState, trackListState);
 		boolean canDeleteContextClip = canDeleteContextClip(timeline, trackListState);
+		BeatBlockClient.LOGGER.info(String.format(
+			"[TimelineInteraction.renderContextMenu] Menu opened: contextClipId=%s, contextTrackId=%s, canDeleteSelection=%s, canDeleteContextClip=%s",
+			contextClipId, contextTrackId, canDeleteSelection, canDeleteContextClip
+		));
 		boolean canDeleteAny = canDeleteSelection || canDeleteContextClip;
 		boolean hasClipboard = !clipboardEvents.isEmpty();
 		EventRef propertiesRef = resolvePropertiesEventRef(timeline, selectionState);
 		boolean canOpenProperties = propertiesRef != null && !isTrackLocked(trackListState, propertiesRef.track.getId());
+		BeatBlockClient.LOGGER.info(String.format(
+			"[TimelineInteraction.renderContextMenu] About to render menu items: hasSelection=%s, hasClipboard=%s, canDeleteAny=%s",
+			hasSelection, hasClipboard, canDeleteAny
+		));
 		if (ImGui.menuItem("Copy", "Ctrl+C", false, hasSelection)) {
+			BeatBlockClient.LOGGER.info("[TimelineInteraction] Copy clicked");
 			copySelectedEvents(timeline, selectionState);
 		}
 		if (ImGui.menuItem("Paste", "Ctrl+V", false, hasClipboard)) {
+			BeatBlockClient.LOGGER.info("[TimelineInteraction] Paste clicked");
 			pasteClipboardEvents(timeline, selectionState, contextTimeSeconds, trackListState);
 		}
 		String deleteLabel = canDeleteAny ? "Delete" : "Delete (Locked)";
+		BeatBlockClient.LOGGER.debug(String.format(
+			"[TimelineInteraction.renderContextMenu] About to render Delete menu item: label=%s, enabled=%s",
+			deleteLabel, canDeleteAny
+		));
 		if (ImGui.menuItem(deleteLabel, "Del", false, canDeleteAny)) {
-			if (selectionState != null && !hasSelection && contextClipId != null) {
+			BeatBlockClient.LOGGER.info("[TimelineInteraction] *** DELETE MENU ITEM CLICKED! ***");
+			if (selectionState != null && canDeleteContextClip && contextClipId != null) {
+				// 右键删除应以当前命中的片段为准，避免旧选中项导致“点了删除却没删到当前片段”。
+				selectionState.clearEvents();
+				selectionState.clearClips();
+				selectionState.selectClip(contextClipId);
+			} else if (selectionState != null && !hasSelection && contextClipId != null) {
 				selectionState.clearEvents();
 				selectionState.clearClips();
 				selectionState.selectClip(contextClipId);
 			}
-			ImGui.openPopup(POPUP_DELETE_CONFIRM);
+			requestDeleteConfirmPopup = true;
+			ImGui.closeCurrentPopup();
 		}
 		ImGui.separator();
 		String propertiesLabel = propertiesRef != null && !canOpenProperties
@@ -904,6 +935,9 @@ public final class TimelineInteraction {
 			openPropertiesPopup(timeline, selectionState, trackListState);
 		}
 		ImGui.endPopup();
+		if (requestDeleteConfirmPopup) {
+			ImGui.openPopup(POPUP_DELETE_CONFIRM);
+		}
 	}
 
 	private void renderDeleteConfirmPopup(
@@ -911,11 +945,20 @@ public final class TimelineInteraction {
 		SelectionState selectionState,
 		TimelineTrackListState trackListState
 	) {
-		if (!ImGui.beginPopup(POPUP_DELETE_CONFIRM)) return;
+		if (!ImGui.beginPopupModal(POPUP_DELETE_CONFIRM)) {
+			BeatBlockClient.LOGGER.debug("[TimelineInteraction.renderDeleteConfirmPopup] Popup not open this frame");
+			return;
+		}
+		BeatBlockClient.LOGGER.info("[TimelineInteraction.renderDeleteConfirmPopup] Delete confirmation dialog is rendering!");
 		int selectedEventCount = selectionState != null ? selectionState.getSelectedEvents().size() : 0;
 		int selectedClipCount = selectionState != null ? selectionState.getSelectedClips().size() : 0;
-		boolean canDelete = hasDeletableSelection(timeline, selectionState, trackListState)
-			|| canDeleteContextClip(timeline, trackListState);
+		boolean hasDeletable = hasDeletableSelection(timeline, selectionState, trackListState);
+		boolean canDeleteCtxClip = canDeleteContextClip(timeline, trackListState);
+		boolean canDelete = hasDeletable || canDeleteCtxClip;
+		BeatBlockClient.LOGGER.info(String.format(
+			"[TimelineInteraction.renderDeleteConfirmPopup] Dialog state: selectedClips=%d, selectedEvents=%d, hasDeletable=%s, canDeleteCtxClip=%s, canDelete=%s",
+			selectedClipCount, selectedEventCount, hasDeletable, canDeleteCtxClip, canDelete
+		));
 
 		ImGui.text("Delete Confirmation");
 		ImGui.separator();
@@ -932,8 +975,15 @@ public final class TimelineInteraction {
 
 		ImGui.spacing();
 		if (ImGui.button("Confirm Delete##timelineDeleteConfirm", 150f, 0f)) {
+			BeatBlockClient.LOGGER.info(String.format(
+				"[TimelineInteraction.renderDeleteConfirmPopup] CONFIRM DELETE BUTTON CLICKED! canDelete=%s, selectedClips=%d, selectedEvents=%d",
+				canDelete, selectedClipCount, selectedEventCount
+			));
 			if (canDelete) {
+				BeatBlockClient.LOGGER.info("[TimelineInteraction.renderDeleteConfirmPopup] Calling deleteSelectedEntries()...");
 				deleteSelectedEntries(timeline, selectionState, trackListState);
+			} else {
+				BeatBlockClient.LOGGER.warn("[TimelineInteraction.renderDeleteConfirmPopup] Cannot delete: canDelete is false");
 			}
 			ImGui.closeCurrentPopup();
 		}
@@ -956,16 +1006,38 @@ public final class TimelineInteraction {
 	}
 
 	private boolean canDeleteContextClip(Timeline timeline, TimelineTrackListState trackListState) {
-		if (timeline == null || contextClipId == null) return false;
+		if (timeline == null || contextClipId == null) {
+			BeatBlockClient.LOGGER.debug(String.format(
+				"[TimelineInteraction.canDeleteContextClip] Early return: timeline=%s, contextClipId=%s",
+				timeline != null, contextClipId
+			));
+			return false;
+		}
 		if (contextTrackId != null && !contextTrackId.isBlank()) {
 			Track track = timeline.getTrack(contextTrackId);
-			return track != null && track.getClip(contextClipId) != null && !isTrackLocked(trackListState, contextTrackId);
+			boolean trackExists = track != null;
+			boolean clipExists = trackExists && track.getClip(contextClipId) != null;
+			boolean trackNotLocked = !isTrackLocked(trackListState, contextTrackId);
+			boolean result = trackExists && clipExists && trackNotLocked;
+			BeatBlockClient.LOGGER.debug(String.format(
+				"[TimelineInteraction.canDeleteContextClip] With contextTrackId: trackExists=%s, clipExists=%s, trackNotLocked=%s, result=%s",
+				trackExists, clipExists, trackNotLocked, result
+			));
+			return result;
 		}
+		// Search through all tracks
 		for (Track track : timeline.getTracks()) {
-			if (track.getClip(contextClipId) != null) {
-				return !isTrackLocked(trackListState, track.getId());
+			Clip clip = track.getClip(contextClipId);
+			if (clip != null) {
+				boolean trackNotLocked = !isTrackLocked(trackListState, track.getId());
+				BeatBlockClient.LOGGER.debug(String.format(
+					"[TimelineInteraction.canDeleteContextClip] Found clip in track %s: trackNotLocked=%s",
+					track.getId(), trackNotLocked
+				));
+				return trackNotLocked;
 			}
 		}
+		BeatBlockClient.LOGGER.debug("[TimelineInteraction.canDeleteContextClip] Clip not found in any track");
 		return false;
 	}
 
@@ -1342,20 +1414,39 @@ public final class TimelineInteraction {
 
 	private static void deleteSelectedEntries(Timeline timeline, SelectionState selectionState, TimelineTrackListState trackListState) {
 		if (timeline == null || selectionState == null) return;
-		if (selectionState.getSelectedEvents().isEmpty() && selectionState.getSelectedClips().isEmpty()) return;
+		if (selectionState.getSelectedEvents().isEmpty() && selectionState.getSelectedClips().isEmpty()) {
+			BeatBlockClient.LOGGER.warn("[TimelineInteraction.deleteSelectedEntries] No clips or events to delete");
+			return;
+		}
 
 		List<String> clipIds = new ArrayList<>(selectionState.getSelectedClips());
+		BeatBlockClient.LOGGER.info(String.format(
+			"[TimelineInteraction.deleteSelectedEntries] Starting: clipIds=%s, eventIds=%s",
+			clipIds, selectionState.getSelectedEvents()
+		));
 		if (!clipIds.isEmpty()) {
 			for (Track track : timeline.getTracks()) {
-				if (isTrackLocked(trackListState, track.getId())) continue;
+				if (isTrackLocked(trackListState, track.getId())) {
+					BeatBlockClient.LOGGER.debug(String.format("[TimelineInteraction.deleteSelectedEntries] Track locked: %s", track.getId()));
+					continue;
+				}
 				for (String clipId : clipIds) {
 					if (clipId == null) continue;
-					if (track.removeClip(clipId)) {
-						selectionState.deselectClip(clipId);
-						timeline.markAnimationEventsDirty(track.getId());
-						if (Timeline.TRACK_ID_AUDIO.equals(track.getId())) {
-							onAudioRootClipDeleted(timeline, clipId);
+					Clip clip = track.getClip(clipId);
+					if (clip != null) {
+						BeatBlockClient.LOGGER.info(String.format("[TimelineInteraction.deleteSelectedEntries] Removing clip %s from track %s", clipId, track.getId()));
+						if (track.removeClip(clipId)) {
+							BeatBlockClient.LOGGER.info(String.format("[TimelineInteraction.deleteSelectedEntries] Clip removed successfully: %s", clipId));
+							selectionState.deselectClip(clipId);
+							timeline.markAnimationEventsDirty(track.getId());
+							if (Timeline.TRACK_ID_AUDIO.equals(track.getId())) {
+								onAudioRootClipDeleted(timeline, clipId);
+							}
+						} else {
+							BeatBlockClient.LOGGER.warn(String.format("[TimelineInteraction.deleteSelectedEntries] Failed to remove clip: %s", clipId));
 						}
+					} else {
+						BeatBlockClient.LOGGER.debug(String.format("[TimelineInteraction.deleteSelectedEntries] Clip not found in track %s: %s", track.getId(), clipId));
 					}
 				}
 			}
