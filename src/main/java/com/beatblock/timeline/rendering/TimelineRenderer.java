@@ -258,14 +258,40 @@ public final class TimelineRenderer {
 		switch (td.getVisualType()) {
 			case WAVEFORM -> {
 				String key = td.getKey();
-				if (key.startsWith("stem_wf_")) {
-					// 茎波形轨：从 Timeline 的 stemWaveforms 获取对应数据
-					String stemKey = key.substring("stem_wf_".length());
-					WaveformData stemWf = timeline.getStemWaveform(stemKey);
-					int color = td.hasCustomColor() ? td.getColor() : 0xFF_66_AA_FF;
-					waveformRenderer.renderStemWaveform(rowY, rowHeight, stemWf, color, timeline, layout, viewState);
+				String stemKey = key != null && key.startsWith("stem_wf_")
+					? key.substring("stem_wf_".length())
+					: null;
+				int color = td.hasCustomColor() ? td.getColor() : 0xFF_66_AA_FF;
+				Track audioTrack = timeline.getTrack(Timeline.TRACK_ID_AUDIO);
+				boolean renderedSegment = false;
+				if (audioTrack != null && !audioTrack.getClips().isEmpty()) {
+					for (Clip clip : audioTrack.getClips()) {
+						if (clip == null) continue;
+						WaveformData clipWaveform = resolveClipWaveformData(timeline, clip, stemKey);
+						if (clipWaveform == null) continue;
+						waveformRenderer.renderWaveformSegment(
+							rowY,
+							rowHeight,
+							clipWaveform,
+							color,
+							timeline,
+							layout,
+							viewState,
+							clip.getStartTimeSeconds(),
+							clip.getEndTimeSeconds()
+						);
+						renderedSegment = true;
+					}
+				}
+				if (!renderedSegment) {
+					if (stemKey != null) {
+						WaveformData stemWf = timeline.getStemWaveform(stemKey);
+						waveformRenderer.renderStemWaveform(rowY, rowHeight, stemWf, color, timeline, layout, viewState);
+					} else {
+						waveformRenderer.render(rowY, rowHeight, timeline, layout, viewState);
+					}
 				} else {
-					waveformRenderer.render(rowY, rowHeight, timeline, layout, viewState);
+					ImGui.setCursorPosY(rowY + rowHeight);
 				}
 			}
 			case IMPULSE -> {
@@ -280,6 +306,35 @@ public final class TimelineRenderer {
 				}
 			}
 		}
+	}
+
+	private WaveformData resolveClipWaveformData(Timeline timeline, Clip clip, String stemKey) {
+		if (timeline == null || clip == null) return null;
+		Object clipPathObj = timeline.getMetadata("clipAudioPath_" + clip.getId());
+		if (clipPathObj == null) return null;
+		String clipAudioKey = normalizeAudioPath(clipPathObj.toString());
+		if (clipAudioKey == null) return null;
+
+		AudioAsset asset = findAssetByAudioKey(clipAudioKey);
+		if (asset == null || asset.getBeatmap() == null) return null;
+		com.beatblock.audio.beatmap.Beatmap beatmap = asset.getBeatmap();
+		com.beatblock.audio.beatmap.WaveformPreview preview = null;
+		if (stemKey == null) {
+			preview = beatmap.waveformPreview;
+		} else if (beatmap.stemWaveforms != null) {
+			preview = beatmap.stemWaveforms.get(stemKey);
+		}
+		if (preview == null || preview.data() == null || preview.data().length == 0) return null;
+
+		float[] peaks = preview.data().clone();
+		float max = 0f;
+		for (float p : peaks) if (p > max) max = p;
+		if (max > 1e-6f && max != 1f) {
+			for (int i = 0; i < peaks.length; i++) peaks[i] /= max;
+		}
+		double duration = resolveAssetDurationSeconds(asset, timeline);
+		int sampleRate = beatmap.meta != null ? beatmap.meta.sampleRate() : 44100;
+		return new WaveformData(peaks, duration, sampleRate);
 	}
 
 	/**
@@ -1250,6 +1305,10 @@ public final class TimelineRenderer {
 			timeline.setMetadata("clipLabel_" + rootClip.getId(), fn);
 			// 多段音频播放：为每个片段绑定独立音频路径
 			timeline.setMetadata("clipAudioPath_" + rootClip.getId(), asset.getPath().toAbsolutePath().normalize().toString());
+			String clipAudioKey = buildAudioAssetKey(asset);
+			if (clipAudioKey != null) {
+				timeline.setMetadata("clipAudioKey_" + rootClip.getId(), clipAudioKey);
+			}
 		}
 	}
 

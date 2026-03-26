@@ -87,6 +87,43 @@ public final class WaveformRenderer {
 		renderWaveform(rowY, rowHeight, wf, color, timeline, layout, view, false);
 	}
 
+	/**
+	 * 仅在指定片段时间范围内渲染波形（用于多段音频场景）。
+	 */
+	public void renderWaveformSegment(float rowY, float rowHeight, WaveformData wf, int color,
+	                                  Timeline timeline, TimelineLayout layout, TimelineViewState view,
+	                                  double clipStartSeconds, double clipEndSeconds) {
+		if (timeline == null || layout == null || view == null) return;
+		if (wf == null || wf.getSampleCount() <= 0) return;
+		if (clipEndSeconds <= clipStartSeconds) return;
+
+		ImGui.setCursorPosY(rowY);
+		float minX = layout.contentLeft;
+		float minY = ImGui.getCursorScreenPosY();
+		double viewStart = view.getViewStartTimeSeconds();
+		double viewEnd = view.getViewEndTimeSeconds();
+		double visibleStart = Math.max(viewStart, clipStartSeconds);
+		double visibleEnd = Math.min(viewEnd, clipEndSeconds);
+		if (visibleEnd <= visibleStart) return;
+
+		float halfH = rowHeight * 0.42f;
+		float centerY = minY + rowHeight * 0.5f;
+		int renderSamples = (int) Math.min(layout.timelineWidth, 800);
+		if (renderSamples <= 0) return;
+		for (int i = 0; i < renderSamples; i++) {
+			double t = visibleStart + (visibleEnd - visibleStart) * (double) i / renderSamples;
+			double localT = t - clipStartSeconds;
+			if (localT < 0.0 || localT > wf.getDurationSeconds()) continue;
+			int idx = wf.timeToIndex(localT);
+			float s = wf.getSample(idx);
+			float x = view.timeToScreen(t);
+			if (x < -1 || x > layout.timelineWidth + 1) continue;
+			float y0 = centerY;
+			float y1 = y0 - s * halfH;
+			ImGui.getWindowDrawList().addLine(minX + x, y0, minX + x, y1, color, 1f);
+		}
+	}
+
 	private void renderWaveform(float rowY, float rowHeight, WaveformData wf, int color,
 	                            Timeline timeline, TimelineLayout layout, TimelineViewState view,
 	                            boolean showBeatOverlay) {

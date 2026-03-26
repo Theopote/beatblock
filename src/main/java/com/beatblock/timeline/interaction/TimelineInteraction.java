@@ -309,7 +309,7 @@ public final class TimelineInteraction {
 			contextTrackId = hit.getTrackId();
 			contextClipId = hit.getClipId();
 			// 右键命中片段时自动将其加入选中，确保右键菜单的 Delete 项可用
-			if (selectionState != null && hit.getClipId() != null && !selectionState.isClipSelected(hit.getClipId())) {
+			if (hit.getClipId() != null && !selectionState.isClipSelected(hit.getClipId())) {
 				selectionState.clearEvents();
 				selectionState.clearClips();
 				selectionState.selectClip(hit.getClipId());
@@ -346,7 +346,7 @@ public final class TimelineInteraction {
 				float boxMaxX = selectionBox.getMaxX();
 				float boxMinY = selectionBox.getMinY();
 				float boxMaxY = selectionBox.getMaxY();
-				for (int i = 0; i < INTERACTIVE_ROW_INDICES.length && i < INTERACTIVE_TRACK_IDS.length; i++) {
+				for (int i = 0; i < INTERACTIVE_ROW_INDICES.length; i++) {
 					int logicalRow = INTERACTIVE_ROW_INDICES[i];
 					if (!layout.isRowVisible(logicalRow)) continue;
 					float rowTopY = layout.getRowScreenY(logicalRow);
@@ -409,13 +409,20 @@ public final class TimelineInteraction {
 				}
 				// 联动：特征轨道事件跟随片段移动
 				if (!dragFeatureEventSnapshot.isEmpty()) {
+					double featureMoveStart = dragClipInitialStart;
+					double featureMoveEnd = dragClipInitialEnd;
 					for (Map.Entry<String, FeatureTrack> entry : timeline.getFeatureTracks().entrySet()) {
 						List<double[]> snap = dragFeatureEventSnapshot.get(entry.getKey());
 						if (snap == null) continue;
 						FeatureTrack ft = entry.getValue();
 						ft.clear();
 						for (double[] pair : snap) {
-							ft.addEvent(new FeatureEvent(Math.max(0.0, pair[0] + actualDelta), (float) pair[1]));
+							double originalTime = pair[0];
+							double shiftedTime = originalTime;
+							if (originalTime >= featureMoveStart && originalTime <= featureMoveEnd) {
+								shiftedTime = Math.max(0.0, originalTime + actualDelta);
+							}
+							ft.addEvent(new FeatureEvent(shiftedTime, (float) pair[1]));
 						}
 					}
 				}
@@ -487,7 +494,7 @@ public final class TimelineInteraction {
 				seekClockAndMusic(clock, Math.max(0, Math.min(t, duration)));
 				return;
 			}
-			for (int i = 0; i < INTERACTIVE_ROW_INDICES.length && i < INTERACTIVE_TRACK_IDS.length; i++) {
+			for (int i = 0; i < INTERACTIVE_ROW_INDICES.length; i++) {
 				int logicalRow = INTERACTIVE_ROW_INDICES[i];
 				if (!layout.isRowVisible(logicalRow)) continue;
 				if (trackListState != null && trackListState.isLocked(logicalRow)) continue;
@@ -1187,7 +1194,7 @@ public final class TimelineInteraction {
 
 	private static HitResult hitContentAtMouse(Timeline timeline, TimelineViewState viewState,
 			TimelineLayout layout, float mx, float my) {
-		for (int i = 0; i < INTERACTIVE_ROW_INDICES.length && i < INTERACTIVE_TRACK_IDS.length; i++) {
+		for (int i = 0; i < INTERACTIVE_ROW_INDICES.length; i++) {
 			int logicalRow = INTERACTIVE_ROW_INDICES[i];
 			if (!layout.isRowVisible(logicalRow)) continue;
 			float rowScreenY = layout.getRowScreenY(logicalRow);
@@ -1379,7 +1386,7 @@ public final class TimelineInteraction {
 
 	private static int logicalRowForTrackId(String trackId) {
 		if (trackId == null || trackId.isBlank()) return -1;
-		for (int i = 0; i < INTERACTIVE_TRACK_IDS.length && i < INTERACTIVE_ROW_INDICES.length; i++) {
+		for (int i = 0; i < INTERACTIVE_TRACK_IDS.length; i++) {
 			if (trackId.equals(INTERACTIVE_TRACK_IDS[i])) {
 				return INTERACTIVE_ROW_INDICES[i];
 			}
@@ -1395,7 +1402,7 @@ public final class TimelineInteraction {
 		// 多段音频模式：仅在音频轨已无任何片段时，才清理全局音频分析/波形数据。
 		if (!audioTrack.getClips().isEmpty()) return;
 
-		if (audioTrack != null && audioTrack.getAudioData() != null) {
+		if (audioTrack.getAudioData() != null) {
 			audioTrack.getAudioData().setWaveform(null);
 			audioTrack.getAudioData().clearAll();
 			audioTrack.getAudioData().clearStemWaveforms();
