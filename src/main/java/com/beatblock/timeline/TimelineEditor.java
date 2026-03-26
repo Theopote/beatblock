@@ -205,6 +205,15 @@ public final class TimelineEditor {
 		if (timeline == null || BeatBlock.musicPlayer == null || audioPlayer != BeatBlock.musicPlayer) return false;
 		Track audioTrack = timeline.getTrack(Timeline.TRACK_ID_AUDIO);
 		if (audioTrack == null || audioTrack.getClips().isEmpty()) return false;
+		boolean segmentedTimeline = false;
+		for (Clip c : audioTrack.getClips()) {
+			if (c == null) continue;
+			Object pathObj = timeline.getMetadata("clipAudioPath_" + c.getId());
+			if (pathObj != null && !pathObj.toString().isBlank()) {
+				segmentedTimeline = true;
+				break;
+			}
+		}
 
 		double clockTime = state.getClock().getCurrentTimeSeconds();
 		Clip active = null;
@@ -215,7 +224,13 @@ public final class TimelineEditor {
 				break;
 			}
 		}
-		if (active == null) return false;
+		if (active == null) {
+			if (!segmentedTimeline) return false;
+			if (BeatBlock.musicPlayer.isPlaying()) {
+				BeatBlock.musicPlayer.pause();
+			}
+			return true;
+		}
 
 		Object pathObj = timeline.getMetadata("clipAudioPath_" + active.getId());
 		if (pathObj == null) return false;

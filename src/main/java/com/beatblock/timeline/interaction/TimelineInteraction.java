@@ -426,6 +426,10 @@ public final class TimelineInteraction {
 						}
 					}
 				}
+				// 拖拽期间同步一次音频定位：若播放头已不在任何音频片段内，会在 seek 逻辑中静音/暂停。
+				if (clock != null) {
+					seekClockAndMusic(clock, clock.getCurrentTimeSeconds());
+				}
 				return;
 			}
 			if (interactionState.getMode() == InteractionMode.DRAG_EVENT && interactionState.getActiveEventId() != null
@@ -484,14 +488,6 @@ public final class TimelineInteraction {
 				interactionState.setMode(InteractionMode.SCRUB_TIME);
 				interactionState.setMouseStart(mx, my);
 				if (clock != null) seekClockAndMusic(clock, Math.max(0, Math.min(t, duration)));
-				return;
-			}
-			// 点击播放头竖线也可拖动（与标尺一致的 SCRUB 行为）
-			if (isMouseOverPlayhead(mx, my, layout, viewState, clock)) {
-				double t = viewState.screenToTime(mx - layout.contentLeft);
-				interactionState.setMode(InteractionMode.SCRUB_TIME);
-				interactionState.setMouseStart(mx, my);
-				seekClockAndMusic(clock, Math.max(0, Math.min(t, duration)));
 				return;
 			}
 			for (int i = 0; i < INTERACTIVE_ROW_INDICES.length; i++) {
@@ -560,6 +556,15 @@ public final class TimelineInteraction {
 					else if (hit.getClipId() != null) selectionState.selectClip(hit.getClipId());
 					return;
 				}
+			}
+			// 点击播放头竖线也可拖动（与标尺一致的 SCRUB 行为）
+			// 放在片段命中之后，避免音频片段与播放头重叠时误触发播放头拖动。
+			if (isMouseOverPlayhead(mx, my, layout, viewState, clock)) {
+				double t = viewState.screenToTime(mx - layout.contentLeft);
+				interactionState.setMode(InteractionMode.SCRUB_TIME);
+				interactionState.setMouseStart(mx, my);
+				seekClockAndMusic(clock, Math.max(0, Math.min(t, duration)));
+				return;
 			}
 			if (!layout.contentContains(mx, my)) {
 				return;
@@ -765,6 +770,8 @@ public final class TimelineInteraction {
 			return;
 		}
 
+		boolean segmentedTimeline = hasSegmentedClipAudio(timeline, audioTrack);
+
 		Clip targetClip = null;
 		double t = clock.getCurrentTimeSeconds();
 		for (Clip c : audioTrack.getClips()) {
@@ -775,6 +782,13 @@ public final class TimelineInteraction {
 			}
 		}
 		if (targetClip == null) {
+			if (segmentedTimeline) {
+				timeline.setMetadata("activeAudioClipId", null);
+				if (audioPlayer.isPlaying()) {
+					audioPlayer.pause();
+				}
+				return;
+			}
 			audioPlayer.setCurrentTimeSeconds(t);
 			return;
 		}
@@ -796,6 +810,16 @@ public final class TimelineInteraction {
 		}
 
 		audioPlayer.setCurrentTimeSeconds(t);
+	}
+
+	private static boolean hasSegmentedClipAudio(Timeline timeline, Track audioTrack) {
+		if (timeline == null || audioTrack == null) return false;
+		for (Clip c : audioTrack.getClips()) {
+			if (c == null) continue;
+			Object pathObj = timeline.getMetadata("clipAudioPath_" + c.getId());
+			if (pathObj != null && !pathObj.toString().isBlank()) return true;
+		}
+		return false;
 	}
 
 	private static boolean isMouseOverLoopInHandle(
