@@ -17,6 +17,8 @@ public final class EventRenderer {
 
 	private static final int EVENT_DOT_COLOR    = 0xFF_AA_CC_FF;
 	private static final int KEYFRAME_COLOR     = 0xFF_FF_CC_66;
+	private static final int ACTION_PLACE_COLOR = 0xFF_57_C4_A0;
+	private static final int ACTION_CLEAR_COLOR = 0xFF_66_66_FF;
 	private static final int GLOBAL_EVENT_COLOR = 0xFF_AA_FF_AA;
 	private static final int SELECTED_BORDER_COLOR = 0xFF_FF_FF_00;
 	private static final float MIN_BAR_HALF_WIDTH = 1.25f;
@@ -187,7 +189,12 @@ public final class EventRenderer {
 			w = Math.max(8f, Math.min(w, layout.timelineWidth - x + 1));
 			float y0 = baseY - layout.rowHeight * 0.35f;
 			float y1 = baseY + layout.rowHeight * 0.35f;
-			ImGui.getWindowDrawList().addRectFilled(baseX + x, y0, baseX + x + w, y1, fillColor, 2f);
+			int resolvedFillColor = switch (e.getActionMode()) {
+				case PLACE -> ACTION_PLACE_COLOR;
+				case CLEAR -> ACTION_CLEAR_COLOR;
+				case ANIMATE -> fillColor;
+			};
+			ImGui.getWindowDrawList().addRectFilled(baseX + x, y0, baseX + x + w, y1, resolvedFillColor, 2f);
 			if (selection != null && selection.isEventSelected(e.getEventId())) {
 				ImGui.getWindowDrawList().addRect(baseX + x, y0, baseX + x + w, y1, SELECTED_BORDER_COLOR, 0f, 0, 2f);
 			}

@@ -7,12 +7,17 @@ import com.beatblock.audio.BeatBlockRuntime;
 import com.beatblock.beat.BeatEvent;
 import com.beatblock.beat.Beatmap;
 import com.beatblock.stage.StageZone;
+import com.beatblock.timeline.TimelineAnimationEvent;
 import net.minecraft.block.Blocks;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.entity.decoration.DisplayEntity;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
+
+import java.util.HashSet;
+import java.util.Locale;
+import java.util.Set;
 
 /**
  * 客户端驱动：每帧推进 MusicPlayer、派发 BeatEvent、更新动画并应用变换。
@@ -21,6 +26,9 @@ public final class BeatBlockClientDriver {
 
 	private static long lastTickNanos;
 	private static boolean driving;
+	private static final Set<String> scheduledTimelineAnimationIds = new HashSet<>();
+	private static final double TIMELINE_EVENT_EPSILON = 1e-4;
+	private static double lastTimelineAnimationTime;
 
 	public static void onClientTick() {
 		if (!driving) return;
@@ -47,6 +55,7 @@ public final class BeatBlockClientDriver {
 		BeatBlock.beatScheduler.tick(currentTime);
 		BeatBlock.animationManager.tick(currentTime);
 		if (BeatBlock.blockAnimationEngine != null) {
+			syncTimelineBlockAnimationEvents(currentTime);
 			BeatBlock.blockAnimationEngine.tick(currentTime);
 		}
 
@@ -79,11 +88,13 @@ public final class BeatBlockClientDriver {
 
 	public static void startDriving() {
 		lastTickNanos = 0;
+		resetTimelineAnimationScheduling();
 		driving = true;
 	}
 
 	public static void stopDriving() {
 		driving = false;
+		resetTimelineAnimationScheduling();
 	}
 
 	public static boolean isDriving() {
@@ -176,7 +187,43 @@ public final class BeatBlockClientDriver {
 		}
 		BeatBlockRuntime.getInstance().stop();
 		BeatBlock.animationManager.clear();
+		resetTimelineAnimationScheduling();
 		stopDriving();
+	}
+
+	private static void syncTimelineBlockAnimationEvents(double currentTime) {
+		if (BeatBlock.timeline == null || BeatBlock.blockAnimationEngine == null) return;
+		if (currentTime + TIMELINE_EVENT_EPSILON < lastTimelineAnimationTime) {
+			resetTimelineAnimationScheduling();
+		}
+		for (TimelineAnimationEvent event : BeatBlock.timeline.getBlockAnimationEvents()) {
+			if (event.getTimeSeconds() > currentTime + TIMELINE_EVENT_EPSILON) {
+				break;
+			}
+			String scheduleKey = scheduleKey(event);
+			if (!scheduledTimelineAnimationIds.add(scheduleKey)) continue;
+			BeatBlock.blockAnimationEngine.scheduleTimelineEvent(event);
+		}
+		lastTimelineAnimationTime = currentTime;
+	}
+
+	private static void resetTimelineAnimationScheduling() {
+		scheduledTimelineAnimationIds.clear();
+		lastTimelineAnimationTime = 0.0;
+		if (BeatBlock.blockAnimationEngine != null) {
+			BeatBlock.blockAnimationEngine.clear();
+		}
+	}
+
+	private static String scheduleKey(TimelineAnimationEvent event) {
+		if (event.getEventId() != null && !event.getEventId().isBlank()) {
+			return event.getEventId();
+		}
+		return String.format(Locale.ROOT, "%s|%.6f|%s|%s",
+			event.getActionMode().name(),
+			event.getTimeSeconds(),
+			event.getAnimationTypeId(),
+			event.getTargetObjectId());
 	}
 
 	public static void togglePlayback() {

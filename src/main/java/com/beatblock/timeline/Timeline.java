@@ -321,6 +321,7 @@ public class Timeline {
 	 */
 	public void markAnimationEventsDirty(String trackId) {
 		if (TRACK_ID_ANIMATION_BLOCK.equals(trackId)) blockAnimationDirty = true;
+		if (isBlockAnimationFeatureTrackId(trackId)) blockAnimationDirty = true;
 		if (TRACK_ID_ANIMATION_AUTO.equals(trackId)) autoAnimationDirty = true;
 	}
 
@@ -416,6 +417,7 @@ public class Timeline {
 		Clip clip = TimelineOperations.addClip(t, e.getTimeSeconds(), e.getEndTimeSeconds());
 		if (clip == null) return;
 		Map<String, Object> params = new HashMap<>();
+		params.put("actionMode", e.getActionMode().name());
 		params.put("animationType", e.getAnimationTypeId());
 		params.put("targetObject", e.getTargetObjectId());
 		params.put("energy", e.getEnergy());

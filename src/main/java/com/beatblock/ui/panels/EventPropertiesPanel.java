@@ -6,6 +6,7 @@ import com.beatblock.engine.StageObject;
 import com.beatblock.timeline.Clip;
 import com.beatblock.timeline.EventType;
 import com.beatblock.timeline.Timeline;
+import com.beatblock.timeline.TimelineAnimationActionMode;
 import com.beatblock.timeline.TimelineEditor;
 import com.beatblock.timeline.TimelineEvent;
 import com.beatblock.timeline.Track;
@@ -120,10 +121,14 @@ public class EventPropertiesPanel {
 			ImGui.sameLine();
 			ImGui.text(generatedBy);
 		}
+		ImGui.textDisabled("Action Mode");
+		ImGui.sameLine();
+		ImGui.text(TimelineAnimationActionMode.fromValue(params.get("actionMode")).name());
 	}
 
 	private void renderAnimationEditor(EventRef ref, Timeline timeline) {
 		Map<String, Object> params = ref.event().getParameters();
+		List<Option> actionOptions = collectActionOptions();
 		List<Option> animationOptions = collectAnimationOptions();
 		List<Option> targetOptions = collectTargetOptions();
 
@@ -137,13 +142,19 @@ public class EventPropertiesPanel {
 
 		String currentAnimationId = stringParam(params, "animationType");
 		String currentTargetId = stringParam(params, "targetObject");
+		String currentActionMode = stringParam(params, "actionMode", TimelineAnimationActionMode.ANIMATE.name());
+		ImInt actionIndex = new ImInt(indexOfOption(actionOptions, currentActionMode));
 		ImInt animationIndex = new ImInt(indexOfOption(animationOptions, currentAnimationId));
 		ImInt targetIndex = new ImInt(indexOfOption(targetOptions, currentTargetId));
+		String[] actionLabels = optionLabels(actionOptions);
 		String[] animationLabels = optionLabels(animationOptions);
 		String[] targetLabels = optionLabels(targetOptions);
 
 		ImGui.spacing();
 		ImGui.text("Binding");
+		if (ImGui.combo("动作模式##eventActionMode", actionIndex, actionLabels)) {
+			validationError = null;
+		}
 		if (ImGui.combo("动画模板##eventAnimation", animationIndex, animationLabels)) {
 			validationError = null;
 		}
@@ -168,6 +179,7 @@ public class EventPropertiesPanel {
 
 		if (applied) {
 			applyAnimationChanges(ref, timeline,
+				actionOptions.get(actionIndex.get()).id(),
 				animationOptions.get(animationIndex.get()).id(),
 				targetOptions.get(targetIndex.get()).id());
 		}
@@ -176,13 +188,14 @@ public class EventPropertiesPanel {
 		}
 	}
 
-	private void applyAnimationChanges(EventRef ref, Timeline timeline, String animationId, String targetObjectId) {
+	private void applyAnimationChanges(EventRef ref, Timeline timeline, String actionMode, String animationId, String targetObjectId) {
 		try {
 			double newTime = Math.max(0.0, Double.parseDouble(valueOf(timeBuffer).trim()));
 			double newDuration = Math.max(0.01, Double.parseDouble(valueOf(durationBuffer).trim()));
 			float newEnergy = (float) Math.max(0.0, Math.min(1.0, Double.parseDouble(valueOf(energyBuffer).trim())));
 
 			ref.event().setTimeSeconds(newTime);
+			ref.event().setParameter("actionMode", TimelineAnimationActionMode.fromValue(actionMode).name());
 			ref.event().setParameter("durationSeconds", newDuration);
 			ref.event().setParameter("energy", newEnergy);
 			ref.event().setParameter("animationType", animationId);
@@ -253,6 +266,19 @@ public class EventPropertiesPanel {
 		defs.sort(Comparator.comparing(AnimationDefinition::getName, String.CASE_INSENSITIVE_ORDER));
 		for (AnimationDefinition def : defs) {
 			options.add(new Option(def.getId(), def.getName() + " [" + def.getId() + "]"));
+		}
+		return options;
+	}
+
+	private List<Option> collectActionOptions() {
+		List<Option> options = new ArrayList<>();
+		for (TimelineAnimationActionMode mode : TimelineAnimationActionMode.values()) {
+			String label = switch (mode) {
+				case ANIMATE -> "动画";
+				case PLACE -> "放置";
+				case CLEAR -> "清除";
+			};
+			options.add(new Option(mode.name(), label + " [" + mode.name() + "]"));
 		}
 		return options;
 	}
