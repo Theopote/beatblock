@@ -1,6 +1,7 @@
 package com.beatblock.timeline.rendering;
 
 import com.beatblock.timeline.Timeline;
+import com.beatblock.timeline.Track;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -58,6 +59,42 @@ public final class TrackRegistry {
 	};
 
 	private TrackRegistry() {}
+
+	public static List<TrackDefinition> buildBlockAnimationControlTracks(Timeline timeline) {
+		List<TrackDefinition> result = new ArrayList<>();
+		if (timeline == null) return List.of();
+
+		int extIdx = 0;
+		for (String key : timeline.getFeatureTracks().keySet()) {
+			String trackId = Timeline.blockAnimationFeatureTrackId(key);
+			if (timeline.getTrack(trackId) == null) continue;
+			result.add(new TrackDefinition(
+				trackId,
+				localizedName(key),
+				TrackDefinition.VisualType.ANIMATION_CLIP,
+				TrackDefinition.GROUP_RHYTHM,
+				colorForKey(key, extIdx)
+			));
+			extIdx++;
+		}
+
+		for (Track track : timeline.getTracks()) {
+			if (!Timeline.isBlockAnimationFeatureTrackId(track.getId())) continue;
+			String key = Timeline.blockAnimationFeatureKeyFromTrackId(track.getId());
+			boolean alreadyIncluded = result.stream().anyMatch(td -> td.getKey().equals(track.getId()));
+			if (alreadyIncluded) continue;
+			result.add(new TrackDefinition(
+				track.getId(),
+				localizedName(key),
+				TrackDefinition.VisualType.ANIMATION_CLIP,
+				TrackDefinition.GROUP_EXTENDED,
+				colorForKey(key, extIdx)
+			));
+			extIdx++;
+		}
+
+		return List.copyOf(result);
+	}
 
 	/**
 	 * 从 Timeline 的当前特征数据构建音频子轨定义列表（含波形行）。
@@ -151,8 +188,8 @@ public final class TrackRegistry {
 		return List.copyOf(result);
 	}
 
-	/** 本地化显示名称（未知 key 直接大写返回）。 */
-	private static String localizedName(String key) {
+	/** 本地化显示名称（未知 key 直接返回原 key）。 */
+	public static String localizedName(String key) {
 		return switch (key.toLowerCase()) {
 			case "kick"         -> "底鼓";
 			case "snare"        -> "军鼓";

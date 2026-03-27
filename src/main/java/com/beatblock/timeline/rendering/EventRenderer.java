@@ -164,6 +164,10 @@ public final class EventRenderer {
 	}
 
 	public void renderAnimationEventBlocks(float rowY, List<TimelineAnimationEvent> events, TimelineLayout layout, TimelineViewState view, SelectionState selection) {
+		renderAnimationEventBlocks(rowY, events, layout, view, selection, KEYFRAME_COLOR);
+	}
+
+	public void renderAnimationEventBlocks(float rowY, List<TimelineAnimationEvent> events, TimelineLayout layout, TimelineViewState view, SelectionState selection, int fillColor) {
 		if (view == null || layout == null || events.isEmpty()) return;
 		ImGui.setCursorPosY(rowY);
 		float baseX = layout.contentLeft;
@@ -183,7 +187,7 @@ public final class EventRenderer {
 			w = Math.max(8f, Math.min(w, layout.timelineWidth - x + 1));
 			float y0 = baseY - layout.rowHeight * 0.35f;
 			float y1 = baseY + layout.rowHeight * 0.35f;
-			ImGui.getWindowDrawList().addRectFilled(baseX + x, y0, baseX + x + w, y1, KEYFRAME_COLOR, 2f);
+			ImGui.getWindowDrawList().addRectFilled(baseX + x, y0, baseX + x + w, y1, fillColor, 2f);
 			if (selection != null && selection.isEventSelected(e.getEventId())) {
 				ImGui.getWindowDrawList().addRect(baseX + x, y0, baseX + x + w, y1, SELECTED_BORDER_COLOR, 0f, 0, 2f);
 			}

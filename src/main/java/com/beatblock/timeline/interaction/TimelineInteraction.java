@@ -12,10 +12,7 @@ import com.beatblock.timeline.TimelineMarker;
 import com.beatblock.timeline.TimelineOperations;
 import com.beatblock.timeline.Track;
 import com.beatblock.timeline.editor.*;
-import com.beatblock.timeline.rendering.TimelineLayout;
-import com.beatblock.timeline.rendering.TimelineTrackMeta;
-import com.beatblock.timeline.rendering.TimelineToolbarState;
-import com.beatblock.timeline.rendering.TimelineTrackListState;
+import com.beatblock.timeline.rendering.*;
 import imgui.ImGui;
 import imgui.flag.ImGuiHoveredFlags;
 import imgui.flag.ImGuiKey;
@@ -133,6 +130,23 @@ public final class TimelineInteraction {
 		TimelineTrackMeta.ROW_CAMERA,
 		TimelineTrackMeta.ROW_GLOBAL_EVENT
 	};
+
+	private record InteractiveTrackSlot(String trackId, int rowIndex) {}
+
+	private static List<InteractiveTrackSlot> interactiveTrackSlots(Timeline timeline) {
+		List<InteractiveTrackSlot> slots = new ArrayList<>();
+		slots.add(new InteractiveTrackSlot(Timeline.TRACK_ID_AUDIO, TimelineTrackMeta.ROW_AUDIO_GROUP));
+		if (timeline != null) {
+			List<TrackDefinition> defs = TrackRegistry.buildBlockAnimationControlTracks(timeline);
+			for (int i = 0; i < defs.size() && i < TimelineTrackMeta.MAX_ANIMATION_SUB_ROWS; i++) {
+				slots.add(new InteractiveTrackSlot(defs.get(i).getKey(), TimelineTrackMeta.ROW_ANIM_FEATURES_START + i));
+			}
+		}
+		slots.add(new InteractiveTrackSlot(Timeline.TRACK_ID_ANIMATION_AUTO, TimelineTrackMeta.ROW_ANIM_AUTO));
+		slots.add(new InteractiveTrackSlot(Timeline.TRACK_ID_CAMERA, TimelineTrackMeta.ROW_CAMERA));
+		slots.add(new InteractiveTrackSlot(Timeline.TRACK_ID_GLOBAL, TimelineTrackMeta.ROW_GLOBAL_EVENT));
+		return slots;
+	}
 
 	public void update(
 		Timeline timeline,
@@ -355,13 +369,13 @@ public final class TimelineInteraction {
 				float boxMaxX = selectionBox.getMaxX();
 				float boxMinY = selectionBox.getMinY();
 				float boxMaxY = selectionBox.getMaxY();
-				for (int i = 0; i < INTERACTIVE_ROW_INDICES.length; i++) {
-					int logicalRow = INTERACTIVE_ROW_INDICES[i];
+				for (InteractiveTrackSlot slot : interactiveTrackSlots(timeline)) {
+					int logicalRow = slot.rowIndex();
 					if (!layout.isRowVisible(logicalRow)) continue;
 					float rowTopY = layout.getRowScreenY(logicalRow);
 					float rowBotY = rowTopY + layout.getRowHeight(logicalRow);
 					if (rowBotY < boxMinY || rowTopY > boxMaxY) continue;
-					Track track = timeline.getTrack(INTERACTIVE_TRACK_IDS[i]);
+					Track track = timeline.getTrack(slot.trackId());
 					if (track == null) continue;
 					for (Clip clip : track.getClips()) {
 						for (TimelineEvent e : clip.getEvents()) {
@@ -387,7 +401,7 @@ public final class TimelineInteraction {
 			}
 			if (interactionState.getMode() == InteractionMode.DRAG_CLIP
 					&& interactionState.getActiveClipId() != null && interactionState.getActiveTrackId() != null) {
-				if (isTrackLocked(trackListState, interactionState.getActiveTrackId())) return;
+				if (isTrackLocked(timeline, trackListState, interactionState.getActiveTrackId())) return;
 				double mouseTime = viewState.screenToTime(mx - layout.contentLeft);
 				double clipDuration = dragClipInitialEnd - dragClipInitialStart;
 				double newStart = DragController.dragClip(timeline, interactionState.getActiveTrackId(),
@@ -397,12 +411,8 @@ public final class TimelineInteraction {
 				// 允许片段右移时自动扩展时间线总时长。
 				timeline.setDurationSeconds(Math.max(timeline.getDurationSeconds(), newStart + clipDuration));
 				// 联动：将其他轨道上快照的事件按同样 delta 移动
-				String[] syncTrackIds = {
-					Timeline.TRACK_ID_ANIMATION_BLOCK, Timeline.TRACK_ID_ANIMATION_AUTO,
-					Timeline.TRACK_ID_CAMERA, Timeline.TRACK_ID_GLOBAL
-				};
-				for (String sid : syncTrackIds) {
-					Track st = timeline.getTrack(sid);
+				for (Track st : timeline.getTracks()) {
+					if (Timeline.TRACK_ID_AUDIO.equals(st.getId())) continue;
 					if (st == null) continue;
 					boolean dirtied = false;
 					for (Clip sc : st.getClips()) {
@@ -414,7 +424,7 @@ public final class TimelineInteraction {
 							}
 						}
 					}
-					if (dirtied) timeline.markAnimationEventsDirty(sid);
+					if (dirtied) timeline.markAnimationEventsDirty(st.getId());
 				}
 				// 联动：特征轨道事件跟随片段移动
 				if (!dragFeatureEventSnapshot.isEmpty()) {
@@ -443,7 +453,7 @@ public final class TimelineInteraction {
 			}
 			if (interactionState.getMode() == InteractionMode.DRAG_EVENT && interactionState.getActiveEventId() != null
 				&& interactionState.getActiveTrackId() != null && interactionState.getActiveClipId() != null) {
-				if (isTrackLocked(trackListState, interactionState.getActiveTrackId())) {
+				if (isTrackLocked(timeline, trackListState, interactionState.getActiveTrackId())) {
 					return;
 				}
 				double t = viewState.screenToTime(mx - layout.contentLeft);
@@ -499,13 +509,13 @@ public final class TimelineInteraction {
 				if (clock != null) seekClockAndMusic(clock, Math.max(0, Math.min(t, duration)));
 				return;
 			}
-			for (int i = 0; i < INTERACTIVE_ROW_INDICES.length; i++) {
-				int logicalRow = INTERACTIVE_ROW_INDICES[i];
+			for (InteractiveTrackSlot slot : interactiveTrackSlots(timeline)) {
+				int logicalRow = slot.rowIndex();
 				if (!layout.isRowVisible(logicalRow)) continue;
 				if (trackListState != null && trackListState.isLocked(logicalRow)) continue;
 				float rowScreenY = layout.getRowScreenY(logicalRow);
 				float rowH = layout.getRowHeight(logicalRow);
-				HitResult hit = HitTestSystem.hitTestTrackContent(timeline, INTERACTIVE_TRACK_IDS[i], mx, my,
+				HitResult hit = HitTestSystem.hitTestTrackContent(timeline, slot.trackId(), mx, my,
 					layout.contentLeft, rowScreenY, rowH, layout.contentWidth, viewState);
 				if (hit.isEmpty()) continue;
 				// 音频轨上的纯片段命中 → 进入 DRAG_CLIP 模式（可左右拖动片段并联动其他轨道事件）
@@ -526,12 +536,8 @@ public final class TimelineInteraction {
 						dragFeatureEventSnapshot.clear();
 						double cs = dragClipInitialStart;
 						double ce = dragClipInitialEnd;
-						String[] syncTrackIds = {
-							Timeline.TRACK_ID_ANIMATION_BLOCK, Timeline.TRACK_ID_ANIMATION_AUTO,
-							Timeline.TRACK_ID_CAMERA, Timeline.TRACK_ID_GLOBAL
-						};
-						for (String sid : syncTrackIds) {
-							Track st = timeline.getTrack(sid);
+						for (Track st : timeline.getTracks()) {
+							if (Timeline.TRACK_ID_AUDIO.equals(st.getId())) continue;
 							if (st == null) continue;
 							for (Clip sc : st.getClips()) {
 								for (TimelineEvent se : sc.getEvents()) {
@@ -894,7 +900,7 @@ public final class TimelineInteraction {
 		boolean canDeleteAny = canDeleteSelection || canDeleteContextClip;
 		boolean hasClipboard = !clipboardEvents.isEmpty();
 		EventRef propertiesRef = resolvePropertiesEventRef(timeline, selectionState);
-		boolean canOpenProperties = propertiesRef != null && !isTrackLocked(trackListState, propertiesRef.track.getId());
+		boolean canOpenProperties = propertiesRef != null && !isTrackLocked(timeline, trackListState, propertiesRef.track.getId());
 		BeatBlockClient.LOGGER.info(String.format(
 			"[TimelineInteraction.renderContextMenu] About to render menu items: hasSelection=%s, hasClipboard=%s, canDeleteAny=%s",
 			hasSelection, hasClipboard, canDeleteAny
@@ -1017,7 +1023,7 @@ public final class TimelineInteraction {
 			Track track = timeline.getTrack(contextTrackId);
 			boolean trackExists = track != null;
 			boolean clipExists = trackExists && track.getClip(contextClipId) != null;
-			boolean trackNotLocked = !isTrackLocked(trackListState, contextTrackId);
+			boolean trackNotLocked = !isTrackLocked(timeline, trackListState, contextTrackId);
 			boolean result = trackExists && clipExists && trackNotLocked;
 			BeatBlockClient.LOGGER.debug(String.format(
 				"[TimelineInteraction.canDeleteContextClip] With contextTrackId: trackExists=%s, clipExists=%s, trackNotLocked=%s, result=%s",
@@ -1029,7 +1035,7 @@ public final class TimelineInteraction {
 		for (Track track : timeline.getTracks()) {
 			Clip clip = track.getClip(contextClipId);
 			if (clip != null) {
-				boolean trackNotLocked = !isTrackLocked(trackListState, track.getId());
+				boolean trackNotLocked = !isTrackLocked(timeline, trackListState, track.getId());
 				BeatBlockClient.LOGGER.debug(String.format(
 					"[TimelineInteraction.canDeleteContextClip] Found clip in track %s: trackNotLocked=%s",
 					track.getId(), trackNotLocked
@@ -1087,7 +1093,7 @@ public final class TimelineInteraction {
 			TimelineTrackListState trackListState) {
 		EventRef ref = resolvePropertiesEventRef(timeline, selectionState);
 		if (ref == null || ref.event == null) return;
-		if (isTrackLocked(trackListState, ref.track.getId())) return;
+		if (isTrackLocked(timeline, trackListState, ref.track.getId())) return;
 		propertiesEventId = ref.event.getId();
 		propertiesTimeBuffer.set(String.format(java.util.Locale.ROOT, "%.6f", ref.event.getTimeSeconds()));
 		loadPropertiesParameterBuffers(ref.event);
@@ -1139,7 +1145,7 @@ public final class TimelineInteraction {
 			ImGui.endPopup();
 			return;
 		}
-		boolean trackLocked = isTrackLocked(trackListState, ref.track.getId());
+		boolean trackLocked = isTrackLocked(timeline, trackListState, ref.track.getId());
 		boolean applyRequested = !trackLocked && ImGui.isKeyPressed(ImGuiKey.Enter);
 		boolean closeRequested = ImGui.isKeyPressed(ImGuiKey.Escape);
 
@@ -1288,16 +1294,16 @@ public final class TimelineInteraction {
 		return null;
 	}
 
-	private static HitResult hitContentAtMouse(Timeline timeline, TimelineViewState viewState,
+	private HitResult hitContentAtMouse(Timeline timeline, TimelineViewState viewState,
 			TimelineLayout layout, float mx, float my) {
-		for (int i = 0; i < INTERACTIVE_ROW_INDICES.length; i++) {
-			int logicalRow = INTERACTIVE_ROW_INDICES[i];
+		for (InteractiveTrackSlot slot : interactiveTrackSlots(timeline)) {
+			int logicalRow = slot.rowIndex();
 			if (!layout.isRowVisible(logicalRow)) continue;
 			float rowScreenY = layout.getRowScreenY(logicalRow);
 			float rowH = layout.getRowHeight(logicalRow);
 			HitResult hit = HitTestSystem.hitTestTrackContent(
 				timeline,
-				INTERACTIVE_TRACK_IDS[i],
+				slot.trackId(),
 				mx,
 				my,
 				layout.contentLeft,
@@ -1371,11 +1377,11 @@ public final class TimelineInteraction {
 	private Track resolvePasteTargetTrack(Timeline timeline, ClipboardEvent src, TimelineTrackListState trackListState) {
 		if (contextTrackId != null) {
 			Track t = timeline.getTrack(contextTrackId);
-			if (t != null && !isTrackLocked(trackListState, t.getId())) return t;
+			if (t != null && !isTrackLocked(timeline, trackListState, t.getId())) return t;
 		}
 		Track fallback = timeline.getTrack(src.trackId);
 		if (fallback == null) return null;
-		return isTrackLocked(trackListState, fallback.getId()) ? null : fallback;
+		return isTrackLocked(timeline, trackListState, fallback.getId()) ? null : fallback;
 	}
 
 	private Clip resolveOrCreatePasteTargetClip(
@@ -1412,7 +1418,7 @@ public final class TimelineInteraction {
 		return created;
 	}
 
-	private static void deleteSelectedEntries(Timeline timeline, SelectionState selectionState, TimelineTrackListState trackListState) {
+	private void deleteSelectedEntries(Timeline timeline, SelectionState selectionState, TimelineTrackListState trackListState) {
 		if (timeline == null || selectionState == null) return;
 		if (selectionState.getSelectedEvents().isEmpty() && selectionState.getSelectedClips().isEmpty()) {
 			BeatBlockClient.LOGGER.warn("[TimelineInteraction.deleteSelectedEntries] No clips or events to delete");
@@ -1426,7 +1432,7 @@ public final class TimelineInteraction {
 		));
 		if (!clipIds.isEmpty()) {
 			for (Track track : timeline.getTracks()) {
-				if (isTrackLocked(trackListState, track.getId())) {
+				if (isTrackLocked(timeline, trackListState, track.getId())) {
 					BeatBlockClient.LOGGER.debug(String.format("[TimelineInteraction.deleteSelectedEntries] Track locked: %s", track.getId()));
 					continue;
 				}
@@ -1454,7 +1460,7 @@ public final class TimelineInteraction {
 
 		List<String> eventIds = new ArrayList<>(selectionState.getSelectedEvents());
 		for (Track track : timeline.getTracks()) {
-			if (isTrackLocked(trackListState, track.getId())) continue;
+			if (isTrackLocked(timeline, trackListState, track.getId())) continue;
 			for (Clip clip : track.getClips()) {
 				for (String eventId : eventIds) {
 					if (eventId == null) continue;
@@ -1467,7 +1473,7 @@ public final class TimelineInteraction {
 		}
 	}
 
-	private static boolean hasDeletableSelection(Timeline timeline, SelectionState selectionState,
+	private boolean hasDeletableSelection(Timeline timeline, SelectionState selectionState,
 			TimelineTrackListState trackListState) {
 		if (timeline == null || selectionState == null) return false;
 
@@ -1475,7 +1481,7 @@ public final class TimelineInteraction {
 			for (String clipId : selectionState.getSelectedClips()) {
 				if (clipId == null) continue;
 				for (Track track : timeline.getTracks()) {
-					if (track.getClip(clipId) != null && !isTrackLocked(trackListState, track.getId())) {
+					if (track.getClip(clipId) != null && !isTrackLocked(timeline, trackListState, track.getId())) {
 						return true;
 					}
 				}
@@ -1485,25 +1491,25 @@ public final class TimelineInteraction {
 		if (selectionState.getSelectedEvents().isEmpty()) return false;
 		for (String eventId : selectionState.getSelectedEvents()) {
 			EventRef ref = findEventRef(timeline, eventId);
-			if (ref != null && !isTrackLocked(trackListState, ref.track.getId())) {
+			if (ref != null && !isTrackLocked(timeline, trackListState, ref.track.getId())) {
 				return true;
 			}
 		}
 		return false;
 	}
 
-	private static boolean isTrackLocked(TimelineTrackListState trackListState, String trackId) {
+	private boolean isTrackLocked(Timeline timeline, TimelineTrackListState trackListState, String trackId) {
 		if (trackListState == null || trackId == null || trackId.isBlank()) return false;
-		int logicalRow = logicalRowForTrackId(trackId);
+		int logicalRow = logicalRowForTrackId(timeline, trackId);
 		if (logicalRow < 0) return false;
 		return trackListState.isLocked(logicalRow);
 	}
 
-	private static int logicalRowForTrackId(String trackId) {
+	private int logicalRowForTrackId(Timeline timeline, String trackId) {
 		if (trackId == null || trackId.isBlank()) return -1;
-		for (int i = 0; i < INTERACTIVE_TRACK_IDS.length; i++) {
-			if (trackId.equals(INTERACTIVE_TRACK_IDS[i])) {
-				return INTERACTIVE_ROW_INDICES[i];
+		for (InteractiveTrackSlot slot : interactiveTrackSlots(timeline)) {
+			if (trackId.equals(slot.trackId())) {
+				return slot.rowIndex();
 			}
 		}
 		return -1;

@@ -20,10 +20,13 @@ public final class TimelineTrackMeta {
 	public static final int ROW_AUDIO_SUBS_END   = ROW_AUDIO_SUBS_START + MAX_AUDIO_SUB_ROWS - 1;
 
 	public static final int ROW_ANIMATION_GROUP = ROW_AUDIO_SUBS_END + 1;  // = 9
-	public static final int ROW_ANIM_BLOCK      = ROW_ANIMATION_GROUP + 1; // = 10
-	public static final int ROW_ANIM_AUTO       = ROW_ANIM_BLOCK + 1;      // = 11
-	public static final int ROW_CAMERA          = ROW_ANIM_AUTO + 1;       // = 12
-	public static final int ROW_GLOBAL_EVENT    = ROW_CAMERA + 1;           // = 13
+	public static final int ROW_ANIM_BLOCK      = ROW_ANIMATION_GROUP + 1;
+	public static final int MAX_ANIMATION_SUB_ROWS = 16;
+	public static final int ROW_ANIM_FEATURES_START = ROW_ANIM_BLOCK + 1;
+	public static final int ROW_ANIM_FEATURES_END = ROW_ANIM_FEATURES_START + MAX_ANIMATION_SUB_ROWS - 1;
+	public static final int ROW_ANIM_AUTO       = ROW_ANIM_FEATURES_END + 1;
+	public static final int ROW_CAMERA          = ROW_ANIM_AUTO + 1;
+	public static final int ROW_GLOBAL_EVENT    = ROW_CAMERA + 1;
 
 	/** 总行槽数（最大值，含所有音频子轨槽位）。 */
 	private static final int ROW_COUNT = ROW_GLOBAL_EVENT + 1;             // = 14
@@ -54,6 +57,9 @@ public final class TimelineTrackMeta {
 		}
 		DEFAULT_NAMES[ROW_ANIMATION_GROUP] = "动画";
 		DEFAULT_NAMES[ROW_ANIM_BLOCK]      = "方块动画";
+		for (int i = ROW_ANIM_FEATURES_START; i <= ROW_ANIM_FEATURES_END; i++) {
+			DEFAULT_NAMES[i] = "";
+		}
 		DEFAULT_NAMES[ROW_ANIM_AUTO]       = "自动动画";
 		DEFAULT_NAMES[ROW_CAMERA]          = "摄像机";
 		DEFAULT_NAMES[ROW_GLOBAL_EVENT]    = "事件";
@@ -64,6 +70,9 @@ public final class TimelineTrackMeta {
 		}
 		PARENT_ROW[ROW_ANIMATION_GROUP] = NO_PARENT;
 		PARENT_ROW[ROW_ANIM_BLOCK]      = ROW_ANIMATION_GROUP;
+		for (int i = ROW_ANIM_FEATURES_START; i <= ROW_ANIM_FEATURES_END; i++) {
+			PARENT_ROW[i] = ROW_ANIMATION_GROUP;
+		}
 		PARENT_ROW[ROW_ANIM_AUTO]       = ROW_ANIMATION_GROUP;
 		PARENT_ROW[ROW_CAMERA]          = NO_PARENT;
 		PARENT_ROW[ROW_GLOBAL_EVENT]    = NO_PARENT;
@@ -89,6 +98,15 @@ public final class TimelineTrackMeta {
 		return rowIndex - ROW_AUDIO_SUBS_START;
 	}
 
+	public static boolean isAnimationFeatureSubRow(int rowIndex) {
+		return rowIndex >= ROW_ANIM_FEATURES_START && rowIndex <= ROW_ANIM_FEATURES_END;
+	}
+
+	public static int animationFeatureSubRowSlot(int rowIndex) {
+		if (!isAnimationFeatureSubRow(rowIndex)) return -1;
+		return rowIndex - ROW_ANIM_FEATURES_START;
+	}
+
 	/** 是否有父轨道（是否为子轨道，需要缩进显示） */
 	public static boolean hasParent(int rowIndex) {
 		if (rowIndex < 0 || rowIndex >= PARENT_ROW.length) return false;
@@ -108,6 +126,7 @@ public final class TimelineTrackMeta {
 		if (rowIndex == ROW_AUDIO_GROUP) return "音频片段";
 		if (isAudioSubRow(rowIndex)) return "节奏特征";
 		if (rowIndex == ROW_ANIMATION_GROUP || rowIndex == ROW_ANIM_BLOCK || rowIndex == ROW_ANIM_AUTO) return "动画";
+		if (isAnimationFeatureSubRow(rowIndex)) return "动画控制";
 		if (rowIndex == ROW_CAMERA) return "摄像机";
 		if (rowIndex == ROW_GLOBAL_EVENT) return "事件";
 		return "";

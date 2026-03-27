@@ -60,6 +60,9 @@ public final class TimelineTrackListState {
 		if (TimelineTrackMeta.isAudioSubRow(rowIndex) && locked[TimelineTrackMeta.ROW_AUDIO_GROUP]) {
 			return true;
 		}
+		if (TimelineTrackMeta.isAnimationFeatureSubRow(rowIndex) && locked[TimelineTrackMeta.ROW_ANIM_BLOCK]) {
+			return true;
+		}
 		return locked[rowIndex];
 	}
 

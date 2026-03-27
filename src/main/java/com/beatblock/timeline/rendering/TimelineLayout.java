@@ -91,6 +91,7 @@ public final class TimelineLayout {
 	 * 默认值 3 与旧的低/中/高三频段行为一致。
 	 */
 	private int activeAudioSubRowCount = 3;
+	private int activeAnimationSubRowCount = 0;
 
 	/** 时间线区域在窗口内的起始 Y（用于 setCursorPosY） */
 	public float startY;
@@ -104,6 +105,12 @@ public final class TimelineLayout {
 	}
 
 	public int getActiveAudioSubRowCount() { return activeAudioSubRowCount; }
+
+	public void setActiveAnimationSubRowCount(int count) {
+		activeAnimationSubRowCount = Math.max(0, Math.min(count, TimelineTrackMeta.MAX_ANIMATION_SUB_ROWS));
+	}
+
+	public int getActiveAnimationSubRowCount() { return activeAnimationSubRowCount; }
 
 	/**
 	 * 采样固定标尺区域的锚点与共享宽度。本帧只调用一次。
@@ -155,7 +162,7 @@ public final class TimelineLayout {
 		int v = 0;
 		float cursorY = 0f;
 		for (int i = 0; i < CONTENT_ROW_COUNT; i++) {
-			boolean visible = isRowVisible(i, trackListState, activeAudioSubRowCount);
+			boolean visible = isRowVisible(i, trackListState, activeAudioSubRowCount, activeAnimationSubRowCount);
 			float h = resolveRowHeight(i, trackListState);
 			rowHeights[i] = h;
 			if (visible) {
@@ -184,11 +191,15 @@ public final class TimelineLayout {
 		return ROW_HEIGHT;
 	}
 
-	private static boolean isRowVisible(int rowIndex, TimelineTrackListState state, int activeAudioSubRowCount) {
+	private static boolean isRowVisible(int rowIndex, TimelineTrackListState state, int activeAudioSubRowCount, int activeAnimationSubRowCount) {
 		// 超出活跃音频子轨数量的槽位始终不可见
 		if (TimelineTrackMeta.isAudioSubRow(rowIndex)) {
 			int slot = TimelineTrackMeta.audioSubRowSlot(rowIndex);
 			if (slot >= activeAudioSubRowCount) return false;
+		}
+		if (TimelineTrackMeta.isAnimationFeatureSubRow(rowIndex)) {
+			int slot = TimelineTrackMeta.animationFeatureSubRowSlot(rowIndex);
+			if (slot >= activeAnimationSubRowCount) return false;
 		}
 		if (state == null) return true;
 		int parent = TimelineTrackMeta.getParentRowIndex(rowIndex);

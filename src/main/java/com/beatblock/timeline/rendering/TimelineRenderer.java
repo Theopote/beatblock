@@ -43,6 +43,7 @@ public final class TimelineRenderer {
 	private static final int FREQ_LOW_COLOR = 0xFF_77_77_DD;
 	private static final int FREQ_MID_COLOR = 0xFF_57_C4_A0;
 	private static final int FREQ_HIGH_COLOR = 0xFF_27_A0_EF;
+	private static final int ANIMATION_CLIP_DEFAULT_COLOR = 0xFF_FF_CC_66;
 	private static final int AUDIO_CLIP_FILL_COLOR = 0xAA_57_C4_A0;
 	private static final int AUDIO_CLIP_BORDER_COLOR = 0xFF_7F_D9_BB;
 	/** 轨道槽交替背景（深色），使轨道行更明显 */
@@ -75,8 +76,10 @@ public final class TimelineRenderer {
 	 * 只在 featureTracks keySet 发生变化时重建，避免每帧分配新对象。
 	 */
 	private List<TrackDefinition> currentAudioSubTracks = Collections.emptyList();
+	private List<TrackDefinition> currentAnimationSubTracks = Collections.emptyList();
 	/** 上次构建 currentAudioSubTracks 时的 featureTracks key 快照，用于脏检测。 */
 	private Set<String> lastFeatureTrackKeys = Set.of();
+	private Set<String> lastAnimationTrackIds = Set.of();
 
 	/** 当前帧音频组是否有拖拽悬停高亮（任意 row 0~4 悬停且有 audio payload 时置 true） */
 	private boolean audioGroupDropHighlight;
@@ -128,6 +131,15 @@ public final class TimelineRenderer {
 			currentAudioSubTracks  = TrackRegistry.buildAudioSubTracks(timeline);
 		}
 		layout.setActiveAudioSubRowCount(currentAudioSubTracks.size());
+		Set<String> currentAnimationIds = timeline.getTracks().stream()
+			.map(Track::getId)
+			.filter(Timeline::isBlockAnimationFeatureTrackId)
+			.collect(java.util.stream.Collectors.toUnmodifiableSet());
+		if (!lastAnimationTrackIds.equals(currentAnimationIds)) {
+			lastAnimationTrackIds = currentAnimationIds;
+			currentAnimationSubTracks = TrackRegistry.buildBlockAnimationControlTracks(timeline);
+		}
+		layout.setActiveAnimationSubRowCount(currentAnimationSubTracks.size());
 		if (trackListState != null) {
 			syncPrimaryPlayerMuteState(trackListState);
 		}
@@ -229,6 +241,25 @@ public final class TimelineRenderer {
 			ImGui.pushClipRect(layout.contentLeft, rowScreenY, layout.contentLeft + layout.contentWidth,
 				rowScreenY + rowHeight, true);
 			renderAudioSubTrack(td, rowY, rowHeight, timeline, layout, viewState);
+			ImGui.popClipRect();
+			return;
+		}
+		if (TimelineTrackMeta.isAnimationFeatureSubRow(rowIndex)) {
+			int slot = TimelineTrackMeta.animationFeatureSubRowSlot(rowIndex);
+			if (slot < 0 || slot >= currentAnimationSubTracks.size()) {
+				return;
+			}
+			ImGui.pushClipRect(layout.contentLeft, rowScreenY, layout.contentLeft + layout.contentWidth,
+				rowScreenY + rowHeight, true);
+			TrackDefinition td = currentAnimationSubTracks.get(slot);
+			eventRenderer.renderAnimationEventBlocks(
+				rowY,
+				timeline.getAnimationEvents(td.getKey()),
+				layout,
+				viewState,
+				selectionState,
+				td.hasCustomColor() ? td.getColor() : ANIMATION_CLIP_DEFAULT_COLOR
+			);
 			ImGui.popClipRect();
 			return;
 		}
@@ -448,6 +479,12 @@ public final class TimelineRenderer {
 				return currentAudioSubTracks.get(slot).getDisplayName();
 			}
 		}
+		if (TimelineTrackMeta.isAnimationFeatureSubRow(rowIndex)) {
+			int slot = TimelineTrackMeta.animationFeatureSubRowSlot(rowIndex);
+			if (slot >= 0 && slot < currentAnimationSubTracks.size()) {
+				return currentAnimationSubTracks.get(slot).getDisplayName();
+			}
+		}
 		return trackListState != null ? trackListState.getDisplayName(rowIndex) : TimelineTrackMeta.getDefaultName(rowIndex);
 	}
 
@@ -468,6 +505,9 @@ public final class TimelineRenderer {
 				// librosa 特征轨 → 「节奏特征」
 				return "节奏特征";
 			}
+		}
+		if (TimelineTrackMeta.isAnimationFeatureSubRow(rowIndex)) {
+			return "动画控制";
 		}
 		return TimelineTrackMeta.getCategoryTypeLabel(rowIndex);
 	}
@@ -644,6 +684,7 @@ public final class TimelineRenderer {
 		minGapScale *= readScaleMetadata(timeline, "demucsMapGapScale", 1.0, 0.5, 2.0);
 
 		if (toBlockTrack) {
+			resetBlockAnimationFeatureTracks(timeline);
 			timeline.clearBlockAnimationEvents();
 		} else {
 			timeline.clearAutoAnimationEvents();
@@ -689,7 +730,26 @@ public final class TimelineRenderer {
 
 		timeline.sortAll();
 		LOGGER.info("BeatBlock Timeline: mapped dropped audio into {} animation events on {} track (preset={})",
-			added, toBlockTrack ? "block" : "auto", mappingPreset);
+			added, toBlockTrack ? "block-feature" : "auto", mappingPreset);
+	}
+
+	private void resetBlockAnimationFeatureTracks(Timeline timeline) {
+		List<String> ids = timeline.getTracks().stream()
+			.map(Track::getId)
+			.filter(Timeline::isBlockAnimationFeatureTrackId)
+			.toList();
+		for (String id : ids) {
+			timeline.removeTrack(id);
+		}
+	}
+
+	private Track ensureBlockAnimationFeatureTrack(Timeline timeline, String featureKey) {
+		String trackId = Timeline.blockAnimationFeatureTrackId(featureKey);
+		Track track = timeline.getTrack(trackId);
+		if (track != null) return track;
+		track = new Track(trackId, TrackRegistry.localizedName(featureKey), TrackType.ANIMATION);
+		timeline.addTrack(track);
+		return track;
 	}
 
 	private int addAnimationEventFromSource(
@@ -746,7 +806,8 @@ public final class TimelineRenderer {
 			params
 		);
 		if (toBlockTrack) {
-			timeline.addBlockAnimationEvent(ev);
+			ensureBlockAnimationFeatureTrack(timeline, sourceFeature);
+			timeline.addAnimationEvent(Timeline.blockAnimationFeatureTrackId(sourceFeature), ev);
 		} else {
 			timeline.addAutoAnimationEvent(ev);
 		}

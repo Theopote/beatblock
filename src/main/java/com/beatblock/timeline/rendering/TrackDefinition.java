@@ -12,6 +12,8 @@ public final class TrackDefinition {
 		WAVEFORM,
 		/** 冲击柱（impulse bar），用于 kick/snare/hihat 等打击类 */
 		IMPULSE,
+		/** 动画片段 */
+		ANIMATION_CLIP,
 	}
 
 	/** 分组 ID（同组在轨道头有缩进视觉、折叠联动） */

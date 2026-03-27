@@ -16,6 +16,7 @@ public class Timeline {
 	public static final String TRACK_ID_AUDIO = "audio";
 	public static final String TRACK_ID_ANIMATION_BLOCK = "animation_block";
 	public static final String TRACK_ID_ANIMATION_AUTO = "animation_auto";
+	public static final String TRACK_ID_ANIMATION_BLOCK_FEATURE_PREFIX = "animation_block_feature_";
 	public static final String TRACK_ID_CAMERA = "camera";
 	public static final String TRACK_ID_GLOBAL = "global";
 
@@ -259,7 +260,13 @@ public class Timeline {
 
 	public List<TimelineAnimationEvent> getBlockAnimationEvents() {
 		if (blockAnimationDirty) {
-			rebuildAnimationCache(TRACK_ID_ANIMATION_BLOCK, blockAnimationCache);
+			blockAnimationCache.clear();
+			blockAnimationCache.addAll(getAnimationEvents(TRACK_ID_ANIMATION_BLOCK));
+			for (Track track : tracks) {
+				if (!isBlockAnimationFeatureTrackId(track.getId())) continue;
+				blockAnimationCache.addAll(getAnimationEvents(track.getId()));
+			}
+			blockAnimationCache.sort(Comparator.comparingDouble(TimelineAnimationEvent::getTimeSeconds));
 			blockAnimationDirty = false;
 		}
 		return blockAnimationCacheView;
@@ -269,13 +276,45 @@ public class Timeline {
 
 	public List<TimelineAnimationEvent> getAutoAnimationEvents() {
 		if (autoAnimationDirty) {
-			rebuildAnimationCache(TRACK_ID_ANIMATION_AUTO, autoAnimationCache);
+			autoAnimationCache.clear();
+			autoAnimationCache.addAll(getAnimationEvents(TRACK_ID_ANIMATION_AUTO));
 			autoAnimationDirty = false;
 		}
 		return autoAnimationCacheView;
 	}
 	public void addAutoAnimationEvent(TimelineAnimationEvent e) { addAnimationEvent(TRACK_ID_ANIMATION_AUTO, e); }
 	public void clearAutoAnimationEvents() { clearClips(TRACK_ID_ANIMATION_AUTO); }
+
+	public static String blockAnimationFeatureTrackId(String featureKey) {
+		String safe = featureKey == null ? "unknown" : featureKey.trim();
+		if (safe.isEmpty()) safe = "unknown";
+		return TRACK_ID_ANIMATION_BLOCK_FEATURE_PREFIX + safe;
+	}
+
+	public static boolean isBlockAnimationFeatureTrackId(String trackId) {
+		return trackId != null && trackId.startsWith(TRACK_ID_ANIMATION_BLOCK_FEATURE_PREFIX);
+	}
+
+	public static String blockAnimationFeatureKeyFromTrackId(String trackId) {
+		if (!isBlockAnimationFeatureTrackId(trackId)) return "";
+		return trackId.substring(TRACK_ID_ANIMATION_BLOCK_FEATURE_PREFIX.length());
+	}
+
+	public List<TimelineAnimationEvent> getAnimationEvents(String trackId) {
+		List<TimelineAnimationEvent> out = new ArrayList<>();
+		Track t = getTrack(trackId);
+		if (t == null) return out;
+		rebuildAnimationCache(trackId, out);
+		return out;
+	}
+
+	public void addAnimationEvent(String trackId, TimelineAnimationEvent e) {
+		addAnimationEventInternal(trackId, e);
+	}
+
+	public void clearAnimationTrack(String trackId) {
+		clearClips(trackId);
+	}
 
 	/**
 	 * 轨道事件被外部直接修改（如拖拽 setTimeSeconds）后，调用此方法失效动画缓存。
@@ -370,7 +409,7 @@ public class Timeline {
 		out.sort(Comparator.comparingDouble(TimelineAnimationEvent::getTimeSeconds));
 	}
 
-	private void addAnimationEvent(String trackId, TimelineAnimationEvent e) {
+	private void addAnimationEventInternal(String trackId, TimelineAnimationEvent e) {
 		if (e == null) return;
 		Track t = getTrack(trackId);
 		if (t == null) return;
