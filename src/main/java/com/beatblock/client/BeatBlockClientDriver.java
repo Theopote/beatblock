@@ -6,11 +6,17 @@ import com.beatblock.animation.AnimationTemplate;
 import com.beatblock.audio.BeatBlockRuntime;
 import com.beatblock.beat.BeatEvent;
 import com.beatblock.beat.Beatmap;
+import com.beatblock.engine.StageObject;
 import com.beatblock.stage.StageZone;
+import com.beatblock.timeline.TimelineAnimationActionMode;
 import com.beatblock.timeline.TimelineAnimationEvent;
+import net.minecraft.block.Block;
+import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.entity.decoration.DisplayEntity;
+import net.minecraft.registry.Registries;
+import net.minecraft.util.Identifier;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
@@ -202,9 +208,63 @@ public final class BeatBlockClientDriver {
 			}
 			String scheduleKey = scheduleKey(event);
 			if (!scheduledTimelineAnimationIds.add(scheduleKey)) continue;
-			BeatBlock.blockAnimationEngine.scheduleTimelineEvent(event);
+			applyTimelineActionEvent(event);
 		}
 		lastTimelineAnimationTime = currentTime;
+	}
+
+	private static void applyTimelineActionEvent(TimelineAnimationEvent event) {
+		if (event == null || BeatBlock.blockAnimationEngine == null) return;
+		TimelineAnimationActionMode actionMode = event.getActionMode();
+		if (actionMode == TimelineAnimationActionMode.ANIMATE) {
+			BeatBlock.blockAnimationEngine.scheduleTimelineEvent(event);
+			return;
+		}
+
+		MinecraftClient mc = MinecraftClient.getInstance();
+		World world = mc != null ? mc.world : null;
+		if (world == null) return;
+
+		StageObject target = BeatBlock.blockAnimationEngine.getStageObjectSystem().get(event.getTargetObjectId());
+		if (target == null || target.getBlocks().isEmpty()) return;
+
+		if (actionMode == TimelineAnimationActionMode.CLEAR) {
+			for (var pos : target.getBlocks()) {
+				if (!world.isChunkLoaded(pos)) continue;
+				if (!world.getBlockState(pos).isAir()) {
+					world.setBlockState(pos, Blocks.AIR.getDefaultState(), 3);
+				}
+			}
+			return;
+		}
+
+		BlockState placementState = resolvePlacementBlockState(event);
+		for (var pos : target.getBlocks()) {
+			if (!world.isChunkLoaded(pos)) continue;
+			if (!world.getBlockState(pos).equals(placementState)) {
+				world.setBlockState(pos, placementState, 3);
+			}
+		}
+	}
+
+	private static BlockState resolvePlacementBlockState(TimelineAnimationEvent event) {
+		if (event == null) return Blocks.DIAMOND_BLOCK.getDefaultState();
+		Object param = event.getParameters().get("placeBlock");
+		if (param == null) param = event.getParameters().get("placeBlockId");
+		if (param == null) return Blocks.DIAMOND_BLOCK.getDefaultState();
+
+		String raw = String.valueOf(param).trim();
+		if (raw.isEmpty()) return Blocks.DIAMOND_BLOCK.getDefaultState();
+		Identifier id;
+		try {
+			id = Identifier.of(raw);
+		} catch (Exception ex) {
+			return Blocks.DIAMOND_BLOCK.getDefaultState();
+		}
+		if (!Registries.BLOCK.containsId(id)) return Blocks.DIAMOND_BLOCK.getDefaultState();
+		Block block = Registries.BLOCK.get(id);
+		if (block == null) return Blocks.DIAMOND_BLOCK.getDefaultState();
+		return block.getDefaultState();
 	}
 
 	private static void resetTimelineAnimationScheduling() {

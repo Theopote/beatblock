@@ -19,6 +19,8 @@ import imgui.ImGui;
 import imgui.flag.ImGuiWindowFlags;
 import imgui.type.ImInt;
 import imgui.type.ImString;
+import net.minecraft.registry.Registries;
+import net.minecraft.util.Identifier;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -38,6 +40,7 @@ public class EventPropertiesPanel {
 	private final ImString timeBuffer = new ImString(INPUT_BUFFER_SIZE);
 	private final ImString durationBuffer = new ImString(INPUT_BUFFER_SIZE);
 	private final ImString energyBuffer = new ImString(INPUT_BUFFER_SIZE);
+	private final ImString placeBlockBuffer = new ImString(INPUT_BUFFER_SIZE);
 	private String validationError;
 
 	private record EventRef(Track track, Clip clip, TimelineEvent event) {}
@@ -161,6 +164,14 @@ public class EventPropertiesPanel {
 		if (ImGui.combo("目标对象##eventTarget", targetIndex, targetLabels)) {
 			validationError = null;
 		}
+		TimelineAnimationActionMode selectedActionMode = TimelineAnimationActionMode.fromValue(actionOptions.get(actionIndex.get()).id());
+		if (selectedActionMode == TimelineAnimationActionMode.PLACE) {
+			ImGui.setNextItemWidth(-1f);
+			ImGui.inputText("放置方块ID##eventPlaceBlock", placeBlockBuffer);
+			if (ImGui.isItemHovered()) {
+				ImGui.setTooltip("例如: minecraft:diamond_block");
+			}
+		}
 
 		ImGui.spacing();
 		ImGui.text("Metadata");
@@ -193,13 +204,33 @@ public class EventPropertiesPanel {
 			double newTime = Math.max(0.0, Double.parseDouble(valueOf(timeBuffer).trim()));
 			double newDuration = Math.max(0.01, Double.parseDouble(valueOf(durationBuffer).trim()));
 			float newEnergy = (float) Math.max(0.0, Math.min(1.0, Double.parseDouble(valueOf(energyBuffer).trim())));
+			TimelineAnimationActionMode mode = TimelineAnimationActionMode.fromValue(actionMode);
+			String placeBlockId = null;
+			if (mode == TimelineAnimationActionMode.PLACE) {
+				String blockId = valueOf(placeBlockBuffer).trim();
+				if (blockId.isEmpty()) {
+					blockId = "minecraft:diamond_block";
+				}
+				Identifier parsed = Identifier.tryParse(blockId);
+				if (parsed == null || !Registries.BLOCK.containsId(parsed)) {
+					validationError = "方块ID无效，示例: minecraft:diamond_block";
+					return;
+				}
+				placeBlockId = parsed.toString();
+			}
 
 			ref.event().setTimeSeconds(newTime);
-			ref.event().setParameter("actionMode", TimelineAnimationActionMode.fromValue(actionMode).name());
+			ref.event().setParameter("actionMode", mode.name());
 			ref.event().setParameter("durationSeconds", newDuration);
 			ref.event().setParameter("energy", newEnergy);
 			ref.event().setParameter("animationType", animationId);
 			ref.event().setParameter("targetObject", targetObjectId);
+			if (mode == TimelineAnimationActionMode.PLACE) {
+				ref.event().setParameter("placeBlock", placeBlockId);
+			} else {
+				ref.event().removeParameter("placeBlock");
+				ref.event().removeParameter("placeBlockId");
+			}
 			ref.clip().setStartTimeSeconds(newTime);
 			ref.clip().setEndTimeSeconds(newTime + newDuration);
 			timeline.markAnimationEventsDirty(ref.track().getId());
@@ -216,6 +247,8 @@ public class EventPropertiesPanel {
 		timeBuffer.set(String.format(Locale.ROOT, "%.6f", event.getTimeSeconds()));
 		durationBuffer.set(String.format(Locale.ROOT, "%.6f", numericParam(params, "durationSeconds", 0.25)));
 		energyBuffer.set(String.format(Locale.ROOT, "%.3f", numericParam(params, "energy", 1.0)));
+		String placeBlock = stringParam(params, "placeBlock", stringParam(params, "placeBlockId", "minecraft:diamond_block"));
+		placeBlockBuffer.set(placeBlock);
 		validationError = null;
 	}
 
