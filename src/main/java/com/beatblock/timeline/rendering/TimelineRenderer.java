@@ -20,9 +20,11 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.Collections;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -832,6 +834,7 @@ public final class TimelineRenderer {
 		boolean toBlockTrack = targetRowIndex == TimelineTrackMeta.ROW_ANIM_BLOCK;
 		boolean toAutoTrack = targetRowIndex == TimelineTrackMeta.ROW_ANIM_AUTO;
 		if (!toBlockTrack && !toAutoTrack) return;
+		String clipGenerationMode = resolveClipGenerationMode(timeline);
 		boolean demucsSeparated = isDemucsSeparatedTimeline(timeline);
 		String mappingPreset = resolveDemucsMappingPreset(timeline, toBlockTrack);
 		double durationScale = durationScaleForPreset(mappingPreset);
@@ -842,10 +845,10 @@ public final class TimelineRenderer {
 		minGapScale *= readScaleMetadata(timeline, "demucsMapGapScale", 1.0, 0.5, 2.0);
 
 		if (toBlockTrack) {
-			resetBlockAnimationFeatureTracks(timeline);
-			timeline.clearBlockAnimationEvents();
+			pruneGeneratedAnimationEventsOnFeatureTracks(timeline);
+			pruneGeneratedAnimationEventsOnTrack(timeline, Timeline.TRACK_ID_ANIMATION_BLOCK);
 		} else {
-			timeline.clearAutoAnimationEvents();
+			pruneGeneratedAnimationEventsOnTrack(timeline, Timeline.TRACK_ID_ANIMATION_AUTO);
 		}
 
 		String targetObjectId = resolveDefaultTargetObjectId();
@@ -859,14 +862,20 @@ public final class TimelineRenderer {
 
 			AnimationMappingRule rule = selectAnimationRule(featureKey, demucsSeparated, toBlockTrack);
 			if (rule == null) continue;
-			for (FeatureEvent event : track.getEvents()) {
-				added += addAnimationEventFromSource(
-					timeline, toBlockTrack, event.getTimeSeconds(),
-					event.getEnergy(), rule,
-					targetObjectId, featureKey, lastAcceptedTimeByFeature,
-					durationScale, energyThresholdScale, minGapScale
-				);
-			}
+			added += addAnimationEventsForFeatureTrack(
+				timeline,
+				toBlockTrack,
+				demucsSeparated,
+				clipGenerationMode,
+				featureKey,
+				track,
+				rule,
+				targetObjectId,
+				lastAcceptedTimeByFeature,
+				durationScale,
+				energyThresholdScale,
+				minGapScale
+			);
 		}
 
 		if (added == 0) {
@@ -889,6 +898,272 @@ public final class TimelineRenderer {
 		timeline.sortAll();
 		LOGGER.info("BeatBlock Timeline: mapped dropped audio into {} animation events on {} track (preset={})",
 			added, toBlockTrack ? "block-feature" : "auto", mappingPreset);
+	}
+
+	private String resolveClipGenerationMode(Timeline timeline) {
+		if (timeline == null) return "mixed";
+		Object value = timeline.getMetadata("featureClipGenerationMode");
+		if (value == null) return "mixed";
+		String mode = value.toString().trim().toLowerCase(Locale.ROOT);
+		if ("trigger".equals(mode) || "sustain".equals(mode) || "mixed".equals(mode)) {
+			return mode;
+		}
+		return "mixed";
+	}
+
+	private int addAnimationEventsForFeatureTrack(
+		Timeline timeline,
+		boolean toBlockTrack,
+		boolean demucsSeparated,
+		String clipGenerationMode,
+		String featureKey,
+		FeatureTrack track,
+		AnimationMappingRule rule,
+		String targetObjectId,
+		Map<String, Double> lastAcceptedTimeByFeature,
+		double durationScale,
+		float energyThresholdScale,
+		double minGapScale
+	) {
+		if (track == null || track.getEvents().isEmpty() || rule == null) return 0;
+		if (shouldUseSustainGeneration(featureKey, demucsSeparated, toBlockTrack, clipGenerationMode)) {
+			return addSustainAnimationEventsFromFeatureTrack(
+				timeline,
+				toBlockTrack,
+				featureKey,
+				track,
+				rule,
+				targetObjectId,
+				durationScale,
+				energyThresholdScale,
+				minGapScale
+			);
+		}
+		int added = 0;
+		for (FeatureEvent event : track.getEvents()) {
+			added += addAnimationEventFromSource(
+				timeline, toBlockTrack, event.getTimeSeconds(),
+				event.getEnergy(), rule,
+				targetObjectId, featureKey, lastAcceptedTimeByFeature,
+				durationScale, energyThresholdScale, minGapScale
+			);
+		}
+		return added;
+	}
+
+	private boolean shouldUseSustainGeneration(String featureKey, boolean demucsSeparated, boolean toBlockTrack, String clipGenerationMode) {
+		if (featureKey == null || featureKey.isBlank()) return false;
+		if ("trigger".equalsIgnoreCase(clipGenerationMode)) return false;
+		if ("sustain".equalsIgnoreCase(clipGenerationMode)) return true;
+		if (!demucsSeparated || !toBlockTrack) return false;
+		String key = featureKey.trim().toLowerCase(Locale.ROOT);
+		return "bass".equals(key) || "vocals".equals(key) || "other".equals(key);
+	}
+
+	private void pruneGeneratedAnimationEventsOnFeatureTracks(Timeline timeline) {
+		if (timeline == null) return;
+		for (Track track : timeline.getTracks()) {
+			if (track == null || !Timeline.isBlockAnimationFeatureTrackId(track.getId())) continue;
+			pruneGeneratedAnimationEventsOnTrack(timeline, track.getId());
+		}
+	}
+
+	private void pruneGeneratedAnimationEventsOnTrack(Timeline timeline, String trackId) {
+		if (timeline == null || trackId == null || trackId.isBlank()) return;
+		Track track = timeline.getTrack(trackId);
+		if (track == null) return;
+
+		List<String> emptyClipIds = new ArrayList<>();
+		boolean changed = false;
+		for (Clip clip : track.getClips()) {
+			if (clip == null) continue;
+			List<String> removeEventIds = new ArrayList<>();
+			for (TimelineEvent event : clip.getEvents()) {
+				if (event == null || event.getType() != EventType.ANIMATION) continue;
+				if (isGeneratedMappingAnimationEvent(event)) {
+					removeEventIds.add(event.getId());
+				}
+			}
+			for (String eventId : removeEventIds) {
+				if (clip.removeEvent(eventId)) changed = true;
+			}
+			if (clip.getEvents().isEmpty()) {
+				emptyClipIds.add(clip.getId());
+			}
+		}
+		for (String clipId : emptyClipIds) {
+			if (track.removeClip(clipId)) changed = true;
+		}
+		if (changed) {
+			timeline.markAnimationEventsDirty(trackId);
+		}
+	}
+
+	private boolean isGeneratedMappingAnimationEvent(TimelineEvent event) {
+		if (event == null) return false;
+		Object generatedBy = event.getParameters().get("generatedBy");
+		if (generatedBy == null) return false;
+		String marker = generatedBy.toString().trim().toLowerCase(Locale.ROOT);
+		return marker.startsWith("audio-asset-drop");
+	}
+
+	private int addSustainAnimationEventsFromFeatureTrack(
+		Timeline timeline,
+		boolean toBlockTrack,
+		String sourceFeature,
+		FeatureTrack track,
+		AnimationMappingRule rule,
+		String targetObjectId,
+		double durationScale,
+		float energyThresholdScale,
+		double minGapScale
+	) {
+		if (track == null || track.getEvents().isEmpty() || rule == null) return 0;
+
+		double featureDurationScale = readFeatureScaleMetadata(timeline, sourceFeature, "duration", 1.0, 0.5, 2.0);
+		float featureEnergyScale = (float) readFeatureScaleMetadata(timeline, sourceFeature, "energy", 1.0, 0.6, 1.6);
+		double featureGapScale = readFeatureScaleMetadata(timeline, sourceFeature, "gap", 1.0, 0.5, 2.0);
+
+		double effectiveDurationScale = durationScale * featureDurationScale;
+		float effectiveEnergyThresholdScale = energyThresholdScale * featureEnergyScale;
+		double effectiveMinGapScale = minGapScale * featureGapScale;
+
+		float minEnergy = Math.max(0f, Math.min(1f, rule.minEnergy() * effectiveEnergyThresholdScale));
+		double minGap = Math.max(0.02, rule.minGapSeconds() * effectiveMinGapScale);
+		double linkGap = Math.max(0.10, minGap * 2.0);
+		double baseDuration = Math.max(0.08, rule.baseDurationSeconds() * effectiveDurationScale);
+
+		List<FeatureEvent> sorted = new ArrayList<>(track.getEvents());
+		sorted.sort(Comparator.comparingDouble(FeatureEvent::getTimeSeconds));
+
+		double windowStart = -1;
+		double windowLast = -1;
+		float windowPeak = 0f;
+		int added = 0;
+
+		for (FeatureEvent e : sorted) {
+			double t = e.getTimeSeconds();
+			float energy = Math.max(0f, Math.min(1f, e.getEnergy()));
+			if (energy < minEnergy) continue;
+
+			if (windowStart < 0) {
+				windowStart = t;
+				windowLast = t;
+				windowPeak = energy;
+				continue;
+			}
+
+			if ((t - windowLast) <= linkGap) {
+				windowLast = t;
+				windowPeak = Math.max(windowPeak, energy);
+				continue;
+			}
+
+			added += emitSustainWindow(
+				timeline,
+				toBlockTrack,
+				rule,
+				targetObjectId,
+				sourceFeature,
+				windowStart,
+				windowLast,
+				windowPeak,
+				baseDuration,
+				minGap,
+				featureDurationScale,
+				featureEnergyScale,
+				featureGapScale,
+				durationScale,
+				energyThresholdScale,
+				minGapScale,
+				minEnergy
+			);
+
+			windowStart = t;
+			windowLast = t;
+			windowPeak = energy;
+		}
+
+		if (windowStart >= 0) {
+			added += emitSustainWindow(
+				timeline,
+				toBlockTrack,
+				rule,
+				targetObjectId,
+				sourceFeature,
+				windowStart,
+				windowLast,
+				windowPeak,
+				baseDuration,
+				minGap,
+				featureDurationScale,
+				featureEnergyScale,
+				featureGapScale,
+				durationScale,
+				energyThresholdScale,
+				minGapScale,
+				minEnergy
+			);
+		}
+
+		return added;
+	}
+
+	private int emitSustainWindow(
+		Timeline timeline,
+		boolean toBlockTrack,
+		AnimationMappingRule rule,
+		String targetObjectId,
+		String sourceFeature,
+		double windowStart,
+		double windowLast,
+		float peakEnergy,
+		double baseDuration,
+		double minGap,
+		double featureDurationScale,
+		float featureEnergyScale,
+		double featureGapScale,
+		double durationScale,
+		float energyThresholdScale,
+		double minGapScale,
+		float minEnergy
+	) {
+		double span = Math.max(0.0, windowLast - windowStart);
+		double duration = Math.max(0.10, span + baseDuration * 0.45);
+		duration = Math.max(duration, minGap * 0.60);
+		duration = Math.min(duration, Math.max(baseDuration * 3.2, 0.90));
+
+		Map<String, Object> params = new HashMap<>();
+		params.put("mode", TimelineAnimationActionMode.ANIMATE.name());
+		params.put("energy", peakEnergy);
+		params.put("energyThreshold", minEnergy);
+		params.put("energyMapping", "linear");
+		params.put("sourceFeature", sourceFeature);
+		params.put("sourceStem", rule.sourceStem());
+		params.put("mappingProfile", "demucs-aware");
+		params.put("mappingPreset", resolvePresetLabel(durationScale, energyThresholdScale, minGapScale));
+		params.put("featureDurationScale", featureDurationScale);
+		params.put("featureEnergyScale", featureEnergyScale);
+		params.put("featureGapScale", featureGapScale);
+		params.put("clipGenerationMode", "sustain");
+		params.put("generatedBy", "audio-asset-drop-sustain");
+
+		TimelineAnimationEvent ev = new TimelineAnimationEvent(
+			"",
+			windowStart,
+			duration,
+			rule.animationType(),
+			targetObjectId,
+			peakEnergy,
+			params
+		);
+		if (toBlockTrack) {
+			ensureBlockAnimationFeatureTrack(timeline, sourceFeature);
+			timeline.addAnimationEvent(Timeline.blockAnimationFeatureTrackId(sourceFeature), ev);
+		} else {
+			timeline.addAutoAnimationEvent(ev);
+		}
+		return 1;
 	}
 
 	private void resetBlockAnimationFeatureTracks(Timeline timeline) {
@@ -955,7 +1230,8 @@ public final class TimelineRenderer {
 		params.put("featureDurationScale", featureDurationScale);
 		params.put("featureEnergyScale", featureEnergyScale);
 		params.put("featureGapScale", featureGapScale);
-		params.put("generatedBy", "audio-asset-drop");
+		params.put("clipGenerationMode", "trigger");
+		params.put("generatedBy", "audio-asset-drop-trigger");
 
 		TimelineAnimationEvent ev = new TimelineAnimationEvent(
 			"",

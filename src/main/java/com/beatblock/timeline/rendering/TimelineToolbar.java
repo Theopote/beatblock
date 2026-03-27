@@ -62,6 +62,7 @@ public final class TimelineToolbar {
 	private static final String TOOLTIP_TRACK_HEIGHT = "调整音频轨（波形/低中高频）高度，便于看清节奏细节";
 	private static final String TOOLTIP_TRACK_HEIGHT_RESET = "恢复音频轨默认高度";
 	private static final String TOOLTIP_DEMUCS_PRESET = "Demucs 映射预设：Drive=更强律动，Detail=更细节，Balanced=平衡";
+	private static final String TOOLTIP_CLIP_GENERATION_MODE = "控制轨片段生成策略：Trigger=逐点短片段，Sustain=持续分段，Mixed=按特征自动混合";
 	private static final String TOOLTIP_DEMUCS_ADVANCED = "高级参数：时长/能量阈值/最小间隔";
 	private static final String TOOLTIP_ACTION_ROLLBACK = "PLACE/CLEAR 预览回滚策略：Preview 会在停止/回退时恢复方块；Persistent 会保留写入结果";
 	private static final String TOOLTIP_ACTION_ROLLBACK_STATUS = "当前 PLACE/CLEAR 执行策略状态";
@@ -74,6 +75,8 @@ public final class TimelineToolbar {
 	private static final double[] SPEED_VALUES = { 0.5, 0.75, 1.0, 1.25, 1.5, 2.0 };
 	private static final String[] DEMUCS_PRESET_LABELS = { "Drive", "Balanced", "Detail" };
 	private static final String[] DEMUCS_PRESET_VALUES = { "drive", "balanced", "detail" };
+	private static final String[] CLIP_GENERATION_MODE_LABELS = { "Mixed", "Trigger", "Sustain" };
+	private static final String[] CLIP_GENERATION_MODE_VALUES = { "mixed", "trigger", "sustain" };
 	private static final String[] ACTION_ROLLBACK_LABELS = { "Preview", "Persistent" };
 	private static final String[] ACTION_ROLLBACK_VALUES = { "preview", "persistent" };
 	private static final String[] DEMUCS_FEATURE_KEYS = {
@@ -97,6 +100,7 @@ public final class TimelineToolbar {
 	private final ImInt zoomComboIndex = new ImInt(2); // 默认 1x
 	private final ImInt speedComboIndex = new ImInt(2); // 默认 1x
 	private final ImInt demucsPresetComboIndex = new ImInt(1); // 默认 balanced
+	private final ImInt clipGenerationModeComboIndex = new ImInt(0); // 默认 mixed
 	private final ImInt actionRollbackComboIndex = new ImInt(0); // 默认 preview
 	private boolean demucsMappingConfigLoaded;
 	private boolean actionExecutionConfigLoaded;
@@ -588,6 +592,7 @@ public final class TimelineToolbar {
 
 		int currentIndex = indexOfDemucsPresetValue(readDemucsPresetFromTimeline());
 		demucsPresetComboIndex.set(currentIndex);
+		clipGenerationModeComboIndex.set(indexOfClipGenerationMode(readClipGenerationModeFromTimeline()));
 
 		if (compactMode) {
 			ImGui.separator();
@@ -597,6 +602,11 @@ public final class TimelineToolbar {
 				writeDemucsPresetToTimeline(DEMUCS_PRESET_VALUES[demucsPresetComboIndex.get()]);
 			}
 			if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_DEMUCS_PRESET);
+			ImGui.setNextItemWidth(comboWidthForLabels(CLIP_GENERATION_MODE_LABELS));
+			if (ImGui.combo("Clip Mode##tlMoreClipMode", clipGenerationModeComboIndex, CLIP_GENERATION_MODE_LABELS)) {
+				writeClipGenerationModeToTimeline(CLIP_GENERATION_MODE_VALUES[clipGenerationModeComboIndex.get()]);
+			}
+			if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_CLIP_GENERATION_MODE);
 			if (ImGui.button("Advanced##tlMoreDemucsAdvanced")) {
 				ImGui.openPopup(DEMUCS_ADVANCED_POPUP_ID);
 			}
@@ -610,6 +620,12 @@ public final class TimelineToolbar {
 			writeDemucsPresetToTimeline(DEMUCS_PRESET_VALUES[demucsPresetComboIndex.get()]);
 		}
 		if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_DEMUCS_PRESET);
+		nextItemInGroup();
+		ImGui.setNextItemWidth(comboWidthForLabels(CLIP_GENERATION_MODE_LABELS));
+		if (ImGui.combo("Clip Mode", clipGenerationModeComboIndex, CLIP_GENERATION_MODE_LABELS)) {
+			writeClipGenerationModeToTimeline(CLIP_GENERATION_MODE_VALUES[clipGenerationModeComboIndex.get()]);
+		}
+		if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_CLIP_GENERATION_MODE);
 		nextItemInGroup();
 		if (ImGui.button("Map...##tlDemucsAdvanced")) {
 			ImGui.openPopup(DEMUCS_ADVANCED_POPUP_ID);
@@ -720,6 +736,27 @@ public final class TimelineToolbar {
 		persistDemucsMappingConfig();
 	}
 
+	private String readClipGenerationModeFromTimeline() {
+		if (BeatBlock.timeline == null) return "mixed";
+		Object mode = BeatBlock.timeline.getMetadata("featureClipGenerationMode");
+		if (mode == null) return "mixed";
+		String value = mode.toString().trim().toLowerCase(Locale.ROOT);
+		if ("trigger".equals(value) || "sustain".equals(value) || "mixed".equals(value)) {
+			return value;
+		}
+		return "mixed";
+	}
+
+	private void writeClipGenerationModeToTimeline(String mode) {
+		if (BeatBlock.timeline == null) return;
+		String normalized = (mode == null ? "mixed" : mode.trim().toLowerCase(Locale.ROOT));
+		if (!"trigger".equals(normalized) && !"sustain".equals(normalized) && !"mixed".equals(normalized)) {
+			normalized = "mixed";
+		}
+		BeatBlock.timeline.setMetadata("featureClipGenerationMode", normalized);
+		persistDemucsMappingConfig();
+	}
+
 	private void ensureDemucsMappingConfigLoaded() {
 		if (demucsMappingConfigLoaded || BeatBlock.timeline == null) return;
 		demucsMappingConfigLoaded = true;
@@ -736,6 +773,12 @@ public final class TimelineToolbar {
 				String preset = dm.get("preset").getAsString();
 				if ("drive".equalsIgnoreCase(preset) || "detail".equalsIgnoreCase(preset) || "balanced".equalsIgnoreCase(preset)) {
 					BeatBlock.timeline.setMetadata("demucsMappingPreset", preset.toLowerCase());
+				}
+			}
+			if (BeatBlock.timeline.getMetadata("featureClipGenerationMode") == null && dm.has("clipGenerationMode")) {
+				String mode = dm.get("clipGenerationMode").getAsString();
+				if ("mixed".equalsIgnoreCase(mode) || "trigger".equalsIgnoreCase(mode) || "sustain".equalsIgnoreCase(mode)) {
+					BeatBlock.timeline.setMetadata("featureClipGenerationMode", mode.toLowerCase(Locale.ROOT));
 				}
 			}
 
@@ -789,6 +832,7 @@ public final class TimelineToolbar {
 				: new JsonObject();
 
 			dm.addProperty("preset", readDemucsPresetFromTimeline());
+			dm.addProperty("clipGenerationMode", readClipGenerationModeFromTimeline());
 			dm.addProperty("durationScale", readTimelineScale("demucsMapDurationScale", 1.0, DEMUCS_SCALE_MIN, DEMUCS_SCALE_MAX));
 			dm.addProperty("energyScale", readTimelineScale("demucsMapEnergyScale", 1.0, DEMUCS_ENERGY_SCALE_MIN, DEMUCS_ENERGY_SCALE_MAX));
 			dm.addProperty("gapScale", readTimelineScale("demucsMapGapScale", 1.0, DEMUCS_SCALE_MIN, DEMUCS_SCALE_MAX));
@@ -977,6 +1021,14 @@ public final class TimelineToolbar {
 		if (value == null || value.isBlank()) return 0;
 		for (int i = 0; i < ACTION_ROLLBACK_VALUES.length; i++) {
 			if (ACTION_ROLLBACK_VALUES[i].equalsIgnoreCase(value)) return i;
+		}
+		return 0;
+	}
+
+	private static int indexOfClipGenerationMode(String value) {
+		if (value == null || value.isBlank()) return 0;
+		for (int i = 0; i < CLIP_GENERATION_MODE_VALUES.length; i++) {
+			if (CLIP_GENERATION_MODE_VALUES[i].equalsIgnoreCase(value)) return i;
 		}
 		return 0;
 	}
