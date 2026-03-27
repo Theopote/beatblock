@@ -82,8 +82,6 @@ public final class TimelineRenderer {
 	private Set<String> lastFeatureTrackKeys = Set.of();
 	private Set<String> lastAnimationTrackIds = Set.of();
 	private final Map<String, PairVisibilitySnapshot> pairedFeatureVisibility = new HashMap<>();
-	private Boolean lastAudioGroupCollapsed;
-	private Boolean lastAnimationGroupCollapsed;
 
 	/** 当前帧音频组是否有拖拽悬停高亮（任意 row 0~4 悬停且有 audio payload 时置 true） */
 	private boolean audioGroupDropHighlight;
@@ -530,7 +528,6 @@ public final class TimelineRenderer {
 
 	private void syncPairedFeatureLaneState(TimelineTrackListState trackListState) {
 		if (trackListState == null) return;
-		syncFeatureGroupCollapse(trackListState);
 
 		Map<String, Integer> audioRowsByFeature = new HashMap<>();
 		for (int slot = 0; slot < currentAudioSubTracks.size(); slot++) {
@@ -581,33 +578,6 @@ public final class TimelineRenderer {
 				trackListState.isVisible(controlRow)
 			));
 		}
-	}
-
-	private void syncFeatureGroupCollapse(TimelineTrackListState trackListState) {
-		boolean audioCollapsed = trackListState.isGroupCollapsed(TimelineTrackMeta.ROW_AUDIO_GROUP);
-		boolean animationCollapsed = trackListState.isGroupCollapsed(TimelineTrackMeta.ROW_ANIMATION_GROUP);
-
-		if (lastAudioGroupCollapsed == null || lastAnimationGroupCollapsed == null) {
-			if (audioCollapsed != animationCollapsed) {
-				trackListState.setGroupCollapsed(TimelineTrackMeta.ROW_ANIMATION_GROUP, audioCollapsed);
-			}
-			lastAudioGroupCollapsed = trackListState.isGroupCollapsed(TimelineTrackMeta.ROW_AUDIO_GROUP);
-			lastAnimationGroupCollapsed = trackListState.isGroupCollapsed(TimelineTrackMeta.ROW_ANIMATION_GROUP);
-			return;
-		}
-
-		boolean audioChanged = !lastAudioGroupCollapsed.equals(audioCollapsed);
-		boolean animationChanged = !lastAnimationGroupCollapsed.equals(animationCollapsed);
-		if (audioChanged && !animationChanged) {
-			trackListState.setGroupCollapsed(TimelineTrackMeta.ROW_ANIMATION_GROUP, audioCollapsed);
-		} else if (animationChanged && !audioChanged) {
-			trackListState.setGroupCollapsed(TimelineTrackMeta.ROW_AUDIO_GROUP, animationCollapsed);
-		} else if (audioCollapsed != animationCollapsed) {
-			trackListState.setGroupCollapsed(TimelineTrackMeta.ROW_ANIMATION_GROUP, audioCollapsed);
-		}
-
-		lastAudioGroupCollapsed = trackListState.isGroupCollapsed(TimelineTrackMeta.ROW_AUDIO_GROUP);
-		lastAnimationGroupCollapsed = trackListState.isGroupCollapsed(TimelineTrackMeta.ROW_ANIMATION_GROUP);
 	}
 
 	/**

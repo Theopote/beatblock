@@ -188,44 +188,8 @@ public final class TimelineLayout {
 
 	private List<Integer> buildLogicalRenderOrder() {
 		List<Integer> ordered = new ArrayList<>(CONTENT_ROW_COUNT);
-		boolean[] added = new boolean[CONTENT_ROW_COUNT];
-
-		ordered.add(TimelineTrackMeta.ROW_AUDIO_GROUP);
-		added[TimelineTrackMeta.ROW_AUDIO_GROUP] = true;
-		ordered.add(TimelineTrackMeta.ROW_ANIMATION_GROUP);
-		added[TimelineTrackMeta.ROW_ANIMATION_GROUP] = true;
-
-		int pairedSlots = Math.max(activeAudioSubRowCount, activeAnimationSubRowCount);
-		for (int slot = 0; slot < pairedSlots; slot++) {
-			if (slot < activeAudioSubRowCount) {
-				int audioRow = TimelineTrackMeta.ROW_AUDIO_SUBS_START + slot;
-				ordered.add(audioRow);
-				added[audioRow] = true;
-			}
-			if (slot < activeAnimationSubRowCount) {
-				int controlRow = TimelineTrackMeta.ROW_ANIM_FEATURES_START + slot;
-				ordered.add(controlRow);
-				added[controlRow] = true;
-			}
-		}
-
-		int[] fixedRows = {
-			TimelineTrackMeta.ROW_ANIM_BLOCK,
-			TimelineTrackMeta.ROW_ANIM_AUTO,
-			TimelineTrackMeta.ROW_CAMERA,
-			TimelineTrackMeta.ROW_GLOBAL_EVENT
-		};
-		for (int row : fixedRows) {
-			if (!added[row]) {
-				ordered.add(row);
-				added[row] = true;
-			}
-		}
-
 		for (int i = 0; i < CONTENT_ROW_COUNT; i++) {
-			if (!added[i]) {
-				ordered.add(i);
-			}
+			ordered.add(i);
 		}
 		return ordered;
 	}
