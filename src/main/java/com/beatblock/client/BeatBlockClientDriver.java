@@ -16,13 +16,17 @@ import net.minecraft.block.Blocks;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.entity.decoration.DisplayEntity;
 import net.minecraft.registry.Registries;
+import net.minecraft.registry.RegistryKey;
 import net.minecraft.util.Identifier;
+import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
 
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -35,6 +39,8 @@ public final class BeatBlockClientDriver {
 	private static final Set<String> scheduledTimelineAnimationIds = new HashSet<>();
 	private static final double TIMELINE_EVENT_EPSILON = 1e-4;
 	private static double lastTimelineAnimationTime;
+	private static final Map<BlockPos, BlockState> timelineMutationSnapshot = new HashMap<>();
+	private static RegistryKey<World> timelineMutationWorldKey;
 
 	public static void onClientTick() {
 		if (!driving) return;
@@ -231,7 +237,9 @@ public final class BeatBlockClientDriver {
 		if (actionMode == TimelineAnimationActionMode.CLEAR) {
 			for (var pos : target.getBlocks()) {
 				if (!world.isChunkLoaded(pos)) continue;
-				if (!world.getBlockState(pos).isAir()) {
+				BlockState currentState = world.getBlockState(pos);
+				if (!currentState.isAir()) {
+					captureTimelineMutationOriginalState(world, pos, currentState);
 					world.setBlockState(pos, Blocks.AIR.getDefaultState(), 3);
 				}
 			}
@@ -241,10 +249,45 @@ public final class BeatBlockClientDriver {
 		BlockState placementState = resolvePlacementBlockState(event);
 		for (var pos : target.getBlocks()) {
 			if (!world.isChunkLoaded(pos)) continue;
-			if (!world.getBlockState(pos).equals(placementState)) {
+			BlockState currentState = world.getBlockState(pos);
+			if (!currentState.equals(placementState)) {
+				captureTimelineMutationOriginalState(world, pos, currentState);
 				world.setBlockState(pos, placementState, 3);
 			}
 		}
+	}
+
+	private static void captureTimelineMutationOriginalState(World world, BlockPos pos, BlockState currentState) {
+		if (world == null || pos == null || currentState == null) return;
+		RegistryKey<World> worldKey = world.getRegistryKey();
+		if (timelineMutationWorldKey == null) {
+			timelineMutationWorldKey = worldKey;
+		} else if (!timelineMutationWorldKey.equals(worldKey)) {
+			restoreTimelineMutationSnapshot();
+			timelineMutationWorldKey = worldKey;
+		}
+		timelineMutationSnapshot.putIfAbsent(pos.toImmutable(), currentState);
+	}
+
+	private static void restoreTimelineMutationSnapshot() {
+		if (timelineMutationSnapshot.isEmpty()) {
+			timelineMutationWorldKey = null;
+			return;
+		}
+		MinecraftClient mc = MinecraftClient.getInstance();
+		World world = mc != null ? mc.world : null;
+		if (world != null && timelineMutationWorldKey != null && timelineMutationWorldKey.equals(world.getRegistryKey())) {
+			for (Map.Entry<BlockPos, BlockState> entry : timelineMutationSnapshot.entrySet()) {
+				BlockPos pos = entry.getKey();
+				if (!world.isChunkLoaded(pos)) continue;
+				BlockState originalState = entry.getValue();
+				if (!world.getBlockState(pos).equals(originalState)) {
+					world.setBlockState(pos, originalState, 3);
+				}
+			}
+		}
+		timelineMutationSnapshot.clear();
+		timelineMutationWorldKey = null;
 	}
 
 	private static BlockState resolvePlacementBlockState(TimelineAnimationEvent event) {
@@ -268,6 +311,7 @@ public final class BeatBlockClientDriver {
 	}
 
 	private static void resetTimelineAnimationScheduling() {
+		restoreTimelineMutationSnapshot();
 		scheduledTimelineAnimationIds.clear();
 		lastTimelineAnimationTime = 0.0;
 		if (BeatBlock.blockAnimationEngine != null) {

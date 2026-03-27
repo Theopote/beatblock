@@ -205,6 +205,14 @@ public class EventPropertiesPanel {
 			double newDuration = Math.max(0.01, Double.parseDouble(valueOf(durationBuffer).trim()));
 			float newEnergy = (float) Math.max(0.0, Math.min(1.0, Double.parseDouble(valueOf(energyBuffer).trim())));
 			TimelineAnimationActionMode mode = TimelineAnimationActionMode.fromValue(actionMode);
+			if (targetObjectId == null || targetObjectId.isBlank()) {
+				validationError = "请先选择目标对象。";
+				return;
+			}
+			if (BeatBlock.blockAnimationEngine == null || BeatBlock.blockAnimationEngine.getStageObjectSystem().get(targetObjectId) == null) {
+				validationError = "目标对象不存在，请重新选择。";
+				return;
+			}
 			String placeBlockId = null;
 			if (mode == TimelineAnimationActionMode.PLACE) {
 				String blockId = valueOf(placeBlockBuffer).trim();
