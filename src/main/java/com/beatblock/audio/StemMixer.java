@@ -33,12 +33,14 @@ public final class StemMixer implements IAudioPlayer {
 
 	private static final class StemTrack {
 		final String key;
+		final Path path;
 		final int alSource;
 		final int alBuffer;
 		volatile boolean muted;
 
-		StemTrack(String key, int alSource, int alBuffer) {
+		StemTrack(String key, Path path, int alSource, int alBuffer) {
 			this.key     = key;
+			this.path = path;
 			this.alSource = alSource;
 			this.alBuffer = alBuffer;
 		}
@@ -49,6 +51,8 @@ public final class StemMixer implements IAudioPlayer {
 	private final Map<String, StemTrack> stems = new LinkedHashMap<>();
 	private volatile boolean playing = false;
 	private double durationSeconds   = 0.0;
+	private double lastKnownTimeSeconds = 0.0;
+	private boolean recoveringOpenAl = false;
 
 	// ── 公共 API ─────────────────────────────────────────────────────────────
 
@@ -62,9 +66,10 @@ public final class StemMixer implements IAudioPlayer {
 	 */
 	public synchronized boolean loadStem(String key, Path wavPath) {
 		if (key == null || wavPath == null) return false;
+		Path normalizedPath = wavPath.toAbsolutePath().normalize();
 		try {
 			// 1. 解码为原始 16-bit signed LE PCM
-			StemPcmData pcmData = decodeStemAudio(wavPath);
+			StemPcmData pcmData = decodeStemAudio(normalizedPath);
 
 			// 2. 上传到 OpenAL buffer
 			ByteBuffer directBuf = ByteBuffer.allocateDirect(pcmData.pcm.length);
@@ -91,7 +96,7 @@ public final class StemMixer implements IAudioPlayer {
 			// 4. 替换同名旧茎
 			StemTrack old = stems.get(key);
 			if (old != null) releaseTrack(old);
-			stems.put(key, new StemTrack(key, src, buf));
+			stems.put(key, new StemTrack(key, normalizedPath, src, buf));
 
 			// 首条茎决定时长
 			if (durationSeconds <= 0.0) {
@@ -104,7 +109,7 @@ public final class StemMixer implements IAudioPlayer {
 
 		} catch (Exception e) {
 			LOGGER.warn("BeatBlock StemMixer: failed to load stem key={} path={} reason={}",
-					key, wavPath, e.getMessage());
+					key, normalizedPath, e.getMessage());
 			return false;
 		}
 	}
@@ -137,6 +142,7 @@ public final class StemMixer implements IAudioPlayer {
 	 * @param muted true = 静音，false = 恢复
 	 */
 	public void setStemMuted(String key, boolean muted) {
+		ensureOpenAlBackendReady();
 		StemTrack t = stems.get(key);
 		if (t == null) return;
 		t.muted = muted;
@@ -149,22 +155,31 @@ public final class StemMixer implements IAudioPlayer {
 
 	@Override
 	public boolean isPlaying() {
+		ensureOpenAlBackendReady();
 		return playing;
 	}
 
 	@Override
 	public double getCurrentTimeSeconds() {
+		if (!ensureOpenAlBackendReady()) return lastKnownTimeSeconds;
 		for (StemTrack t : stems.values()) {
 			try {
-				return AL11.alGetSourcef(t.alSource, AL11.AL_SEC_OFFSET);
+				lastKnownTimeSeconds = AL11.alGetSourcef(t.alSource, AL11.AL_SEC_OFFSET);
+				return lastKnownTimeSeconds;
 			} catch (Throwable ignored) {}
 		}
-		return 0.0;
+		return lastKnownTimeSeconds;
 	}
 
 	@Override
 	public synchronized void setCurrentTimeSeconds(double seconds) {
+		if (!ensureOpenAlBackendReady()) {
+			lastKnownTimeSeconds = Math.max(0.0, seconds);
+			playing = false;
+			return;
+		}
 		float secs = (float) Math.max(0.0, seconds);
+		lastKnownTimeSeconds = secs;
 		boolean wasPlaying = playing;
 		if (wasPlaying) pauseAll();
 		for (StemTrack t : stems.values()) {
@@ -178,18 +193,31 @@ public final class StemMixer implements IAudioPlayer {
 	@Override
 	public synchronized void play() {
 		if (stems.isEmpty()) return;
+		if (!ensureOpenAlBackendReady()) {
+			playing = false;
+			return;
+		}
 		playAll();
 		playing = true;
 	}
 
 	@Override
 	public synchronized void pause() {
+		if (!ensureOpenAlBackendReady()) {
+			playing = false;
+			return;
+		}
 		pauseAll();
 		playing = false;
 	}
 
 	@Override
 	public synchronized void stop() {
+		if (!ensureOpenAlBackendReady()) {
+			playing = false;
+			lastKnownTimeSeconds = 0.0;
+			return;
+		}
 		for (StemTrack t : stems.values()) {
 			try {
 				AL10.alSourceStop(t.alSource);
@@ -197,11 +225,13 @@ public final class StemMixer implements IAudioPlayer {
 			} catch (Throwable ignored) {}
 		}
 		playing = false;
+		lastKnownTimeSeconds = 0.0;
 	}
 
 	// ── 内部：OpenAL 操作 ─────────────────────────────────────────────────────
 
 	private void playAll() {
+		if (!ensureOpenAlBackendReady()) return;
 		for (StemTrack t : stems.values()) {
 			try {
 				AL10.alSourcePlay(t.alSource);
@@ -212,6 +242,7 @@ public final class StemMixer implements IAudioPlayer {
 	}
 
 	private void pauseAll() {
+		if (!ensureOpenAlBackendReady()) return;
 		for (StemTrack t : stems.values()) {
 			try {
 				AL10.alSourcePause(t.alSource);
@@ -228,6 +259,64 @@ public final class StemMixer implements IAudioPlayer {
 		try {
 			AL10.alDeleteBuffers(t.alBuffer);
 		} catch (Throwable ignored) {}
+	}
+
+	private boolean ensureOpenAlBackendReady() {
+		if (stems.isEmpty()) return true;
+		if (recoveringOpenAl) return false;
+		if (areStemHandlesValid()) return true;
+		return recoverOpenAlBackend();
+	}
+
+	private boolean areStemHandlesValid() {
+		if (stems.isEmpty()) return true;
+		try {
+			for (StemTrack t : stems.values()) {
+				AL10.alGetError();
+				boolean sourceValid = AL10.alIsSource(t.alSource);
+				int sourceErr = AL10.alGetError();
+				boolean bufferValid = AL10.alIsBuffer(t.alBuffer);
+				int bufferErr = AL10.alGetError();
+				if (sourceErr != AL10.AL_NO_ERROR || bufferErr != AL10.AL_NO_ERROR || !sourceValid || !bufferValid) {
+					return false;
+				}
+			}
+			return true;
+		} catch (Throwable ignored) {
+			return false;
+		}
+	}
+
+	private boolean recoverOpenAlBackend() {
+		if (stems.isEmpty()) return true;
+		recoveringOpenAl = true;
+		boolean resumePlaying = playing;
+		double resumeTime = lastKnownTimeSeconds;
+		Map<String, StemTrack> snapshot = new LinkedHashMap<>(stems);
+		try {
+			LOGGER.warn("BeatBlock StemMixer: OpenAL handles became invalid, rebuilding {} stems at {}s",
+				snapshot.size(), String.format("%.3f", resumeTime));
+			clearStems();
+			for (StemTrack track : snapshot.values()) {
+				if (!loadStem(track.key, track.path)) {
+					LOGGER.warn("BeatBlock StemMixer: failed to rebuild stem key={} path={}", track.key, track.path);
+					playing = false;
+					return false;
+				}
+				setStemMuted(track.key, track.muted);
+			}
+			setCurrentTimeSeconds(resumeTime);
+			if (resumePlaying) {
+				playAll();
+				playing = true;
+			} else {
+				playing = false;
+			}
+			LOGGER.info("BeatBlock StemMixer: OpenAL backend rebuilt successfully with {} stems", stems.size());
+			return true;
+		} finally {
+			recoveringOpenAl = false;
+		}
 	}
 
 	// ── 内部：PCM 解码 ────────────────────────────────────────────────────────

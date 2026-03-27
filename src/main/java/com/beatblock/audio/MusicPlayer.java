@@ -54,6 +54,7 @@ public class MusicPlayer implements IAudioPlayer {
 	private int alSource = 0;
 	private boolean useOpenAl = false;
 	private double alBytesPerSecond = 0.0;
+	private boolean recoveringOpenAl = false;
 
 	public MusicPlayer() {
 		this.playing = false;
@@ -97,6 +98,11 @@ public class MusicPlayer implements IAudioPlayer {
 			}
 			LOGGER.info("BeatBlock MusicPlayer: stream playback started path={} time={}s", loadedAudioPath, String.format("%.3f", currentTimeSeconds));
 		} else if (useOpenAl) {
+			if (!ensureOpenAlBackendReady()) {
+				LOGGER.warn("BeatBlock MusicPlayer: OpenAL backend is unavailable after device reset. lastLoadError={}", lastLoadError);
+				playing = false;
+				return;
+			}
 			if (durationSeconds > 0 && currentTimeSeconds >= durationSeconds - 0.001) {
 				try { AL11.alSourcef(alSource, AL11.AL_SEC_OFFSET, 0.0f); } catch (Throwable ignored) {}
 				currentTimeSeconds = 0;
@@ -124,6 +130,10 @@ public class MusicPlayer implements IAudioPlayer {
 			stopStreamPlayback(false);
 			currentTimeSeconds = streamPositionSeconds();
 		} else if (useOpenAl) {
+			if (!ensureOpenAlBackendReady()) {
+				playing = false;
+				return;
+			}
 			try {
 				currentTimeSeconds = openAlPositionSeconds();
 				AL10.alSourcePause(alSource);
@@ -139,6 +149,11 @@ public class MusicPlayer implements IAudioPlayer {
 		} else if (hasStreamBackend()) {
 			stopStreamPlayback(true);
 		} else if (useOpenAl) {
+			if (!ensureOpenAlBackendReady()) {
+				playing = false;
+				currentTimeSeconds = 0;
+				return;
+			}
 			try {
 				AL10.alSourceStop(alSource);
 				AL11.alSourcef(alSource, AL11.AL_SEC_OFFSET, 0.0f);
@@ -174,6 +189,10 @@ public class MusicPlayer implements IAudioPlayer {
 				startStreamPlayback();
 			}
 		} else if (useOpenAl) {
+			if (!ensureOpenAlBackendReady()) {
+				playing = false;
+				return;
+			}
 			try {
 				boolean wasPlaying = playing && AL10.alGetSourcei(alSource, AL10.AL_SOURCE_STATE) == AL10.AL_PLAYING;
 				if (wasPlaying) AL10.alSourcePause(alSource);
@@ -305,6 +324,10 @@ public class MusicPlayer implements IAudioPlayer {
 			return;
 		}
 		if (useOpenAl) {
+			if (!ensureOpenAlBackendReady()) {
+				playing = false;
+				return;
+			}
 			try {
 				currentTimeSeconds = openAlPositionSeconds();
 				if (playing) {
@@ -348,6 +371,9 @@ public class MusicPlayer implements IAudioPlayer {
 		}
 
 		if (useOpenAl && alSource != 0) {
+			if (!ensureOpenAlBackendReady()) {
+				return;
+			}
 			try { AL10.alSourcef(alSource, AL10.AL_GAIN, gain); } catch (Throwable ignored) {}
 		}
 	}
@@ -389,6 +415,59 @@ public class MusicPlayer implements IAudioPlayer {
 				AL10.alDeleteBuffers(alBuffer);
 			} catch (Throwable ignored) {}
 			alBuffer = 0;
+		}
+	}
+
+	private boolean ensureOpenAlBackendReady() {
+		if (!useOpenAl) return false;
+		if (recoveringOpenAl) return false;
+		if (isOpenAlBackendValid()) return true;
+		return recoverOpenAlBackend();
+	}
+
+	private boolean isOpenAlBackendValid() {
+		if (!useOpenAl || alSource == 0 || alBuffer == 0) return false;
+		try {
+			AL10.alGetError();
+			boolean sourceValid = AL10.alIsSource(alSource);
+			int sourceErr = AL10.alGetError();
+			boolean bufferValid = AL10.alIsBuffer(alBuffer);
+			int bufferErr = AL10.alGetError();
+			return sourceErr == AL10.AL_NO_ERROR && bufferErr == AL10.AL_NO_ERROR && sourceValid && bufferValid;
+		} catch (Throwable ignored) {
+			return false;
+		}
+	}
+
+	private boolean recoverOpenAlBackend() {
+		String path = loadedAudioPath;
+		if (path == null || path.isBlank()) {
+			closeOpenAlBackend();
+			lastLoadError = "OpenAL 设备重建后无法恢复：未绑定音频文件";
+			return false;
+		}
+		recoveringOpenAl = true;
+		boolean resumePlaying = playing;
+		double resumeTime = currentTimeSeconds;
+		try {
+			LOGGER.warn("BeatBlock MusicPlayer: OpenAL handles became invalid, rebuilding backend path={} time={}s",
+				path, String.format("%.3f", resumeTime));
+			boolean loaded = loadAudio(path);
+			if (!loaded) {
+				LOGGER.warn("BeatBlock MusicPlayer: OpenAL backend rebuild failed path={} reason={}", path, lastLoadError);
+				playing = false;
+				return false;
+			}
+			setCurrentTimeSeconds(resumeTime);
+			if (resumePlaying) {
+				play();
+			} else {
+				playing = false;
+			}
+			LOGGER.info("BeatBlock MusicPlayer: OpenAL backend rebuilt successfully path={}", path);
+			return true;
+		} finally {
+			recoveringOpenAl = false;
 		}
 	}
 
