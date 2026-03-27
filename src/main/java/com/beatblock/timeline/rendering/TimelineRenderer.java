@@ -786,7 +786,10 @@ public final class TimelineRenderer {
 
 		double duration = Math.max(0.05, rule.baseDurationSeconds() * effectiveDurationScale * (0.70 + energy * 0.75));
 		Map<String, Object> params = new HashMap<>();
+		params.put("mode", TimelineAnimationActionMode.ANIMATE.name());
 		params.put("energy", energy);
+		params.put("energyThreshold", minEnergy);
+		params.put("energyMapping", "linear");
 		params.put("sourceFeature", sourceFeature);
 		params.put("sourceStem", rule.sourceStem());
 		params.put("mappingProfile", "demucs-aware");

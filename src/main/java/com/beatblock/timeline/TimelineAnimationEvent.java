@@ -58,7 +58,9 @@ public final class TimelineAnimationEvent {
 	}
 
 	public TimelineAnimationActionMode getActionMode() {
-		return TimelineAnimationActionMode.fromValue(parameters.get("actionMode"));
+		Object value = parameters.get("actionMode");
+		if (value == null) value = parameters.get("mode");
+		return TimelineAnimationActionMode.fromValue(value);
 	}
 
 	public Map<String, Object> getParameters() {

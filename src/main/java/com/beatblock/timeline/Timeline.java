@@ -418,6 +418,7 @@ public class Timeline {
 		if (clip == null) return;
 		Map<String, Object> params = new HashMap<>();
 		params.put("actionMode", e.getActionMode().name());
+		params.put("mode", e.getActionMode().name());
 		params.put("animationType", e.getAnimationTypeId());
 		params.put("targetObject", e.getTargetObjectId());
 		params.put("energy", e.getEnergy());

@@ -3,8 +3,10 @@ package com.beatblock.engine;
 import com.beatblock.timeline.TimelineAnimationActionMode;
 import com.beatblock.timeline.TimelineAnimationEvent;
 import java.util.Map;
+import java.util.List;
 
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.world.World;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -18,6 +20,7 @@ public final class BlockAnimationEngine {
 	private final StageObjectSystem stageObjectSystem = new StageObjectSystem();
 	private final AnimationLibrary animationLibrary = new AnimationLibrary();
 	private final AnimationPlayer animationPlayer = new AnimationPlayer();
+	private final BlockControlExecutor blockControlExecutor = new BlockControlExecutor(stageObjectSystem);
 
 	public StageObjectSystem getStageObjectSystem() {
 		return stageObjectSystem;
@@ -29,6 +32,10 @@ public final class BlockAnimationEngine {
 
 	public AnimationPlayer getAnimationPlayer() {
 		return animationPlayer;
+	}
+
+	public BlockControlExecutor getBlockControlExecutor() {
+		return blockControlExecutor;
 	}
 
 	/**
@@ -53,20 +60,25 @@ public final class BlockAnimationEngine {
 	public void scheduleTimelineEvent(TimelineAnimationEvent event) {
 		if (event == null) return;
 		TimelineAnimationActionMode actionMode = event.getActionMode();
-		switch (actionMode) {
-			case ANIMATE -> scheduleFromTimelineEvent(
+		if (actionMode == TimelineAnimationActionMode.ANIMATE) {
+			scheduleFromTimelineEvent(
 				event.getAnimationTypeId(),
 				event.getTargetObjectId(),
 				event.getTimeSeconds(),
 				event.getDurationSeconds(),
 				event.getEnergy()
 			);
-			case PLACE, CLEAR -> LOGGER.debug(
-				"Timeline action mode {} is captured for event {}, but world mutation is not implemented yet.",
-				actionMode,
-				event.getEventId()
-			);
 		}
+	}
+
+	public List<BlockControlExecutor.BlockMutation> planControlMutations(TimelineAnimationEvent event, World world) {
+		if (event == null || world == null) return List.of();
+		return blockControlExecutor.planMutations(world, event);
+	}
+
+	public void applyControlMutations(World world, List<BlockControlExecutor.BlockMutation> mutations) {
+		if (world == null || mutations == null || mutations.isEmpty()) return;
+		blockControlExecutor.applyMutations(world, mutations);
 	}
 
 	/** 当前帧参与动画的方块及其状态，供渲染层做 Matrix 变换后绘制 */

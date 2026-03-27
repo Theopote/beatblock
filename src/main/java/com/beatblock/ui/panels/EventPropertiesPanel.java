@@ -40,6 +40,7 @@ public class EventPropertiesPanel {
 	private final ImString timeBuffer = new ImString(INPUT_BUFFER_SIZE);
 	private final ImString durationBuffer = new ImString(INPUT_BUFFER_SIZE);
 	private final ImString energyBuffer = new ImString(INPUT_BUFFER_SIZE);
+	private final ImString energyThresholdBuffer = new ImString(INPUT_BUFFER_SIZE);
 	private final ImString placeBlockBuffer = new ImString(INPUT_BUFFER_SIZE);
 	private String validationError;
 
@@ -126,7 +127,8 @@ public class EventPropertiesPanel {
 		}
 		ImGui.textDisabled("Action Mode");
 		ImGui.sameLine();
-		ImGui.text(TimelineAnimationActionMode.fromValue(params.get("actionMode")).name());
+		Object actionMode = params.get("actionMode") != null ? params.get("actionMode") : params.get("mode");
+		ImGui.text(TimelineAnimationActionMode.fromValue(actionMode).name());
 	}
 
 	private void renderAnimationEditor(EventRef ref, Timeline timeline) {
@@ -142,10 +144,12 @@ public class EventPropertiesPanel {
 		ImGui.inputText("持续时间 (s)##eventDuration", durationBuffer);
 		ImGui.setNextItemWidth(-1f);
 		ImGui.inputText("能量 (0-1)##eventEnergy", energyBuffer);
+		ImGui.setNextItemWidth(-1f);
+		ImGui.inputText("能量阈值 (0-1)##eventEnergyThreshold", energyThresholdBuffer);
 
 		String currentAnimationId = stringParam(params, "animationType");
 		String currentTargetId = stringParam(params, "targetObject");
-		String currentActionMode = stringParam(params, "actionMode", TimelineAnimationActionMode.ANIMATE.name());
+		String currentActionMode = stringParam(params, "actionMode", stringParam(params, "mode", TimelineAnimationActionMode.ANIMATE.name()));
 		ImInt actionIndex = new ImInt(indexOfOption(actionOptions, currentActionMode));
 		ImInt animationIndex = new ImInt(indexOfOption(animationOptions, currentAnimationId));
 		ImInt targetIndex = new ImInt(indexOfOption(targetOptions, currentTargetId));
@@ -204,6 +208,7 @@ public class EventPropertiesPanel {
 			double newTime = Math.max(0.0, Double.parseDouble(valueOf(timeBuffer).trim()));
 			double newDuration = Math.max(0.01, Double.parseDouble(valueOf(durationBuffer).trim()));
 			float newEnergy = (float) Math.max(0.0, Math.min(1.0, Double.parseDouble(valueOf(energyBuffer).trim())));
+			float newEnergyThreshold = (float) Math.max(0.0, Math.min(1.0, Double.parseDouble(valueOf(energyThresholdBuffer).trim())));
 			TimelineAnimationActionMode mode = TimelineAnimationActionMode.fromValue(actionMode);
 			if (targetObjectId == null || targetObjectId.isBlank()) {
 				validationError = "请先选择目标对象。";
@@ -229,8 +234,10 @@ public class EventPropertiesPanel {
 
 			ref.event().setTimeSeconds(newTime);
 			ref.event().setParameter("actionMode", mode.name());
+			ref.event().setParameter("mode", mode.name());
 			ref.event().setParameter("durationSeconds", newDuration);
 			ref.event().setParameter("energy", newEnergy);
+			ref.event().setParameter("energyThreshold", newEnergyThreshold);
 			ref.event().setParameter("animationType", animationId);
 			ref.event().setParameter("targetObject", targetObjectId);
 			if (mode == TimelineAnimationActionMode.PLACE) {
@@ -255,6 +262,7 @@ public class EventPropertiesPanel {
 		timeBuffer.set(String.format(Locale.ROOT, "%.6f", event.getTimeSeconds()));
 		durationBuffer.set(String.format(Locale.ROOT, "%.6f", numericParam(params, "durationSeconds", 0.25)));
 		energyBuffer.set(String.format(Locale.ROOT, "%.3f", numericParam(params, "energy", 1.0)));
+		energyThresholdBuffer.set(String.format(Locale.ROOT, "%.3f", numericParam(params, "energyThreshold", 0.15)));
 		String placeBlock = stringParam(params, "placeBlock", stringParam(params, "placeBlockId", "minecraft:diamond_block"));
 		placeBlockBuffer.set(placeBlock);
 		validationError = null;

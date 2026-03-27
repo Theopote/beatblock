@@ -6,18 +6,15 @@ import com.beatblock.animation.AnimationTemplate;
 import com.beatblock.audio.BeatBlockRuntime;
 import com.beatblock.beat.BeatEvent;
 import com.beatblock.beat.Beatmap;
-import com.beatblock.engine.StageObject;
+import com.beatblock.engine.BlockControlExecutor;
 import com.beatblock.stage.StageZone;
 import com.beatblock.timeline.TimelineAnimationActionMode;
 import com.beatblock.timeline.TimelineAnimationEvent;
-import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.entity.decoration.DisplayEntity;
-import net.minecraft.registry.Registries;
 import net.minecraft.registry.RegistryKey;
-import net.minecraft.util.Identifier;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Vec3d;
@@ -230,31 +227,12 @@ public final class BeatBlockClientDriver {
 		MinecraftClient mc = MinecraftClient.getInstance();
 		World world = mc != null ? mc.world : null;
 		if (world == null) return;
-
-		StageObject target = BeatBlock.blockAnimationEngine.getStageObjectSystem().get(event.getTargetObjectId());
-		if (target == null || target.getBlocks().isEmpty()) return;
-
-		if (actionMode == TimelineAnimationActionMode.CLEAR) {
-			for (var pos : target.getBlocks()) {
-				if (!world.isChunkLoaded(pos)) continue;
-				BlockState currentState = world.getBlockState(pos);
-				if (!currentState.isAir()) {
-					captureTimelineMutationOriginalState(world, pos, currentState);
-					world.setBlockState(pos, Blocks.AIR.getDefaultState(), 3);
-				}
-			}
-			return;
+		var mutations = BeatBlock.blockAnimationEngine.planControlMutations(event, world);
+		if (mutations == null || mutations.isEmpty()) return;
+		for (BlockControlExecutor.BlockMutation mutation : mutations) {
+			captureTimelineMutationOriginalState(world, mutation.pos(), mutation.fromState());
 		}
-
-		BlockState placementState = resolvePlacementBlockState(event);
-		for (var pos : target.getBlocks()) {
-			if (!world.isChunkLoaded(pos)) continue;
-			BlockState currentState = world.getBlockState(pos);
-			if (!currentState.equals(placementState)) {
-				captureTimelineMutationOriginalState(world, pos, currentState);
-				world.setBlockState(pos, placementState, 3);
-			}
-		}
+		BeatBlock.blockAnimationEngine.applyControlMutations(world, mutations);
 	}
 
 	private static void captureTimelineMutationOriginalState(World world, BlockPos pos, BlockState currentState) {
@@ -302,26 +280,6 @@ public final class BeatBlockClientDriver {
 		if (raw == null) return true;
 		String mode = String.valueOf(raw).trim().toLowerCase(Locale.ROOT);
 		return !"persistent".equals(mode) && !"performance".equals(mode);
-	}
-
-	private static BlockState resolvePlacementBlockState(TimelineAnimationEvent event) {
-		if (event == null) return Blocks.DIAMOND_BLOCK.getDefaultState();
-		Object param = event.getParameters().get("placeBlock");
-		if (param == null) param = event.getParameters().get("placeBlockId");
-		if (param == null) return Blocks.DIAMOND_BLOCK.getDefaultState();
-
-		String raw = String.valueOf(param).trim();
-		if (raw.isEmpty()) return Blocks.DIAMOND_BLOCK.getDefaultState();
-		Identifier id;
-		try {
-			id = Identifier.of(raw);
-		} catch (Exception ex) {
-			return Blocks.DIAMOND_BLOCK.getDefaultState();
-		}
-		if (!Registries.BLOCK.containsId(id)) return Blocks.DIAMOND_BLOCK.getDefaultState();
-		Block block = Registries.BLOCK.get(id);
-		if (block == null) return Blocks.DIAMOND_BLOCK.getDefaultState();
-		return block.getDefaultState();
 	}
 
 	private static void resetTimelineAnimationScheduling() {
