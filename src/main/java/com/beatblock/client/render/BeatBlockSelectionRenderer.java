@@ -18,7 +18,7 @@ import net.minecraft.util.shape.VoxelShapes;
 
 /**
  * 在世界中绘制当前选区的总包围盒线框（优化：不按方块逐个描边，大选区仍保持低开销）。
- * 框选 / 线选：第一点后沿光标预览第二角包围盒；球选：预览球体包络盒。
+ * 框选/线选：两点 AABB 预览；球选/笔刷：半径包络盒；平面切片：按击中面与范围预览薄片 AABB。
  */
 public final class BeatBlockSelectionRenderer {
 
@@ -26,6 +26,8 @@ public final class BeatBlockSelectionRenderer {
 	private static final int BOX_PREVIEW_ARGB = 0xAABBDDFF;
 	private static final int LINE_PREVIEW_ARGB = 0xAAFFCC66;
 	private static final int SPHERE_PREVIEW_ARGB = 0xAADD88FF;
+	private static final int PLANE_SLICE_PREVIEW_ARGB = 0xAA88FFAA;
+	private static final int BRUSH_PREVIEW_ARGB = 0xAAFFAA66;
 
 	private BeatBlockSelectionRenderer() {}
 
@@ -47,6 +49,8 @@ public final class BeatBlockSelectionRenderer {
 		renderBoxDragPreviewIfNeeded(matrices, consumers, mc, mgr);
 		renderLineDragPreviewIfNeeded(matrices, consumers, mc, mgr);
 		renderSphereBrushPreviewIfNeeded(matrices, consumers, mc, mgr);
+		renderPlaneSlicePreviewIfNeeded(matrices, consumers, mc, mgr);
+		renderBrushPreviewIfNeeded(matrices, consumers, mc, mgr);
 	}
 
 	private static void renderBoxDragPreviewIfNeeded(
@@ -73,8 +77,38 @@ public final class BeatBlockSelectionRenderer {
 		if (mgr.getMode() != SelectionMode.SPHERE) return;
 		BlockHitResult hit = raycastForPreview(mc);
 		if (hit == null) return;
-		BlockPos c = hit.getBlockPos();
-		int r = mgr.getSphereBrushRadius();
+		drawRadiusPreviewAabb(matrices, consumers, mc, hit.getBlockPos(), mgr.getSphereBrushRadius(),
+				SPHERE_PREVIEW_ARGB, 1.75f);
+	}
+
+	private static void renderPlaneSlicePreviewIfNeeded(
+			MatrixStack matrices, VertexConsumerProvider consumers,
+			MinecraftClient mc, BeatBlockSelectionManager mgr) {
+		if (mgr.getMode() != SelectionMode.PLANE_SLICE) return;
+		if (mc.world == null) return;
+		BlockHitResult hit = raycastForPreview(mc);
+		if (hit == null) return;
+		var b = mgr.computePlaneSliceBounds(mc.world, hit.getBlockPos(), hit.getSide());
+		if (b.isEmpty()) return;
+		drawInclusiveBoundingBox(matrices, consumers, mc,
+				new BlockPos(b.minX(), b.minY(), b.minZ()),
+				new BlockPos(b.maxX(), b.maxY(), b.maxZ()),
+				PLANE_SLICE_PREVIEW_ARGB, 2.0f);
+	}
+
+	private static void renderBrushPreviewIfNeeded(
+			MatrixStack matrices, VertexConsumerProvider consumers,
+			MinecraftClient mc, BeatBlockSelectionManager mgr) {
+		if (mgr.getMode() != SelectionMode.BRUSH) return;
+		BlockHitResult hit = raycastForPreview(mc);
+		if (hit == null) return;
+		drawRadiusPreviewAabb(matrices, consumers, mc, hit.getBlockPos(), mgr.getSphereBrushRadius(),
+				BRUSH_PREVIEW_ARGB, 1.85f);
+	}
+
+	private static void drawRadiusPreviewAabb(
+			MatrixStack matrices, VertexConsumerProvider consumers, MinecraftClient mc,
+			BlockPos c, int r, int argb, float lineWidth) {
 		int minX = c.getX() - r;
 		int minY = c.getY() - r;
 		int minZ = c.getZ() - r;
@@ -82,8 +116,7 @@ public final class BeatBlockSelectionRenderer {
 		int maxY = c.getY() + r;
 		int maxZ = c.getZ() + r;
 		drawInclusiveBoundingBox(matrices, consumers, mc,
-				new BlockPos(minX, minY, minZ), new BlockPos(maxX, maxY, maxZ),
-				SPHERE_PREVIEW_ARGB, 1.75f);
+				new BlockPos(minX, minY, minZ), new BlockPos(maxX, maxY, maxZ), argb, lineWidth);
 	}
 
 	private static BlockHitResult raycastForPreview(MinecraftClient mc) {

@@ -1,8 +1,11 @@
 package com.beatblock.selection;
 
 import net.minecraft.block.BlockState;
+import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.ChunkPos;
 import net.minecraft.util.math.Direction;
+import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -14,12 +17,11 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 
 /**
- * BeatBlock 方块选区（复刻 ChronoBlocks 类：点击、框选、线选、球、连通、整列）。
- * <p>
- * 大体积一次性合并；超过上限则拒绝或截断（连通）并提示。
+ * BeatBlock 方块选区：点击、框选、线选、球/立方笔刷、连通魔棒、选区魔棒、整列、平面切片等。
  */
 public final class BeatBlockSelectionManager {
 
@@ -40,6 +42,9 @@ public final class BeatBlockSelectionManager {
 	private int maxBlocks = 100_000;
 	private int sphereBrushRadius = 3;
 	private boolean connectedMatchFullState = true;
+	private BrushShape brushShape = BrushShape.SPHERE;
+	private BlockPos brushLastStampBlock;
+	private boolean brushHadStroke;
 	private String lastMessage = "";
 
 	private BeatBlockSelectionManager() {}
@@ -55,6 +60,10 @@ public final class BeatBlockSelectionManager {
 		}
 		if (this.mode != SelectionMode.LINE) {
 			lineFirstCorner = null;
+		}
+		if (this.mode != SelectionMode.BRUSH) {
+			clearBrushAnchor();
+			brushHadStroke = false;
 		}
 	}
 
@@ -98,6 +107,14 @@ public final class BeatBlockSelectionManager {
 		this.connectedMatchFullState = connectedMatchFullState;
 	}
 
+	public BrushShape getBrushShape() {
+		return brushShape;
+	}
+
+	public void setBrushShape(BrushShape brushShape) {
+		this.brushShape = brushShape != null ? brushShape : BrushShape.SPHERE;
+	}
+
 	public Set<BlockPos> getSelectedBlocks() {
 		return Collections.unmodifiableSet(selected);
 	}
@@ -126,6 +143,8 @@ public final class BeatBlockSelectionManager {
 		selected.clear();
 		boxFirstCorner = null;
 		lineFirstCorner = null;
+		clearBrushAnchor();
+		brushHadStroke = false;
 		lastMessage = "已清空选区。";
 	}
 
@@ -139,9 +158,6 @@ public final class BeatBlockSelectionManager {
 		lastMessage = "已取消线选第一点。";
 	}
 
-	/**
-	 * 关闭 UI 或重置会话时调用。
-	 */
 	public void reset() {
 		mode = SelectionMode.OFF;
 		operation = SelectionOperation.NEW;
@@ -151,11 +167,19 @@ public final class BeatBlockSelectionManager {
 		includeAir = false;
 		sphereBrushRadius = 3;
 		connectedMatchFullState = true;
+		brushShape = BrushShape.SPHERE;
+		clearBrushAnchor();
+		brushHadStroke = false;
 		lastMessage = "";
 	}
 
-	public void handleLeftClick(World world, BlockPos pos, boolean shiftDown) {
-		if (mode == SelectionMode.OFF || world == null || pos == null) return;
+	/**
+	 * 左键单击（含击中面）。平面切片依赖 {@link BlockHitResult#getSide()}。
+	 */
+	public void handleBlockSelectClick(World world, BlockHitResult hit, boolean shiftDown) {
+		if (mode == SelectionMode.OFF || world == null || hit == null) return;
+		BlockPos pos = hit.getBlockPos();
+		Direction side = hit.getSide();
 
 		if (!includeAir && world.getBlockState(pos).isAir()) {
 			lastMessage = "当前设置跳过空气方块。";
@@ -170,7 +194,52 @@ public final class BeatBlockSelectionManager {
 			case SPHERE -> handleSphereTool(world, pos, shiftDown);
 			case CONNECTED -> handleConnectedTool(world, pos, shiftDown);
 			case COLUMN -> handleColumnTool(world, pos, shiftDown);
+			case PLANE_SLICE -> handlePlaneSliceTool(world, pos, side, shiftDown);
+			case SELECTION_WAND -> handleSelectionWandTool(world, pos, shiftDown);
+			case BRUSH -> {}
 		}
+	}
+
+	/** 无击中面信息时使用（例如测试）；一般应使用 {@link #handleBlockSelectClick(World, BlockHitResult, boolean)}。 */
+	public void handleLeftClick(World world, BlockPos pos, boolean shiftDown) {
+		if (world == null || pos == null) return;
+		BlockHitResult hit = new BlockHitResult(Vec3d.ofCenter(pos), Direction.UP, pos, false);
+		handleBlockSelectClick(world, hit, shiftDown);
+	}
+
+	public void stampBrushIfNeeded(World world, BlockPos center, boolean shiftDown) {
+		BlockPos imm = center.toImmutable();
+		if (brushLastStampBlock != null && brushLastStampBlock.equals(imm)) {
+			return;
+		}
+		brushLastStampBlock = imm;
+		brushHadStroke = true;
+		List<BlockPos> blocks = collectBrush(world, imm);
+		if (blocks == null) {
+			return;
+		}
+		SelectionOperation op = shiftDown ? SelectionOperation.ADD : operation;
+		mergeBlockListIntoSelection(blocks, op, true);
+	}
+
+	public void clearBrushAnchor() {
+		brushLastStampBlock = null;
+	}
+
+	/** 松开左键时由客户端 tick 调用，用于结束一次涂抹并提示。 */
+	public void finishBrushStroke() {
+		if (brushHadStroke) {
+			lastMessage = "笔刷结束：当前选区 " + selected.size() + " 个方块。";
+			brushHadStroke = false;
+		}
+		brushLastStampBlock = null;
+	}
+
+	/**
+	 * 计算平面切片在「当前选区包围盒 ∩ 平面」或「当前区块 ∩ 平面」内的 AABB（用于预览与选区一致）。
+	 */
+	public PlaneSliceBounds computePlaneSliceBounds(World world, BlockPos pos, Direction face) {
+		return computePlaneSliceBoundsInternal(world, pos, face);
 	}
 
 	private void handleClickTool(World world, BlockPos pos, boolean shiftDown) {
@@ -254,7 +323,7 @@ public final class BeatBlockSelectionManager {
 	private void handleConnectedTool(World world, BlockPos pos, boolean shiftDown) {
 		SelectionOperation op = shiftDown ? SelectionOperation.ADD : operation;
 		List<BlockPos> blocks = collectConnected(world, pos);
-        mergeBlockListIntoSelection(blocks, op);
+		mergeBlockListIntoSelection(blocks, op);
 	}
 
 	private void handleColumnTool(World world, BlockPos pos, boolean shiftDown) {
@@ -264,6 +333,182 @@ public final class BeatBlockSelectionManager {
 			return;
 		}
 		mergeBlockListIntoSelection(blocks, op);
+	}
+
+	private void handlePlaneSliceTool(World world, BlockPos pos, Direction face, boolean shiftDown) {
+		SelectionOperation op = shiftDown ? SelectionOperation.ADD : operation;
+		List<BlockPos> blocks = collectPlaneSlice(world, pos, face);
+		if (blocks == null) {
+			return;
+		}
+		mergeBlockListIntoSelection(blocks, op);
+	}
+
+	private void handleSelectionWandTool(World world, BlockPos pos, boolean shiftDown) {
+		BlockPos bMin = getBoundingMin();
+		BlockPos bMax = getBoundingMax();
+		if (bMin == null || bMax == null) {
+			lastMessage = "选区魔棒：请先建立选区（需要有效包围盒）。";
+			return;
+		}
+		if (!containsInBounds(pos, bMin, bMax)) {
+			lastMessage = "选区魔棒：请点击当前选区包围盒内的方块。";
+			return;
+		}
+		SelectionOperation op = shiftDown ? SelectionOperation.ADD : operation;
+		List<BlockPos> blocks = collectConnectedInBounds(world, pos, bMin, bMax);
+		mergeBlockListIntoSelection(blocks, op);
+	}
+
+	private static boolean containsInBounds(BlockPos p, BlockPos bMin, BlockPos bMax) {
+		return p.getX() >= bMin.getX() && p.getX() <= bMax.getX()
+				&& p.getY() >= bMin.getY() && p.getY() <= bMax.getY()
+				&& p.getZ() >= bMin.getZ() && p.getZ() <= bMax.getZ();
+	}
+
+	private PlaneSliceBounds computePlaneSliceBoundsInternal(World world, BlockPos pos, Direction face) {
+		Direction.Axis axis = face.getAxis();
+		BlockPos bMin = getBoundingMin();
+		BlockPos bMax = getBoundingMax();
+		boolean useSel = bMin != null && bMax != null;
+		int bottom = world.getBottomY();
+		int top = bottom + world.getHeight() - 1;
+
+		ChunkPos cp = new ChunkPos(pos);
+		int cx0 = cp.getStartX();
+		int cx1 = cx0 + 15;
+		int cz0 = cp.getStartZ();
+		int cz1 = cz0 + 15;
+
+		return switch (axis) {
+			case Y -> {
+				int y = pos.getY();
+				if (useSel) {
+					BlockPos smin = Objects.requireNonNull(bMin);
+					BlockPos smax = Objects.requireNonNull(bMax);
+					if (y < smin.getY() || y > smax.getY()) {
+						yield PlaneSliceBounds.EMPTY;
+					}
+					yield new PlaneSliceBounds(smin.getX(), smax.getX(), y, y, smin.getZ(), smax.getZ());
+				}
+				yield new PlaneSliceBounds(cx0, cx1, y, y, cz0, cz1);
+			}
+			case X -> {
+				int x = pos.getX();
+				if (useSel) {
+					BlockPos smin = Objects.requireNonNull(bMin);
+					BlockPos smax = Objects.requireNonNull(bMax);
+					if (x < smin.getX() || x > smax.getX()) {
+						yield PlaneSliceBounds.EMPTY;
+					}
+					yield new PlaneSliceBounds(x, x, smin.getY(), smax.getY(), smin.getZ(), smax.getZ());
+				}
+				yield new PlaneSliceBounds(x, x, bottom, top, cz0, cz1);
+			}
+			case Z -> {
+				int z = pos.getZ();
+				if (useSel) {
+					BlockPos smin = Objects.requireNonNull(bMin);
+					BlockPos smax = Objects.requireNonNull(bMax);
+					if (z < smin.getZ() || z > smax.getZ()) {
+						yield PlaneSliceBounds.EMPTY;
+					}
+					yield new PlaneSliceBounds(smin.getX(), smax.getX(), smin.getY(), smax.getY(), z, z);
+				}
+				yield new PlaneSliceBounds(cx0, cx1, bottom, top, z, z);
+			}
+		};
+	}
+
+	private List<BlockPos> collectPlaneSlice(World world, BlockPos pos, Direction face) {
+		PlaneSliceBounds b = computePlaneSliceBoundsInternal(world, pos, face);
+		if (b.isEmpty()) {
+			lastMessage = "平面切片：该平面与当前范围无交集（可先有选区再切，或对准区块内）。";
+			return null;
+		}
+		long vol = b.volume();
+		if (vol > maxBlocks) {
+			lastMessage = String.format("平面切片体积 %d 超过上限 %d。", vol, maxBlocks);
+			return null;
+		}
+		List<BlockPos> out = new ArrayList<>((int) Math.min(vol, Integer.MAX_VALUE));
+		for (int x = b.minX(); x <= b.maxX(); x++) {
+			for (int y = b.minY(); y <= b.maxY(); y++) {
+				for (int z = b.minZ(); z <= b.maxZ(); z++) {
+					BlockPos p = new BlockPos(x, y, z);
+					if (!includeAir && world.getBlockState(p).isAir()) continue;
+					out.add(p.toImmutable());
+					if (out.size() > maxBlocks) {
+						lastMessage = String.format("平面切片超过上限 %d。", maxBlocks);
+						return null;
+					}
+				}
+			}
+		}
+		return out;
+	}
+
+	private List<BlockPos> collectConnectedInBounds(World world, BlockPos start, BlockPos bMin, BlockPos bMax) {
+		BlockState anchor = world.getBlockState(start);
+		ArrayDeque<BlockPos> queue = new ArrayDeque<>();
+		HashSet<BlockPos> visited = new HashSet<>();
+		List<BlockPos> result = new ArrayList<>();
+
+		BlockPos startImm = start.toImmutable();
+		queue.add(startImm);
+		visited.add(startImm);
+
+		while (!queue.isEmpty()) {
+			if (result.size() >= maxBlocks) {
+				lastMessage = String.format("选区魔棒已达上限 %d，已选 %d 个方块（未完全展开）。", maxBlocks, result.size());
+				break;
+			}
+			BlockPos p = queue.removeFirst();
+			result.add(p);
+
+			for (Direction d : Direction.values()) {
+				BlockPos n = p.offset(d);
+				if (visited.contains(n)) continue;
+				if (!containsInBounds(n, bMin, bMax)) continue;
+				BlockState st = world.getBlockState(n);
+				if (!includeAir && st.isAir()) continue;
+				if (!connectedMatches(st, anchor)) continue;
+				visited.add(n);
+				queue.add(n.toImmutable());
+			}
+		}
+
+		return result;
+	}
+
+	private List<BlockPos> collectBrush(World world, BlockPos center) {
+		return switch (brushShape) {
+			case SPHERE -> collectSphere(world, center, sphereBrushRadius);
+			case CUBE -> collectCube(world, center, sphereBrushRadius);
+		};
+	}
+
+	private List<BlockPos> collectCube(World world, BlockPos center, int r) {
+		long worst = (2L * r + 1) * (2L * r + 1) * (2L * r + 1);
+		if (worst > maxBlocks) {
+			lastMessage = String.format("立方笔刷包络约 %d 方块，超过上限 %d。", worst, maxBlocks);
+			return null;
+		}
+		List<BlockPos> out = new ArrayList<>();
+		for (int dx = -r; dx <= r; dx++) {
+			for (int dy = -r; dy <= r; dy++) {
+				for (int dz = -r; dz <= r; dz++) {
+					BlockPos p = center.add(dx, dy, dz);
+					if (!includeAir && world.getBlockState(p).isAir()) continue;
+					out.add(p.toImmutable());
+					if (out.size() > maxBlocks) {
+						lastMessage = String.format("立方笔刷超过上限 %d。", maxBlocks);
+						return null;
+					}
+				}
+			}
+		}
+		return out;
 	}
 
 	private List<BlockPos> collectBox(World world, BlockPos a, BlockPos b) {
@@ -389,23 +634,35 @@ public final class BeatBlockSelectionManager {
 	}
 
 	private void mergeBlockListIntoSelection(List<BlockPos> blocks, SelectionOperation op) {
+		mergeBlockListIntoSelection(blocks, op, false);
+	}
+
+	private void mergeBlockListIntoSelection(List<BlockPos> blocks, SelectionOperation op, boolean quiet) {
 		switch (op) {
 			case NEW -> {
 				selected.clear();
 				selected.addAll(blocks);
-				lastMessage = mergeMessageNew(blocks.size());
+				if (!quiet) {
+					lastMessage = mergeMessageNew(blocks.size());
+				}
 			}
 			case ADD -> {
 				selected.addAll(blocks);
-				lastMessage = mergeMessageAfterAdd();
+				if (!quiet) {
+					lastMessage = mergeMessageAfterAdd();
+				}
 			}
 			case SUBTRACT -> {
 				blocks.forEach(selected::remove);
-				lastMessage = mergeMessageAfterSubtract();
+				if (!quiet) {
+					lastMessage = mergeMessageAfterSubtract();
+				}
 			}
 			case INTERSECT -> {
 				selected.retainAll(Set.copyOf(blocks));
-				lastMessage = mergeMessageAfterIntersect();
+				if (!quiet) {
+					lastMessage = mergeMessageAfterIntersect();
+				}
 			}
 		}
 		LOGGER.debug("[BeatBlockSelection] merge op={} size={}", op, selected.size());
@@ -418,6 +675,9 @@ public final class BeatBlockSelectionManager {
 			case SPHERE -> "新建球选：" + count + " 个方块";
 			case CONNECTED -> "新建连通选区：" + count + " 个方块";
 			case COLUMN -> "新建整列：" + count + " 个方块";
+			case PLANE_SLICE -> "新建平面切片：" + count + " 个方块";
+			case SELECTION_WAND -> "新建选区魔棒：" + count + " 个方块";
+			case BRUSH -> "新建笔刷：" + count + " 个方块";
 			default -> "新建选区：" + count + " 个方块";
 		};
 	}
@@ -430,6 +690,9 @@ public final class BeatBlockSelectionManager {
 			case SPHERE -> "加选球后共 " + n + " 个方块";
 			case CONNECTED -> "加选连通区域后共 " + n + " 个方块";
 			case COLUMN -> "加选整列后共 " + n + " 个方块";
+			case PLANE_SLICE -> "加选切片后共 " + n + " 个方块";
+			case SELECTION_WAND -> "加选选区魔棒后共 " + n + " 个方块";
+			case BRUSH -> "加选笔刷后共 " + n + " 个方块";
 			default -> "加选后共 " + n + " 个方块";
 		};
 	}
@@ -442,6 +705,9 @@ public final class BeatBlockSelectionManager {
 			case SPHERE -> "减选球后共 " + n + " 个方块";
 			case CONNECTED -> "减选连通区域后共 " + n + " 个方块";
 			case COLUMN -> "减选整列后共 " + n + " 个方块";
+			case PLANE_SLICE -> "减选切片后共 " + n + " 个方块";
+			case SELECTION_WAND -> "减选选区魔棒后共 " + n + " 个方块";
+			case BRUSH -> "减选笔刷后共 " + n + " 个方块";
 			default -> "减选后共 " + n + " 个方块";
 		};
 	}
@@ -454,13 +720,13 @@ public final class BeatBlockSelectionManager {
 			case SPHERE -> "与球求交后共 " + n + " 个方块";
 			case CONNECTED -> "与连通区域求交后共 " + n + " 个方块";
 			case COLUMN -> "与整列求交后共 " + n + " 个方块";
+			case PLANE_SLICE -> "与切片求交后共 " + n + " 个方块";
+			case SELECTION_WAND -> "与选区魔棒结果求交后共 " + n + " 个方块";
+			case BRUSH -> "与笔刷求交后共 " + n + " 个方块";
 			default -> "求交后共 " + n + " 个方块";
 		};
 	}
 
-	/**
-	 * 用于属性面板或导出：整体包围盒的最小角（含选区中方块的最小坐标）。
-	 */
 	public BlockPos getBoundingMin() {
 		if (selected.isEmpty()) return null;
 		int minX = Integer.MAX_VALUE, minY = Integer.MAX_VALUE, minZ = Integer.MAX_VALUE;
@@ -493,5 +759,19 @@ public final class BeatBlockSelectionManager {
 
 	public void addBlocks(Collection<BlockPos> toAdd) {
 		selected.addAll(toAdd);
+	}
+
+	/** 与 {@link #computePlaneSliceBounds(World, BlockPos, Direction)} 一致，供预览使用。 */
+	public record PlaneSliceBounds(int minX, int maxX, int minY, int maxY, int minZ, int maxZ) {
+		public static final PlaneSliceBounds EMPTY = new PlaneSliceBounds(1, 0, 1, 0, 1, 0);
+
+		public boolean isEmpty() {
+			return minX > maxX || minY > maxY || minZ > maxZ;
+		}
+
+		public long volume() {
+			if (isEmpty()) return 0;
+			return (long) (maxX - minX + 1) * (maxY - minY + 1) * (maxZ - minZ + 1);
+		}
 	}
 }
