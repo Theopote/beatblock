@@ -13,9 +13,9 @@ import com.beatblock.timeline.Track;
 import com.beatblock.timeline.TrackType;
 import com.beatblock.timeline.rendering.TimelineTrackMeta;
 import com.beatblock.timeline.rendering.TrackRegistry;
+import org.jspecify.annotations.NonNull;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -69,21 +69,7 @@ public final class AnimationBindingEngine {
 				if (!passesProbability(rule, event)) continue;
 				if (!passesCooldown(rule, event, lastAcceptedByRule)) continue;
 
-				Map<String, Object> params = new HashMap<>();
-				params.put("generatedBy", GENERATED_BY_MARK);
-				params.put("bindingRuleId", rule.id());
-				params.put("bindingRuleName", rule.name());
-				params.put("sourceFeature", rule.sourceFeatureKey());
-				// energyThreshold 不写入：绑定引擎已在生成时做过阈值过滤，
-				// 运行时 passesEnergyThreshold() 默认 0.0 直接通过，避免双重过滤。
-				params.put("energyScale", rule.energyScale());
-				params.put("probability", rule.probability());
-				params.put("cooldownSeconds", rule.cooldownSeconds());
-				params.put("actionMode", rule.actionMode().name());
-				params.put("mode", rule.actionMode().name());
-				params.put("spatialMode", rule.spatialMode().name());
-				params.put("sequentialDelaySeconds", rule.sequentialDelaySeconds());
-				if (!rule.sectionFilter().isBlank()) params.put("sectionFilter", rule.sectionFilter());
+				Map<String, Object> params = getStringObjectMap(rule);
 				params.putAll(rule.extraParams());
 
 				float energy = clamp01(event.getEnergy() * rule.energyScale());
@@ -109,6 +95,25 @@ public final class AnimationBindingEngine {
 		}
 		timeline.sortAll();
 		return added;
+	}
+
+	private static @NonNull Map<String, Object> getStringObjectMap(AnimationBindingRule rule) {
+		Map<String, Object> params = new HashMap<>();
+		params.put("generatedBy", GENERATED_BY_MARK);
+		params.put("bindingRuleId", rule.id());
+		params.put("bindingRuleName", rule.name());
+		params.put("sourceFeature", rule.sourceFeatureKey());
+		// energyThreshold 不写入：绑定引擎已在生成时做过阈值过滤，
+		// 运行时 passesEnergyThreshold() 默认 0.0 直接通过，避免双重过滤。
+		params.put("energyScale", rule.energyScale());
+		params.put("probability", rule.probability());
+		params.put("cooldownSeconds", rule.cooldownSeconds());
+		params.put("actionMode", rule.actionMode().name());
+		params.put("mode", rule.actionMode().name());
+		params.put("spatialMode", rule.spatialMode().name());
+		params.put("sequentialDelaySeconds", rule.sequentialDelaySeconds());
+		if (!rule.sectionFilter().isBlank()) params.put("sectionFilter", rule.sectionFilter());
+		return params;
 	}
 
 	public static List<AnimationBindingRule> loadRules(Timeline timeline) {
@@ -356,8 +361,8 @@ public final class AnimationBindingEngine {
 				}
 			}
 		}
-		Collections.sort(keys, String.CASE_INSENSITIVE_ORDER);
-		return keys.isEmpty() ? (preferred != null ? preferred : "other") : keys.get(0);
+		keys.sort(String.CASE_INSENSITIVE_ORDER);
+		return keys.isEmpty() ? (preferred != null ? preferred : "other") : keys.getFirst();
 	}
 
 	private static AnimationBindingRule defaultRuleForFeature(String featureKey, String targetObjectId) {
@@ -372,44 +377,30 @@ public final class AnimationBindingEngine {
 			.energyScale(1.0f);
 
 		switch (key) {
-			case "kick", "low" -> {
-				b.animationTypeId("BlockJump").energyThreshold(0.30f).durationSeconds(0.55).cooldownSeconds(0.08)
-					.spatialMode(SpatialDispatchMode.ALL);
-			}
-			case "snare", "mid" -> {
-				b.animationTypeId("WaveMotion").energyThreshold(0.22f).durationSeconds(0.80).cooldownSeconds(0.12)
-					.spatialMode(SpatialDispatchMode.SEQUENTIAL).sequentialDelaySeconds(0.03);
-			}
-			case "hihat", "hihat_open", "snare_hi", "high" -> {
-				b.animationTypeId("Pulse").energyThreshold(0.18f).durationSeconds(0.28).cooldownSeconds(0.06)
-					.spatialMode(SpatialDispatchMode.ALL);
-			}
-			case "bass" -> {
-				b.animationTypeId("SpiralLift").energyThreshold(0.24f).durationSeconds(1.20).cooldownSeconds(0.20)
-					.spatialMode(SpatialDispatchMode.SPIRAL);
-			}
-			case "vocals" -> {
-				b.animationTypeId("Orbit").energyThreshold(0.20f).durationSeconds(0.95).cooldownSeconds(0.18)
-					.spatialMode(SpatialDispatchMode.RADIAL);
-			}
-			case "other" -> {
-				b.animationTypeId("BlockExplosion").energyThreshold(0.26f).durationSeconds(0.72).cooldownSeconds(0.24)
-					.spatialMode(SpatialDispatchMode.RANDOM).probability(0.7f);
-			}
-			default -> {
-				b.animationTypeId("Pulse").energyThreshold(0.22f).durationSeconds(0.40).cooldownSeconds(0.10)
-					.spatialMode(SpatialDispatchMode.ALL);
-			}
+			case "kick", "low" -> b.animationTypeId("BlockJump").energyThreshold(0.30f).durationSeconds(0.55).cooldownSeconds(0.08)
+                .spatialMode(SpatialDispatchMode.ALL);
+			case "snare", "mid" -> b.animationTypeId("WaveMotion").energyThreshold(0.22f).durationSeconds(0.80).cooldownSeconds(0.12)
+                .spatialMode(SpatialDispatchMode.SEQUENTIAL).sequentialDelaySeconds(0.03);
+			case "hihat", "hihat_open", "snare_hi", "high" -> b.animationTypeId("Pulse").energyThreshold(0.18f).durationSeconds(0.28).cooldownSeconds(0.06)
+                .spatialMode(SpatialDispatchMode.ALL);
+			case "bass" -> b.animationTypeId("SpiralLift").energyThreshold(0.24f).durationSeconds(1.20).cooldownSeconds(0.20)
+                .spatialMode(SpatialDispatchMode.SPIRAL);
+			case "vocals" -> b.animationTypeId("Orbit").energyThreshold(0.20f).durationSeconds(0.95).cooldownSeconds(0.18)
+                .spatialMode(SpatialDispatchMode.RADIAL);
+			case "other" -> b.animationTypeId("BlockExplosion").energyThreshold(0.26f).durationSeconds(0.72).cooldownSeconds(0.24)
+                .spatialMode(SpatialDispatchMode.RANDOM).probability(0.7f);
+			default -> b.animationTypeId("Pulse").energyThreshold(0.22f).durationSeconds(0.40).cooldownSeconds(0.10)
+                .spatialMode(SpatialDispatchMode.ALL);
 		}
 		return b.build();
 	}
 
 	private static String resolveDefaultTargetObjectId() {
-		if (BeatBlock.blockAnimationEngine == null || BeatBlock.blockAnimationEngine.getStageObjectSystem() == null) {
+		if (BeatBlock.blockAnimationEngine == null) {
 			return "";
 		}
 		var all = BeatBlock.blockAnimationEngine.getStageObjectSystem().getAll();
-		if (all == null || all.isEmpty()) return "";
+		if (all.isEmpty()) return "";
 		return all.iterator().next().getId();
 	}
 
@@ -472,7 +463,7 @@ public final class AnimationBindingEngine {
 		long bits = Double.doubleToLongBits(timeSeconds);
 		int h = 17;
 		h = h * 31 + (ruleId != null ? ruleId.hashCode() : 0);
-		h = h * 31 + (int) (bits ^ (bits >>> 32));
+		h = h * 31 + Long.hashCode(bits);
 		long normalized = (h & 0x7fffffffL);
 		return normalized / (double) Integer.MAX_VALUE;
 	}

@@ -289,7 +289,7 @@ public final class TimelineRenderer {
 		Map<String, Integer> controlFeatureRows = new HashMap<>();
 		for (int slot = 0; slot < currentAnimationSubTracks.size(); slot++) {
 			String key = Timeline.blockAnimationFeatureKeyFromTrackId(currentAnimationSubTracks.get(slot).getKey());
-			if (key == null || key.isBlank()) continue;
+			if (key.isBlank()) continue;
 			controlFeatureRows.put(key, TimelineTrackMeta.ROW_ANIM_FEATURES_START + slot);
 		}
 
@@ -463,10 +463,10 @@ public final class TimelineRenderer {
 		AudioAsset asset = findAssetByAudioKey(clipAudioKey);
 		if (asset == null || asset.getBeatmap() == null) return null;
 		com.beatblock.audio.beatmap.Beatmap beatmap = asset.getBeatmap();
-		com.beatblock.audio.beatmap.WaveformPreview preview = null;
+		com.beatblock.audio.beatmap.WaveformPreview preview;
 		if (stemKey == null) {
 			preview = beatmap.waveformPreview;
-		} else if (beatmap.stemWaveforms != null) {
+		} else {
 			preview = beatmap.stemWaveforms.get(stemKey);
 		}
 		if (preview == null || preview.data() == null || preview.data().length == 0) return null;
@@ -602,7 +602,7 @@ public final class TimelineRenderer {
 			int slot = TimelineTrackMeta.animationFeatureSubRowSlot(rowIndex);
 			if (slot >= 0 && slot < currentAnimationSubTracks.size()) {
 				String featureKey = Timeline.blockAnimationFeatureKeyFromTrackId(currentAnimationSubTracks.get(slot).getKey());
-				String base = featureKey != null && !featureKey.isBlank()
+				String base = !featureKey.isBlank()
 					? TrackRegistry.localizedName(featureKey)
 					: currentAnimationSubTracks.get(slot).getDisplayName();
 				return base + " 控制";
@@ -651,7 +651,7 @@ public final class TimelineRenderer {
 		for (int slot = 0; slot < currentAnimationSubTracks.size(); slot++) {
 			TrackDefinition td = currentAnimationSubTracks.get(slot);
 			String key = Timeline.blockAnimationFeatureKeyFromTrackId(td.getKey());
-			if (key == null || key.isBlank()) continue;
+			if (key.isBlank()) continue;
 			controlRowsByFeature.put(key, TimelineTrackMeta.ROW_ANIM_FEATURES_START + slot);
 		}
 
@@ -1279,8 +1279,8 @@ public final class TimelineRenderer {
 	private String resolveDefaultTargetObjectId() {
 		if (BeatBlock.blockAnimationEngine != null) {
 			var sys = BeatBlock.blockAnimationEngine.getStageObjectSystem();
-			var all = sys != null ? sys.getAll() : null;
-			if (all != null && !all.isEmpty()) {
+			var all = sys.getAll();
+			if (!all.isEmpty()) {
 				return all.iterator().next().getId();
 			}
 		}

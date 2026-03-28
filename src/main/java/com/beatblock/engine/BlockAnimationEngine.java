@@ -7,7 +7,6 @@ import java.util.Map;
 import java.util.List;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.Locale;
 import java.util.Objects;
 
 import net.minecraft.util.math.BlockPos;
@@ -140,10 +139,7 @@ public final class BlockAnimationEngine {
 				.comparingDouble((BlockPos p) -> angleAroundCenter(p, center))
 				.thenComparingDouble(p -> distanceSqToCenter(p, center)));
 			case RANDOM -> blocks.sort(Comparator.comparingLong(p -> mixedHash(seed, p)));
-			case ALL -> {
-				return blocks;
-			}
-		}
+        }
 		return blocks;
 	}
 

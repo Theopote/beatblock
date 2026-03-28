@@ -48,7 +48,7 @@ public final class AnimationBindingRule {
 		this.sectionFilter = safe(builder.sectionFilter, "");
 		this.extraParams = builder.extraParams == null
 			? Collections.emptyMap()
-			: Collections.unmodifiableMap(new HashMap<>(builder.extraParams));
+			: Map.copyOf(builder.extraParams);
 	}
 
 	public String id() { return id; }
@@ -93,7 +93,6 @@ public final class AnimationBindingRule {
 		return out;
 	}
 
-	@SuppressWarnings("unchecked")
 	public static AnimationBindingRule fromMap(Map<String, Object> raw) {
 		if (raw == null) return null;
 		Builder b = builder();
@@ -129,14 +128,13 @@ public final class AnimationBindingRule {
 		String u = v.toUpperCase(Locale.ROOT);
 		return switch (u) {
 			case "EJECT" -> "BlockJump";
-			case "FALL" -> "BlockDrop";
+			case "FALL", "METEOR" -> "BlockDrop";
 			case "PULSE" -> "Pulse";
 			case "SLIDE" -> "Orbit";
 			case "SPIRAL" -> "SpiralLift";
 			case "WAVE" -> "WaveMotion";
 			case "IMPACT" -> "BlockExplosion";
-			case "METEOR" -> "BlockDrop";
-			default -> v;
+            default -> v;
 		};
 	}
 

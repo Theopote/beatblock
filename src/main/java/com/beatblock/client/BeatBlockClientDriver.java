@@ -22,7 +22,6 @@ import net.minecraft.world.World;
 
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
@@ -178,8 +177,7 @@ public final class BeatBlockClientDriver {
 
 	private static AnimationTemplate templateFor(BeatEvent.Type type) {
 		return switch (type) {
-			case KICK -> BeatBlock.animationRegistry.get("bounce");
-			case SNARE -> BeatBlock.animationRegistry.get("slide");
+            case SNARE -> BeatBlock.animationRegistry.get("slide");
 			case HIHAT, BASS, MELODY -> BeatBlock.animationRegistry.get("pulse");
 			default -> BeatBlock.animationRegistry.get("bounce");
 		};
@@ -285,9 +283,9 @@ public final class BeatBlockClientDriver {
 			return;
 		}
 		var plan = BeatBlock.blockAnimationEngine.planControl(event, world);
-		var mutations = plan != null ? plan.mutations() : List.<BlockControlExecutor.BlockMutation>of();
+		var mutations = plan.mutations();
 		if (mutations == null || mutations.isEmpty()) {
-			String detail = plan != null && plan.skipReason() != null
+			String detail = plan.skipReason() != null
 				? "skip-" + plan.skipReason().name().toLowerCase(Locale.ROOT)
 				: "skip-no-change";
 			recordActionReport(event, 0, "SKIPPED", detail);

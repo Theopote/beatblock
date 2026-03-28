@@ -99,14 +99,14 @@ public class MenuBarPanel {
 				}
 				if (ImGui.menuItem("选择属性", null, selectionPropertiesVisible)) {
 					selectionPropertiesVisible = !selectionPropertiesVisible;
-					if (onToggleSelectionProperties != null) onToggleSelectionProperties.run();
+                    onToggleSelectionProperties.run();
 				}
 				ImGui.endMenu();
 			}
 			// 演出
 			if (ImGui.beginMenu("演出")) {
 				if (ImGui.menuItem("Smart Auto Map...", "自动编排")) {
-					if (onOpenSmartAutoMap != null) onOpenSmartAutoMap.run();
+                    onOpenSmartAutoMap.run();
 				}
 				if (ImGui.isItemHovered()) ImGui.setTooltip("根据音乐自动生成方块动画、镜头与粒子");
 				ImGui.endMenu();

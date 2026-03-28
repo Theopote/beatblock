@@ -130,7 +130,6 @@ public final class BlockControlExecutor {
 		}
 		if (!Registries.BLOCK.containsId(id)) return Blocks.DIAMOND_BLOCK.getDefaultState();
 		Block block = Registries.BLOCK.get(id);
-		if (block == null) return Blocks.DIAMOND_BLOCK.getDefaultState();
-		return block.getDefaultState();
+        return block.getDefaultState();
 	}
 }

@@ -304,19 +304,31 @@ public class EventPropertiesPanel {
 	}
 
 	private boolean isTrackLocked(Timeline timeline, TimelineEditor editor, String trackId) {
-		if (editor == null || editor.getTrackListState() == null || trackId == null || trackId.isBlank()) return false;
+		if (editor == null || trackId == null || trackId.isBlank()) return false;
 		int rowIndex = logicalRowForTrackId(timeline, trackId);
 		return rowIndex >= 0 && editor.getTrackListState().isLocked(rowIndex);
 	}
 
 	private int logicalRowForTrackId(Timeline timeline, String trackId) {
 		if (trackId == null || trackId.isBlank()) return -1;
-		if (Timeline.TRACK_ID_AUDIO.equals(trackId)) return TimelineTrackMeta.ROW_AUDIO_GROUP;
-		if (Timeline.TRACK_ID_ANIMATION_BLOCK.equals(trackId)) return TimelineTrackMeta.ROW_ANIM_BLOCK;
-		if (Timeline.TRACK_ID_ANIMATION_AUTO.equals(trackId)) return TimelineTrackMeta.ROW_ANIM_AUTO;
-		if (Timeline.TRACK_ID_CAMERA.equals(trackId)) return TimelineTrackMeta.ROW_CAMERA;
-		if (Timeline.TRACK_ID_GLOBAL.equals(trackId)) return TimelineTrackMeta.ROW_GLOBAL_EVENT;
-		if (timeline != null && Timeline.isBlockAnimationFeatureTrackId(trackId)) {
+        switch (trackId) {
+            case Timeline.TRACK_ID_AUDIO -> {
+                return TimelineTrackMeta.ROW_AUDIO_GROUP;
+            }
+            case Timeline.TRACK_ID_ANIMATION_BLOCK -> {
+                return TimelineTrackMeta.ROW_ANIM_BLOCK;
+            }
+            case Timeline.TRACK_ID_ANIMATION_AUTO -> {
+                return TimelineTrackMeta.ROW_ANIM_AUTO;
+            }
+            case Timeline.TRACK_ID_CAMERA -> {
+                return TimelineTrackMeta.ROW_CAMERA;
+            }
+            case Timeline.TRACK_ID_GLOBAL -> {
+                return TimelineTrackMeta.ROW_GLOBAL_EVENT;
+            }
+        }
+        if (timeline != null && Timeline.isBlockAnimationFeatureTrackId(trackId)) {
 			List<TrackDefinition> defs = TrackRegistry.buildBlockAnimationControlTracks(timeline);
 			for (int i = 0; i < defs.size() && i < TimelineTrackMeta.MAX_ANIMATION_SUB_ROWS; i++) {
 				if (trackId.equals(defs.get(i).getKey())) {

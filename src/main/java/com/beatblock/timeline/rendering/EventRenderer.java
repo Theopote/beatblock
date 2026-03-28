@@ -89,7 +89,7 @@ public final class EventRenderer {
 		double vs = view.getViewStartTimeSeconds();
 		double ve = view.getViewEndTimeSeconds();
 
-		float pxPerSecond = (float) (view.timeToScreen(1.0) - view.timeToScreen(0.0));
+		float pxPerSecond = view.timeToScreen(1.0) - view.timeToScreen(0.0);
 		double beatDur = bpm > 1e-6 ? (60.0 / bpm) : 0.5;
 		float beatWidthPx = (float) (pxPerSecond * beatDur);
 		float barHalfW = Math.max(MIN_BAR_HALF_WIDTH, beatWidthPx * Math.max(0.08f, widthRatio) * 0.5f);
@@ -141,7 +141,7 @@ public final class EventRenderer {
 		double vs = view.getViewStartTimeSeconds();
 		double ve = view.getViewEndTimeSeconds();
 
-		float pxPerSecond = (float) (view.timeToScreen(1.0) - view.timeToScreen(0.0));
+		float pxPerSecond = view.timeToScreen(1.0) - view.timeToScreen(0.0);
 		double beatDur = bpm > 1e-6 ? (60.0 / bpm) : 0.5;
 		float beatWidthPx = (float) (pxPerSecond * beatDur);
 		float barHalfW = Math.max(MIN_BAR_HALF_WIDTH, beatWidthPx * Math.max(0.08f, widthRatio) * 0.5f);
@@ -184,30 +184,29 @@ public final class EventRenderer {
 		double ve = view.getViewEndTimeSeconds();
 		// 动画块有时长：起点 < vs 的块可能仍与视口重叠，不能跳过，下界从 0 开始；
 		// 起点 > ve 的块之后全部不可见（列表有序），可以 break 提前退出。
-		for (int i = 0; i < events.size(); i++) {
-			TimelineAnimationEvent e = events.get(i);
-			double t = e.getTimeSeconds();
-			if (t > ve) break;
-			double end = e.getEndTimeSeconds();
-			if (end < vs) continue;
-			float x = view.timeToScreen(t);
-			float w = (float) (e.getDurationSeconds() * view.getZoom());
-			w = Math.max(8f, Math.min(w, layout.timelineWidth - x + 1));
-			float y0 = baseY - layout.rowHeight * 0.35f;
-			float y1 = baseY + layout.rowHeight * 0.35f;
-			int resolvedFillColor = switch (e.getActionMode()) {
-				case PLACE -> ACTION_PLACE_COLOR;
-				case CLEAR -> ACTION_CLEAR_COLOR;
-				case BUILD -> ACTION_BUILD_COLOR;
-				case ANIMATE -> fillColor;
-			};
-			ImGui.getWindowDrawList().addRectFilled(baseX + x, y0, baseX + x + w, y1, resolvedFillColor, 2f);
-			BeatBlockClientDriver.TimelineActionExecutionReport report = BeatBlockClientDriver.getTimelineActionExecutionReport(e.getEventId());
-			renderRuntimeBadge(baseX + x, y0, baseX + x + w, y1, e, report);
-			if (selection != null && selection.isEventSelected(e.getEventId())) {
-				ImGui.getWindowDrawList().addRect(baseX + x, y0, baseX + x + w, y1, SELECTED_BORDER_COLOR, 0f, 0, 2f);
-			}
-		}
+        for (TimelineAnimationEvent e : events) {
+            double t = e.getTimeSeconds();
+            if (t > ve) break;
+            double end = e.getEndTimeSeconds();
+            if (end < vs) continue;
+            float x = view.timeToScreen(t);
+            float w = (float) (e.getDurationSeconds() * view.getZoom());
+            w = Math.max(8f, Math.min(w, layout.timelineWidth - x + 1));
+            float y0 = baseY - layout.rowHeight * 0.35f;
+            float y1 = baseY + layout.rowHeight * 0.35f;
+            int resolvedFillColor = switch (e.getActionMode()) {
+                case PLACE -> ACTION_PLACE_COLOR;
+                case CLEAR -> ACTION_CLEAR_COLOR;
+                case BUILD -> ACTION_BUILD_COLOR;
+                case ANIMATE -> fillColor;
+            };
+            ImGui.getWindowDrawList().addRectFilled(baseX + x, y0, baseX + x + w, y1, resolvedFillColor, 2f);
+            BeatBlockClientDriver.TimelineActionExecutionReport report = BeatBlockClientDriver.getTimelineActionExecutionReport(e.getEventId());
+            renderRuntimeBadge(baseX + x, y0, baseX + x + w, y1, e, report);
+            if (selection != null && selection.isEventSelected(e.getEventId())) {
+                ImGui.getWindowDrawList().addRect(baseX + x, y0, baseX + x + w, y1, SELECTED_BORDER_COLOR, 0f, 0, 2f);
+            }
+        }
 		ImGui.setCursorPosY(rowY + layout.rowHeight);
 	}
 
@@ -216,7 +215,7 @@ public final class EventRenderer {
 	                              BeatBlockClientDriver.TimelineActionExecutionReport report) {
 		if (event == null || report == null) return;
 		String eventId = event.getEventId();
-		if (eventId == null || eventId.isBlank() || !eventId.equals(report.eventId())) return;
+		if (eventId.isBlank() || !eventId.equals(report.eventId())) return;
 
 		int badgeColor = switch (report.status()) {
 			case "APPLIED" -> STATUS_APPLIED_COLOR;

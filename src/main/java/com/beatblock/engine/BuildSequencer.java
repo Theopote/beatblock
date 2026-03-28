@@ -186,7 +186,7 @@ public final class BuildSequencer {
 			Identifier id = Identifier.of(str);
 			if (!Registries.BLOCK.containsId(id)) return Blocks.DIAMOND_BLOCK.getDefaultState();
 			Block block = Registries.BLOCK.get(id);
-			return block != null ? block.getDefaultState() : Blocks.DIAMOND_BLOCK.getDefaultState();
+			return block.getDefaultState();
 		} catch (Exception ex) {
 			return Blocks.DIAMOND_BLOCK.getDefaultState();
 		}
