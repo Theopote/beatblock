@@ -54,6 +54,8 @@ public final class BeatBlockSelectionManager {
 	 */
 	private int maxMagicWandSpreadFromSeed = 64;
 	private Vec3d interactionCameraPos;
+	/** 逐块半透明填充（仅当选区不大时绘制，开销高） */
+	private boolean selectionFillEnabled;
 	private String lastMessage = "";
 
 	private BeatBlockSelectionManager() {}
@@ -151,6 +153,14 @@ public final class BeatBlockSelectionManager {
 		}
 	}
 
+	public boolean isSelectionFillEnabled() {
+		return selectionFillEnabled;
+	}
+
+	public void setSelectionFillEnabled(boolean selectionFillEnabled) {
+		this.selectionFillEnabled = selectionFillEnabled;
+	}
+
 	/** 由套索提交选中方块（当前模式应为 {@link SelectionMode#LASSO}）。 */
 	public void commitLassoSelection(List<BlockPos> blocks, SelectionOperation op) {
 		if (blocks == null || blocks.isEmpty()) {
@@ -216,6 +226,7 @@ public final class BeatBlockSelectionManager {
 		maxDistanceFromCamera = 128;
 		maxMagicWandSpreadFromSeed = 64;
 		interactionCameraPos = null;
+		selectionFillEnabled = false;
 		clearBrushAnchor();
 		brushHadStroke = false;
 		lastMessage = "";
@@ -239,12 +250,11 @@ public final class BeatBlockSelectionManager {
 			case CLICK -> handleClickTool(world, pos, shiftDown);
 			case BOX -> handleBoxTool(world, pos);
 			case LINE -> handleLineTool(world, pos);
-			case SPHERE -> handleSphereTool(world, pos, shiftDown);
+			case BRUSH -> handleBrushClick(world, pos, shiftDown);
 			case CONNECTED -> handleConnectedTool(world, pos, shiftDown);
 			case COLUMN -> handleColumnTool(world, pos, shiftDown);
 			case PLANE_SLICE -> handlePlaneSliceTool(world, pos, side, shiftDown);
 			case SELECTION_WAND -> handleSelectionWandTool(world, pos, shiftDown);
-			case BRUSH -> {}
 			case LASSO -> {}
 		}
 	}
@@ -377,9 +387,9 @@ public final class BeatBlockSelectionManager {
 		mergeBlockListIntoSelection(lineBlocks, operation);
 	}
 
-	private void handleSphereTool(World world, BlockPos pos, boolean shiftDown) {
+	private void handleBrushClick(World world, BlockPos pos, boolean shiftDown) {
 		SelectionOperation op = shiftDown ? SelectionOperation.ADD : operation;
-		List<BlockPos> blocks = collectSphere(world, pos, sphereBrushRadius);
+		List<BlockPos> blocks = collectBrush(world, pos);
 		if (blocks == null) {
 			return;
 		}
@@ -758,16 +768,22 @@ public final class BeatBlockSelectionManager {
 		LOGGER.debug("[BeatBlockSelection] merge op={} size={}", op, selected.size());
 	}
 
+	private String brushShapeLabel() {
+		return switch (brushShape) {
+			case SPHERE -> "球体";
+			case CUBE -> "立方";
+		};
+	}
+
 	private String mergeMessageNew(int count) {
 		return switch (mode) {
 			case BOX -> "新建框选：" + count + " 个方块";
 			case LINE -> "新建线选：" + count + " 个方块";
-			case SPHERE -> "新建球选：" + count + " 个方块";
 			case CONNECTED -> "新建连通选区：" + count + " 个方块";
 			case COLUMN -> "新建整列：" + count + " 个方块";
 			case PLANE_SLICE -> "新建平面切片：" + count + " 个方块";
 			case SELECTION_WAND -> "新建选区魔棒：" + count + " 个方块";
-			case BRUSH -> "新建笔刷：" + count + " 个方块";
+			case BRUSH -> "新建笔刷（" + brushShapeLabel() + "）：" + count + " 个方块";
 			case LASSO -> "新建套索：" + count + " 个方块";
 			default -> "新建选区：" + count + " 个方块";
 		};
@@ -778,7 +794,6 @@ public final class BeatBlockSelectionManager {
 		return switch (mode) {
 			case BOX -> "加选框后共 " + n + " 个方块";
 			case LINE -> "加选线后共 " + n + " 个方块";
-			case SPHERE -> "加选球后共 " + n + " 个方块";
 			case CONNECTED -> "加选连通区域后共 " + n + " 个方块";
 			case COLUMN -> "加选整列后共 " + n + " 个方块";
 			case PLANE_SLICE -> "加选切片后共 " + n + " 个方块";
@@ -794,7 +809,6 @@ public final class BeatBlockSelectionManager {
 		return switch (mode) {
 			case BOX -> "减选框后共 " + n + " 个方块";
 			case LINE -> "减选线后共 " + n + " 个方块";
-			case SPHERE -> "减选球后共 " + n + " 个方块";
 			case CONNECTED -> "减选连通区域后共 " + n + " 个方块";
 			case COLUMN -> "减选整列后共 " + n + " 个方块";
 			case PLANE_SLICE -> "减选切片后共 " + n + " 个方块";
@@ -810,7 +824,6 @@ public final class BeatBlockSelectionManager {
 		return switch (mode) {
 			case BOX -> "与框求交后共 " + n + " 个方块";
 			case LINE -> "与线求交后共 " + n + " 个方块";
-			case SPHERE -> "与球求交后共 " + n + " 个方块";
 			case CONNECTED -> "与连通区域求交后共 " + n + " 个方块";
 			case COLUMN -> "与整列求交后共 " + n + " 个方块";
 			case PLANE_SLICE -> "与切片求交后共 " + n + " 个方块";

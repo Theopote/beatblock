@@ -3,6 +3,7 @@ package com.beatblock;
 import com.beatblock.client.BeatBlockClientDriver;
 import com.beatblock.client.BeatBlockUIScreen;
 import com.beatblock.client.render.BeatBlockHoverOutlineRenderer;
+import com.beatblock.client.render.BeatBlockSelectedBlocksRenderer;
 import com.beatblock.client.render.BeatBlockSelectionRenderer;
 import com.beatblock.client.selection.BeatBlockLassoInteraction;
 import com.beatblock.client.selection.BeatBlockSelectionBrushTick;
@@ -41,6 +42,7 @@ public class BeatBlockClient implements ClientModInitializer {
 		WorldRenderEvents.END_MAIN.register(context -> {
 			var consumers = context.consumers();
 			var matrices = context.matrices();
+			BeatBlockSelectedBlocksRenderer.renderIfNeeded(matrices, consumers);
 			BeatBlockSelectionRenderer.renderIfNeeded(matrices, consumers);
 			BeatBlockHoverOutlineRenderer.renderIfNeeded(matrices, consumers);
 		});

@@ -52,6 +52,29 @@ public class ToolPanel {
 	private static final int MAX_STAGE_OBJECT_BLOCKS = 32768;
 	private static final String[] MARKER_TYPE_LABELS = MarkerType.displayNames();
 
+	private static final SelectionMode[] SELECTION_COMBO_ORDER = {
+			SelectionMode.OFF,
+			SelectionMode.CLICK,
+			SelectionMode.BOX,
+			SelectionMode.LINE,
+			SelectionMode.BRUSH,
+			SelectionMode.CONNECTED,
+			SelectionMode.COLUMN,
+			SelectionMode.PLANE_SLICE,
+			SelectionMode.SELECTION_WAND,
+			SelectionMode.LASSO
+	};
+
+	private final Runnable onSelectionToolChosen;
+
+	public ToolPanel() {
+		this(null);
+	}
+
+	public ToolPanel(Runnable onSelectionToolChosen) {
+		this.onSelectionToolChosen = onSelectionToolChosen;
+	}
+
 	/** 由菜单栏「演出 → Smart Auto Map」调用，打开设置弹窗 */
 	public void setShowAutoMapSettings(boolean show) {
 		this.showAutoMapSettings = show;
@@ -99,41 +122,41 @@ public class ToolPanel {
 	private void renderBlockSelectionTools() {
 		ImGui.text("方块选择工具");
 		var mgr = BeatBlockSelectionManager.get();
-		if (ImGui.radioButton("关闭##bselOff", mgr.getMode() == SelectionMode.OFF)) {
-			mgr.setMode(SelectionMode.OFF);
+		ImGui.setNextItemWidth(ImGui.getContentRegionAvail().x);
+		if (ImGui.beginCombo("##bselCombo", selectionModeComboLabel(mgr.getMode()))) {
+			for (SelectionMode m : SELECTION_COMBO_ORDER) {
+				boolean selected = mgr.getMode() == m;
+				if (ImGui.selectable(selectionModeComboLabel(m), selected)) {
+					if (mgr.getMode() != m) {
+						mgr.setMode(m);
+						if (onSelectionToolChosen != null) {
+							onSelectionToolChosen.run();
+						}
+					}
+				}
+				if (selected) {
+					ImGui.setItemDefaultFocus();
+				}
+			}
+			ImGui.endCombo();
 		}
-		if (ImGui.radioButton("点击选择##bselClick", mgr.getMode() == SelectionMode.CLICK)) {
-			mgr.setMode(SelectionMode.CLICK);
-		}
-		if (ImGui.radioButton("框选（两角 + 预览）##bselBox", mgr.getMode() == SelectionMode.BOX)) {
-			mgr.setMode(SelectionMode.BOX);
-		}
-		if (ImGui.radioButton("线选（两端点 + 预览）##bselLine", mgr.getMode() == SelectionMode.LINE)) {
-			mgr.setMode(SelectionMode.LINE);
-		}
-		if (ImGui.radioButton("球选（单击中心，属性里调半径）##bselSphere", mgr.getMode() == SelectionMode.SPHERE)) {
-			mgr.setMode(SelectionMode.SPHERE);
-		}
-		if (ImGui.radioButton("魔棒（同色六邻域连通）##bselConn", mgr.getMode() == SelectionMode.CONNECTED)) {
-			mgr.setMode(SelectionMode.CONNECTED);
-		}
-		if (ImGui.radioButton("整列（同 XZ 全高度）##bselCol", mgr.getMode() == SelectionMode.COLUMN)) {
-			mgr.setMode(SelectionMode.COLUMN);
-		}
-		if (ImGui.radioButton("平面切片（按击中面，有选区则切在包围盒内）##bselPlane", mgr.getMode() == SelectionMode.PLANE_SLICE)) {
-			mgr.setMode(SelectionMode.PLANE_SLICE);
-		}
-		if (ImGui.radioButton("选区魔棒（仅包围盒内连通）##bselSelWand", mgr.getMode() == SelectionMode.SELECTION_WAND)) {
-			mgr.setMode(SelectionMode.SELECTION_WAND);
-		}
-		if (ImGui.radioButton("笔刷（场景区按住左键涂抹）##bselBrush", mgr.getMode() == SelectionMode.BRUSH)) {
-			mgr.setMode(SelectionMode.BRUSH);
-		}
-		if (ImGui.radioButton("套索（场景区按住左键拖闭合区域）##bselLasso", mgr.getMode() == SelectionMode.LASSO)) {
-			mgr.setMode(SelectionMode.LASSO);
-		}
-		ImGui.textWrapped("框选/线选：两点；魔棒等：单击；笔刷/套索：按住左键拖动。范围、半径与魔棒扩散见「视图 → 选择属性」。");
+		ImGui.textWrapped("笔刷含球体/立方等形状：单击盖章或按住涂抹。框选/线选为两点；套索为拖画。详情与范围见「视图 → 选择属性」（切换工具时会自动打开该面板）。");
 		ImGui.separator();
+	}
+
+	private static String selectionModeComboLabel(SelectionMode m) {
+		return switch (m) {
+			case OFF -> "关闭";
+			case CLICK -> "点击选择";
+			case BOX -> "框选（两角 + 预览）";
+			case LINE -> "线选（两端点 + 预览）";
+			case BRUSH -> "笔刷（球/立方，单击或涂抹）";
+			case CONNECTED -> "魔棒（同色六邻域）";
+			case COLUMN -> "整列（同 XZ）";
+			case PLANE_SLICE -> "平面切片";
+			case SELECTION_WAND -> "选区魔棒（盒内）";
+			case LASSO -> "套索（屏幕多边形）";
+		};
 	}
 
 	private void renderStageObjectCreator() {

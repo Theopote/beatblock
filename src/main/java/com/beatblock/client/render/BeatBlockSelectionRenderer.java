@@ -17,15 +17,14 @@ import net.minecraft.util.math.Vec3d;
 import net.minecraft.util.shape.VoxelShapes;
 
 /**
- * 在世界中绘制当前选区的总包围盒线框（优化：不按方块逐个描边，大选区仍保持低开销）。
- * 框选/线选：两点 AABB 预览；球选/笔刷：半径包络盒；平面切片：按击中面与范围预览薄片 AABB。
+ * 在世界中绘制当前选区的总包围盒线框（大选区或未启用逐块高亮时使用）。
+ * 框选/线选：两点 AABB 预览；笔刷：半径包络盒；平面切片：薄片 AABB。
  */
 public final class BeatBlockSelectionRenderer {
 
 	private static final int COLOR_ARGB = 0xE6FFB833;
 	private static final int BOX_PREVIEW_ARGB = 0xAABBDDFF;
 	private static final int LINE_PREVIEW_ARGB = 0xAAFFCC66;
-	private static final int SPHERE_PREVIEW_ARGB = 0xAADD88FF;
 	private static final int PLANE_SLICE_PREVIEW_ARGB = 0xAA88FFAA;
 	private static final int BRUSH_PREVIEW_ARGB = 0xAAFFAA66;
 
@@ -38,7 +37,8 @@ public final class BeatBlockSelectionRenderer {
 
 		var mgr = BeatBlockSelectionManager.get();
 
-		if (mgr.getSelectionCount() > 0) {
+		int selCount = mgr.getSelectionCount();
+		if (selCount > BeatBlockSelectedBlocksRenderer.MAX_BLOCKS_FOR_PER_BLOCK_RENDER) {
 			BlockPos min = mgr.getBoundingMin();
 			BlockPos max = mgr.getBoundingMax();
 			if (min != null && max != null) {
@@ -48,7 +48,6 @@ public final class BeatBlockSelectionRenderer {
 
 		renderBoxDragPreviewIfNeeded(matrices, consumers, mc, mgr);
 		renderLineDragPreviewIfNeeded(matrices, consumers, mc, mgr);
-		renderSphereBrushPreviewIfNeeded(matrices, consumers, mc, mgr);
 		renderPlaneSlicePreviewIfNeeded(matrices, consumers, mc, mgr);
 		renderBrushPreviewIfNeeded(matrices, consumers, mc, mgr);
 	}
@@ -69,16 +68,6 @@ public final class BeatBlockSelectionRenderer {
 		BlockHitResult hit = raycastForPreview(mc);
 		if (hit == null) return;
 		drawAabbBetweenCorners(matrices, consumers, mc, mgr.getLineFirstCorner(), hit.getBlockPos(), LINE_PREVIEW_ARGB, 2.0f);
-	}
-
-	private static void renderSphereBrushPreviewIfNeeded(
-			MatrixStack matrices, VertexConsumerProvider consumers,
-			MinecraftClient mc, BeatBlockSelectionManager mgr) {
-		if (mgr.getMode() != SelectionMode.SPHERE) return;
-		BlockHitResult hit = raycastForPreview(mc);
-		if (hit == null) return;
-		drawRadiusPreviewAabb(matrices, consumers, mc, hit.getBlockPos(), mgr.getSphereBrushRadius(),
-				SPHERE_PREVIEW_ARGB, 1.75f);
 	}
 
 	private static void renderPlaneSlicePreviewIfNeeded(

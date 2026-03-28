@@ -40,7 +40,7 @@ public class BeatBlockUIManager {
 
 	public BeatBlockUIManager(Runnable onCloseRequest) {
 		this.onCloseRequest = onCloseRequest;
-		this.toolPanel = new ToolPanel();
+		this.toolPanel = new ToolPanel(this::openSelectionPropertiesForTool);
 		this.audioAnalysisPanel = new AudioAnalysisPanel();
 		this.menuBarPanel = new MenuBarPanel(onCloseRequest, this::toggleAnimationLibrary,
 			() -> toolPanel.setShowAutoMapSettings(true), this::toggleSelectionProperties);
@@ -62,6 +62,12 @@ public class BeatBlockUIManager {
 	private void toggleSelectionProperties() {
 		selectionPropertiesVisible = !selectionPropertiesVisible;
 		menuBarPanel.setSelectionPropertiesVisible(selectionPropertiesVisible);
+	}
+
+	/** 切换方块选择工具时自动打开并勾选「选择属性」面板。 */
+	private void openSelectionPropertiesForTool() {
+		selectionPropertiesVisible = true;
+		menuBarPanel.setSelectionPropertiesVisible(true);
 	}
 
 	public void render() {

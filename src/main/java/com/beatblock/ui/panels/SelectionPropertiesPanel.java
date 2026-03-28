@@ -6,6 +6,7 @@ import com.beatblock.selection.SelectionMode;
 import com.beatblock.selection.SelectionOperation;
 import com.beatblock.ui.layout.BeatBlockDockSpaceLayoutBuilder;
 import imgui.ImGui;
+import imgui.flag.ImGuiCol;
 import imgui.flag.ImGuiWindowFlags;
 import imgui.type.ImBoolean;
 import java.util.Locale;
@@ -22,6 +23,7 @@ public class SelectionPropertiesPanel {
 	private final int[] maxWandSpreadScratch = new int[1];
 	private final ImBoolean includeAirProxy = new ImBoolean(false);
 	private final ImBoolean connectedFullStateProxy = new ImBoolean(true);
+	private final ImBoolean selectionFillProxy = new ImBoolean(false);
 
 	public void render() {
 		if (!ImGui.begin(BeatBlockDockSpaceLayoutBuilder.SELECTION_PROPERTIES_WINDOW, WINDOW_FLAGS)) {
@@ -31,6 +33,9 @@ public class SelectionPropertiesPanel {
 
 		var mgr = BeatBlockSelectionManager.get();
 		ImGui.text("方块选择");
+		ImGui.pushStyleColor(ImGuiCol.Text, 0.55f, 0.75f, 1f, 1f);
+		ImGui.text("当前工具：" + currentToolTitle(mgr.getMode()));
+		ImGui.popStyleColor();
 		ImGui.separator();
 
 		ImGui.textDisabled("操作模式");
@@ -47,41 +52,14 @@ public class SelectionPropertiesPanel {
 			mgr.setMaxDistanceFromCamera(maxCameraDistScratch[0]);
 		}
 		if (ImGui.isItemHovered()) {
-			ImGui.setTooltip("候选方块中心到相机不能超过此距离。套索、魔棒、切片、框/线/球/列/笔刷等均生效，防止无界选中。");
+			ImGui.setTooltip("候选方块中心到相机不能超过此距离。套索、魔棒、切片、框/线/列/笔刷等均生效，防止无界选中。");
 		}
 
-		maxWandSpreadScratch[0] = mgr.getMaxMagicWandSpreadFromSeed();
-		ImGui.setNextItemWidth(200f);
-		if (ImGui.sliderInt("魔棒最大扩散半径（格）##selWandSpread", maxWandSpreadScratch, 4, 256)) {
-			mgr.setMaxMagicWandSpreadFromSeed(maxWandSpreadScratch[0]);
-		}
+		selectionFillProxy.set(mgr.isSelectionFillEnabled());
+		ImGui.checkbox("选区半透明填充（与描边叠加）##selFill", selectionFillProxy);
+		mgr.setSelectionFillEnabled(selectionFillProxy.get());
 		if (ImGui.isItemHovered()) {
-			ImGui.setTooltip("从魔棒点击的种子方块算起，欧氏距离超过此值的格子不会入选（全图魔棒与选区魔棒均适用）。");
-		}
-
-		sphereRadiusScratch[0] = mgr.getSphereBrushRadius();
-		ImGui.setNextItemWidth(160f);
-		if (ImGui.sliderInt("球选 / 笔刷半径（格）##selSphereR", sphereRadiusScratch, 1, 32)) {
-			mgr.setSphereBrushRadius(sphereRadiusScratch[0]);
-		}
-		if (ImGui.isItemHovered()) {
-			ImGui.setTooltip("球选：欧氏球；立方笔刷：轴对齐立方体边长 2r+1；预览均为包络盒。");
-		}
-
-		ImGui.textDisabled("笔刷形状");
-		if (ImGui.radioButton("球体##brushSph", mgr.getBrushShape() == BrushShape.SPHERE)) {
-			mgr.setBrushShape(BrushShape.SPHERE);
-		}
-		ImGui.sameLine();
-		if (ImGui.radioButton("立方体##brushCube", mgr.getBrushShape() == BrushShape.CUBE)) {
-			mgr.setBrushShape(BrushShape.CUBE);
-		}
-
-		connectedFullStateProxy.set(mgr.isConnectedMatchFullState());
-		ImGui.checkbox("魔棒：完整方块状态一致##selConnFull", connectedFullStateProxy);
-		mgr.setConnectedMatchFullState(connectedFullStateProxy.get());
-		if (ImGui.isItemHovered()) {
-			ImGui.setTooltip("勾选：与起点 BlockState 完全相同才算同色；关闭：仅方块类型一致。对「连通」与「选区魔棒」均生效。");
+			ImGui.setTooltip("在方块选择 UI 打开且选中方块数量不太多时，为每个格子绘制略缩小的半透明面；大量选区时仅显示总包围盒。");
 		}
 
 		includeAirProxy.set(mgr.isIncludeAir());
@@ -94,7 +72,46 @@ public class SelectionPropertiesPanel {
 			mgr.setMaxBlocks(maxBlocksScratch[0]);
 		}
 		if (ImGui.isItemHovered()) {
-			ImGui.setTooltip("框/线/球/立方/列/切片体积、连通与选区魔棒展开、笔刷单次盖章等超过此值时拒绝或截断。");
+			ImGui.setTooltip("框/线/笔刷/列/切片体积、连通与选区魔棒展开、笔刷单次盖章等超过此值时拒绝或截断。");
+		}
+
+		if (mgr.getMode() == SelectionMode.BRUSH) {
+			ImGui.separator();
+			ImGui.textDisabled("笔刷（球体 / 立方）");
+			sphereRadiusScratch[0] = mgr.getSphereBrushRadius();
+			ImGui.setNextItemWidth(160f);
+			if (ImGui.sliderInt("半径（格）##selBrushR", sphereRadiusScratch, 1, 32)) {
+				mgr.setSphereBrushRadius(sphereRadiusScratch[0]);
+			}
+			if (ImGui.isItemHovered()) {
+				ImGui.setTooltip("球体：欧氏球；立方体：轴对齐立方体边长 2r+1；预览为包络盒。单击盖章或按住涂抹。");
+			}
+			if (ImGui.radioButton("球体##brushSph", mgr.getBrushShape() == BrushShape.SPHERE)) {
+				mgr.setBrushShape(BrushShape.SPHERE);
+			}
+			ImGui.sameLine();
+			if (ImGui.radioButton("立方体##brushCube", mgr.getBrushShape() == BrushShape.CUBE)) {
+				mgr.setBrushShape(BrushShape.CUBE);
+			}
+		}
+
+		if (mgr.getMode() == SelectionMode.CONNECTED || mgr.getMode() == SelectionMode.SELECTION_WAND) {
+			ImGui.separator();
+			ImGui.textDisabled("魔棒");
+			maxWandSpreadScratch[0] = mgr.getMaxMagicWandSpreadFromSeed();
+			ImGui.setNextItemWidth(200f);
+			if (ImGui.sliderInt("最大扩散半径（格）##selWandSpread", maxWandSpreadScratch, 4, 256)) {
+				mgr.setMaxMagicWandSpreadFromSeed(maxWandSpreadScratch[0]);
+			}
+			if (ImGui.isItemHovered()) {
+				ImGui.setTooltip("从点击的种子方块算起，欧氏距离超过此值的格子不会入选（全图魔棒与选区魔棒均适用）。");
+			}
+			connectedFullStateProxy.set(mgr.isConnectedMatchFullState());
+			ImGui.checkbox("完整方块状态一致##selConnFull", connectedFullStateProxy);
+			mgr.setConnectedMatchFullState(connectedFullStateProxy.get());
+			if (ImGui.isItemHovered()) {
+				ImGui.setTooltip("勾选：与起点 BlockState 完全相同才算同色；关闭：仅方块类型一致。");
+			}
 		}
 
 		ImGui.separator();
@@ -145,6 +162,21 @@ public class SelectionPropertiesPanel {
 			case ADD -> "加选";
 			case SUBTRACT -> "减选";
 			case INTERSECT -> "交集";
+		};
+	}
+
+	private static String currentToolTitle(SelectionMode m) {
+		return switch (m) {
+			case OFF -> "关闭";
+			case CLICK -> "点击选择";
+			case BOX -> "框选";
+			case LINE -> "线选";
+			case BRUSH -> "笔刷";
+			case CONNECTED -> "魔棒（连通）";
+			case COLUMN -> "整列";
+			case PLANE_SLICE -> "平面切片";
+			case SELECTION_WAND -> "选区魔棒";
+			case LASSO -> "套索";
 		};
 	}
 }
