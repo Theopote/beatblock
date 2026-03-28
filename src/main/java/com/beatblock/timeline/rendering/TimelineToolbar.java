@@ -370,6 +370,15 @@ public final class TimelineToolbar {
 		nextGroup();
 
 		// ----- 4. Auto Map -----
+		{
+			int objCount = BeatBlock.blockAnimationEngine != null
+				? BeatBlock.blockAnimationEngine.getStageObjectSystem().size() : 0;
+			if (objCount == 0) {
+				ImGui.textColored(0.95f, 0.65f, 0.30f, 1f, "无对象");
+				if (ImGui.isItemHovered()) ImGui.setTooltip("请先在工具面板中创建 StageObject（选区→创建），否则 Binding Map 无法生成事件");
+				nextItemInGroup();
+			}
+		}
 		if (ImGui.button("Binding Map")) {
 			if (BeatBlock.timeline != null) {
 				lastBindingMapCount = AnimationBindingEngine.applyRules(BeatBlock.timeline, TimelineTrackMeta.ROW_ANIM_BLOCK, true);

@@ -23,6 +23,14 @@ public final class StageObjectSystem {
 		return Collections.unmodifiableCollection(objects.values());
 	}
 
+	public boolean remove(String id) {
+		return objects.remove(id) != null;
+	}
+
+	public int size() {
+		return objects.size();
+	}
+
 	public void clear() {
 		objects.clear();
 	}

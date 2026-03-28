@@ -27,6 +27,7 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 
@@ -179,6 +180,40 @@ public class ToolPanel {
 
 		if (stageObjectMessage != null && !stageObjectMessage.isBlank()) {
 			ImGui.textWrapped(stageObjectMessage);
+		}
+
+		renderStageObjectList();
+	}
+
+	private void renderStageObjectList() {
+		if (BeatBlock.blockAnimationEngine == null) return;
+		var sys = BeatBlock.blockAnimationEngine.getStageObjectSystem();
+		List<StageObject> objects = new ArrayList<>(sys.getAll());
+		if (objects.isEmpty()) {
+			ImGui.spacing();
+			ImGui.textDisabled("暂无已注册的 StageObject。");
+			return;
+		}
+		objects.sort(Comparator.comparing(StageObject::getName, String.CASE_INSENSITIVE_ORDER));
+
+		ImGui.spacing();
+		ImGui.text("已注册对象 (" + objects.size() + ")");
+		String removeId = null;
+		if (ImGui.beginChild("##StageObjectList", 0, Math.min(objects.size() * 22f + 8f, 160f), true)) {
+			for (StageObject obj : objects) {
+				String label = obj.getName() + "  [" + obj.getId() + "]  " + obj.getBlocks().size() + " blocks";
+				ImGui.text(label);
+				ImGui.sameLine();
+				if (ImGui.smallButton("Delete##stageObjDel_" + obj.getId())) {
+					removeId = obj.getId();
+				}
+			}
+		}
+		ImGui.endChild();
+
+		if (removeId != null) {
+			sys.remove(removeId);
+			stageObjectMessage = "已删除 StageObject: " + removeId;
 		}
 	}
 
