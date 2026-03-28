@@ -94,7 +94,12 @@ public final class AudioAnalysisPanel {
     private static final float MIN_LIST_PANEL_WIDTH = 96f;
     private static final float MIN_DETAIL_PANEL_WIDTH = 96f;
     private static final float PANEL_GAP = 4f;
-    private static final float PANEL_INNER_INSET_X = 2f;
+    private static final float PANEL_OUTER_PADDING_X = 4f;
+    private static final float PANEL_OUTER_PADDING_Y = 6f;
+    private static final float LIST_PANEL_PADDING = 2f;
+    private static final float DETAIL_PANEL_PADDING = 6f;
+    private static final float FOOTER_BUTTON_HEIGHT = 22f;
+    private static final float FOOTER_RESERVED_HEIGHT = FOOTER_BUTTON_HEIGHT + 12f;
     private static final int COLLAPSED_TEXT_MAX_CHARS = 56;
 
     // ── 状态字段 ────────────────────────────────────────────────────────────
@@ -110,10 +115,13 @@ public final class AudioAnalysisPanel {
     // ── 公共入口 ─────────────────────────────────────────────────────────────
 
     public void render() {
+        ImGui.pushStyleVar(ImGuiStyleVar.WindowPadding, PANEL_OUTER_PADDING_X, PANEL_OUTER_PADDING_Y);
         if (!ImGui.begin("音频解析###AudioAnalysisPanel", WINDOW_FLAGS)) {
+            ImGui.popStyleVar();
             ImGui.end();
             return;
         }
+        ImGui.popStyleVar();
 
         renderToolbar();
 		renderPythonRuntimeHint();
@@ -124,7 +132,7 @@ public final class AudioAnalysisPanel {
         List<AudioAsset> assets = AudioAssetManager.getInstance().getAssets();
 
         float totalW = Math.max(0f, ImGui.getContentRegionAvailX());
-        float totalH = ImGui.getContentRegionAvailY() - 32f; // 为底栏留空间
+        float totalH = ImGui.getContentRegionAvailY() - FOOTER_RESERVED_HEIGHT;
         float splitterW = detailExpanded ? PANEL_GAP : 0f;
 
         float detailW = 0f;
@@ -142,11 +150,9 @@ public final class AudioAnalysisPanel {
         }
 
         // ── 左侧：列表 ──────────────────────────────────────────────────────
-        // 顶层子面板不再叠加额外 WindowPadding，避免看起来超过 8px 外边距。
-        ImGui.pushStyleVar(ImGuiStyleVar.WindowPadding, 0f, 0f);
+        ImGui.pushStyleVar(ImGuiStyleVar.WindowPadding, LIST_PANEL_PADDING, LIST_PANEL_PADDING);
         ImGui.beginChild("##AudioList", listW, totalH, false, ImGuiWindowFlags.NoScrollbar);
         ImGui.popStyleVar();
-        ImGui.setCursorPosX(PANEL_INNER_INSET_X);
         renderDropZone();
         ImGui.spacing();
         renderAssetList(assets);
@@ -174,10 +180,9 @@ public final class AudioAnalysisPanel {
 
             ImGui.sameLine(0f, 0f);
             ImGui.pushStyleVar(ImGuiStyleVar.ChildRounding, 4f);
-            ImGui.pushStyleVar(ImGuiStyleVar.WindowPadding, 0f, 0f);
+            ImGui.pushStyleVar(ImGuiStyleVar.WindowPadding, DETAIL_PANEL_PADDING, DETAIL_PANEL_PADDING);
             ImGui.beginChild("##AudioDetail", detailW, totalH, true, ImGuiWindowFlags.NoScrollbar);
             ImGui.popStyleVar(2);
-            ImGui.setCursorPosX(PANEL_INNER_INSET_X);
             renderDetailPanel(selectedAsset);
             ImGui.endChild();
         } else {
