@@ -94,6 +94,7 @@ public final class AudioAnalysisPanel {
     private static final float MIN_LIST_PANEL_WIDTH = 96f;
     private static final float MIN_DETAIL_PANEL_WIDTH = 96f;
     private static final float PANEL_GAP = 4f;
+    private static final float PANEL_INNER_INSET_X = 2f;
     private static final int COLLAPSED_TEXT_MAX_CHARS = 56;
 
     // ── 状态字段 ────────────────────────────────────────────────────────────
@@ -116,6 +117,9 @@ public final class AudioAnalysisPanel {
 
         renderToolbar();
 		renderPythonRuntimeHint();
+
+        // 工具栏大量 sameLine 控件后，显式恢复内容起始 X，避免后续主体区被意外右移。
+        ImGui.setCursorPosX(ImGui.getCursorStartPosX());
 
         List<AudioAsset> assets = AudioAssetManager.getInstance().getAssets();
 
@@ -142,6 +146,7 @@ public final class AudioAnalysisPanel {
         ImGui.pushStyleVar(ImGuiStyleVar.WindowPadding, 0f, 0f);
         ImGui.beginChild("##AudioList", listW, totalH, false, ImGuiWindowFlags.NoScrollbar);
         ImGui.popStyleVar();
+        ImGui.setCursorPosX(PANEL_INNER_INSET_X);
         renderDropZone();
         ImGui.spacing();
         renderAssetList(assets);
@@ -172,6 +177,7 @@ public final class AudioAnalysisPanel {
             ImGui.pushStyleVar(ImGuiStyleVar.WindowPadding, 0f, 0f);
             ImGui.beginChild("##AudioDetail", detailW, totalH, true, ImGuiWindowFlags.NoScrollbar);
             ImGui.popStyleVar(2);
+            ImGui.setCursorPosX(PANEL_INNER_INSET_X);
             renderDetailPanel(selectedAsset);
             ImGui.endChild();
         } else {
@@ -422,7 +428,7 @@ public final class AudioAnalysisPanel {
             case QUEUED    -> lineH * 3f + 20f;            // 排队信息 + 操作按钮
             case ANALYZING -> {
                 // 解析中行在不同状态文本长度下高度波动较大，留更保守余量避免进度条底部被 child 裁剪。
-                float base = lineH * 3f + 28f; // 标题(2行)+进度条行(1行)+子窗口内边距/边框/间距余量
+                float base = lineH * 3f + 48f; // 增加额外安全余量，覆盖高缩放/DPI 下的 item 高度放大
                 String statusText = asset.getProcessingStatusText();
                 if (statusText != null && !statusText.isBlank()) {
                     float infoExtra = (asset.getInfoMessage() != null && !asset.getInfoMessage().isBlank()) ? lineH * 2f : 0f;
@@ -476,17 +482,16 @@ public final class AudioAnalysisPanel {
     private void renderAnalyzingContent(AudioAsset asset) {
         // 总进度条
         float progress = computeProgress(asset);
-        float barW = ImGui.getContentRegionAvailX();
 
         ImGui.pushStyleColor(ImGuiCol.PlotHistogram,
                 COLOR_PROGRESS_FG.x, COLOR_PROGRESS_FG.y, COLOR_PROGRESS_FG.z, COLOR_PROGRESS_FG.w);
         ImGui.pushStyleColor(ImGuiCol.FrameBg,
                 COLOR_PROGRESS_BG.x, COLOR_PROGRESS_BG.y, COLOR_PROGRESS_BG.z, COLOR_PROGRESS_BG.w);
-        ImGui.progressBar(progress, barW, 10f, "");
+        // 使用默认高度(0f)与整行宽度(-1f)，规避自定义高度在不同缩放/样式下的裁剪问题。
+        ImGui.progressBar(progress, -1f, 0f, "");
         ImGui.popStyleColor(2);
 
-        // 百分比文字
-        ImGui.sameLine(0f, 6f);
+        // 百分比独立一行，避免 sameLine 与进度条高度耦合导致的可见区域计算误差。
         ImGui.textDisabled(String.format("%.0f%%", progress * 100f));
 
         String statusText = asset.getProcessingStatusText();
@@ -1129,38 +1134,6 @@ public final class AudioAnalysisPanel {
         ImGui.textDisabled(text);
     }
 
-    /** 节标题（加粗感：先 separator 再文字）。 */
-    private void sectionHeader(String title) {
-        ImGui.pushStyleColor(ImGuiCol.Text, 0.70f, 0.68f, 0.90f, 1f);
-        ImGui.text(title);
-        ImGui.popStyleColor();
-        ImGui.separator();
-    }
-
-    /** key-value 一行，key 灰色，value 白色，右对齐。 */
-    private void detailRow(String key, String value) {
-        ImGui.textDisabled(key + "：");
-        ImGui.sameLine();
-        ImGui.setCursorPosX(ImGui.getCursorPosX() + 4f);
-        float wrapPos = ImGui.getCursorPosX() + Math.max(64f, ImGui.getContentRegionAvailX());
-        ImGui.pushTextWrapPos(wrapPos);
-        ImGui.text(value != null ? value : "-");
-        ImGui.popTextWrapPos();
-    }
-
-    /** 同 detailRow，但 value 使用指定颜色。 */
-    private void detailRowColored(String key, String value, ImVec4 color) {
-        ImGui.textDisabled(key + "：");
-        ImGui.sameLine();
-        ImGui.setCursorPosX(ImGui.getCursorPosX() + 4f);
-        ImGui.pushStyleColor(ImGuiCol.Text, color.x, color.y, color.z, color.w);
-        float wrapPos = ImGui.getCursorPosX() + Math.max(64f, ImGui.getContentRegionAvailX());
-        ImGui.pushTextWrapPos(wrapPos);
-        ImGui.text(value != null ? value : "-");
-        ImGui.popTextWrapPos();
-        ImGui.popStyleColor();
-    }
-
     private void textDisabledWrapped(String text) {
         if (text == null || text.isBlank()) return;
         float wrapPos = ImGui.getCursorPosX() + Math.max(64f, ImGui.getContentRegionAvailX());
@@ -1379,21 +1352,6 @@ public final class AudioAnalysisPanel {
             appendHealthTooltipLine(tooltip, "torch", snapshot.torch());
             appendHealthTooltipLine(tooltip, "ffmpeg", snapshot.ffmpeg());
             ImGui.setTooltip(tooltip.toString());
-        }
-    }
-
-    private void renderHealthInline(String label, AudioAnalysisService.HealthItem item) {
-        ImVec4 color = switch (item != null ? item.state() : "unknown") {
-            case "ok" -> new ImVec4(0.36f, 0.79f, 0.65f, 1f);
-            case "warn" -> new ImVec4(0.94f, 0.62f, 0.16f, 1f);
-            case "error", "missing" -> new ImVec4(0.87f, 0.30f, 0.30f, 1f);
-            default -> new ImVec4(0.62f, 0.64f, 0.70f, 1f);
-        };
-        ImGui.pushStyleColor(ImGuiCol.Text, color.x, color.y, color.z, color.w);
-        ImGui.text(label + ": " + (item != null ? item.detail() : "未知"));
-        ImGui.popStyleColor();
-        if (ImGui.isItemHovered() && item != null) {
-            ImGui.setTooltip(label + " 状态: " + item.state());
         }
     }
 
