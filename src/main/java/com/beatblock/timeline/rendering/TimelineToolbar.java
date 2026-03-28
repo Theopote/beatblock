@@ -153,7 +153,6 @@ public final class TimelineToolbar {
 
 		// 图标按钮：与轨道行同高、零内边距，字形尽量铺满并居中
 		final float tBtn = TimelineLayout.ROW_HEIGHT;
-		boolean compactToolbar = shouldUseCompactToolbar(tBtn);
 		String transportTooltip;
 		IconButtonStyle.pushBeatBlockIconButton();
 		if (ImGui.button(Icons.Play.REWIND_START + "##tlToStart", tBtn, tBtn)) {
@@ -262,13 +261,7 @@ public final class TimelineToolbar {
 			ImGui.textDisabled(MusicTimeFormatter.formatPositionDisplay(posTime, posDur, posBpm));
 		}
 
-		if (compactToolbar) {
-			nextGroup();
-			renderOverflowMenu(editor, toolbarState, seekStep);
-			return;
-		}
-
-		nextGroup();
+		nextGroupOrWrap(0);
 
 		// ----- 1.5 循环区（In/Out）与速度 -----
 		double now = editor.getClock().getCurrentTimeSeconds();
@@ -308,7 +301,7 @@ public final class TimelineToolbar {
 		if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_SPEED);
 		nextItemInGroup();
 		renderActionRollbackControl(false);
-		nextGroup();
+		nextGroupOrWrap(0);
 
 		// ----- 2. 吸附与网格 -----
 		if (toolbarState != null) {
@@ -338,14 +331,14 @@ public final class TimelineToolbar {
 				toolbarState.setMagnetSnap(!magnet);
 			}
 			if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_MAGNET);
-			nextGroup();
+			nextGroupOrWrap(0);
 
 			boolean loop = toolbarState.isLoop();
 			if (ImGui.checkbox("Loop", loop)) {
 				toolbarState.setLoop(!loop);
 			}
 			if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_LOOP);
-			nextGroup();
+			nextGroupOrWrap(0);
 		}
 
 		// ----- 3. 视图：Zoom 下拉 + Fit -----
@@ -367,7 +360,7 @@ public final class TimelineToolbar {
 		if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_FIT);
 		nextItemInGroup();
 		renderTrackHeightControl(editor, false);
-		nextGroup();
+		nextGroupOrWrap(0);
 
 		// ----- 4. Auto Map -----
 		{
@@ -412,7 +405,7 @@ public final class TimelineToolbar {
 		nextItemInGroup();
 		renderToolActionFeedback();
 
-		nextGroup();
+		nextGroupOrWrap(0);
 		renderDemucsMappingPresetControl(false);
 
 	}
@@ -575,48 +568,6 @@ public final class TimelineToolbar {
 			: "Action: Preview";
 		ImGui.textDisabled(label);
 		if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_ACTION_ROLLBACK_STATUS);
-	}
-
-	private static boolean shouldUseCompactToolbar(float tBtn) {
-		float availableWidth = ImGui.getContentRegionAvailX();
-		float requiredWidth = estimateExpandedToolbarWidth(tBtn);
-		return availableWidth < requiredWidth;
-	}
-
-	private static float estimateExpandedToolbarWidth(float tBtn) {
-		float transportWidth = estimateTransportWidth(tBtn);
-		float timeDisplayWidth = 130f; // "m:ss / m:ss  |  Bar N Beat M" 近似宽度
-		float loopAndSpeedWidth = buttonWidth("In") + TOOLBAR_ITEM_SPACING
-			+ buttonWidth("Out") + TOOLBAR_ITEM_SPACING
-			+ buttonWidth("Clr") + TOOLBAR_ITEM_SPACING
-			+ comboTotalWidth("Speed", SPEED_LABELS) + TOOLBAR_ITEM_SPACING
-			+ comboTotalWidth("Rollback", ACTION_ROLLBACK_LABELS);
-
-		float snapGroupWidth = checkboxWidth("Snap") + TOOLBAR_ITEM_SPACING
-			+ checkboxWidth("Beat Snap") + TOOLBAR_ITEM_SPACING
-			+ checkboxWidth("Beat Grid") + TOOLBAR_ITEM_SPACING
-			+ checkboxWidth("Magnet") + TOOLBAR_GROUP_SPACING
-			+ checkboxWidth("Loop");
-
-		float viewGroupWidth = comboTotalWidth("Zoom", ZOOM_PRESET_LABELS) + TOOLBAR_ITEM_SPACING + buttonWidth("Fit");
-		float trackHeightGroupWidth = sliderTotalWidth(120f) + TOOLBAR_ITEM_SPACING + buttonWidth("Reset");
-		float bindingGroupWidth = buttonWidth("Binding Map") + TOOLBAR_ITEM_SPACING
-			+ buttonWidth("Bindings...") + TOOLBAR_ITEM_SPACING
-			+ buttonWidth("Auto Map");
-
-		return transportWidth
-			+ TOOLBAR_GROUP_SPACING + timeDisplayWidth
-			+ TOOLBAR_GROUP_SPACING + loopAndSpeedWidth
-			+ TOOLBAR_GROUP_SPACING + snapGroupWidth
-			+ TOOLBAR_GROUP_SPACING + viewGroupWidth
-			+ TOOLBAR_GROUP_SPACING + trackHeightGroupWidth
-			+ TOOLBAR_GROUP_SPACING + bindingGroupWidth;
-	}
-
-	private static float estimateTransportWidth(float tBtn) {
-		// to-start, back-step, prev-event, play/pause, stop, fwd-step, next-event, to-end, add-marker
-		float buttonSum = tBtn * 9f;
-		return buttonSum + TOOLBAR_ITEM_SPACING * 8f;
 	}
 
 	private static float buttonWidth(String label) {
@@ -1558,6 +1509,19 @@ public final class TimelineToolbar {
 
 	private static void nextGroup() {
 		ImGui.sameLine(0f, TOOLBAR_GROUP_SPACING);
+	}
+
+	/**
+	 * 组间换行检测：如果当前行剩余空间不够放下一个元素组，就不调 sameLine，让 ImGui 自动换行。
+	 * @param estimatedNextGroupWidth 下一组控件的近似宽度，0 表示使用默认阈值。
+	 */
+	private static void nextGroupOrWrap(float estimatedNextGroupWidth) {
+		float threshold = estimatedNextGroupWidth > 0 ? estimatedNextGroupWidth : 80f;
+		// 先 sameLine 把光标移到上一个控件右侧，再检查剩余空间
+		ImGui.sameLine(0f, TOOLBAR_GROUP_SPACING);
+		if (ImGui.getContentRegionAvailX() < threshold) {
+			ImGui.newLine();
+		}
 	}
 
 	private static float comboWidthForLabels(String[] labels) {
