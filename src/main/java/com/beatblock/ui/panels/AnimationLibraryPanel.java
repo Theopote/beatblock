@@ -3,16 +3,20 @@ package com.beatblock.ui.panels;
 import com.beatblock.ui.layout.BeatBlockDockSpaceLayoutBuilder;
 import imgui.ImGui;
 import imgui.flag.ImGuiWindowFlags;
+import imgui.type.ImBoolean;
 
 /**
- * 动画库面板，可通过菜单「视图 → 动画库」打开/关闭。
+ * 动画库面板，可通过菜单「视图 → 面板」打开/关闭。
  */
 public class AnimationLibraryPanel {
 
 	private static final int WINDOW_FLAGS = ImGuiWindowFlags.NoCollapse;
 
-	public void render() {
-		if (!ImGui.begin(BeatBlockDockSpaceLayoutBuilder.ANIMATION_LIBRARY_WINDOW, WINDOW_FLAGS)) {
+	public void render(ImBoolean pOpen) {
+		if (!pOpen.get()) {
+			return;
+		}
+		if (!ImGui.begin(BeatBlockDockSpaceLayoutBuilder.ANIMATION_LIBRARY_WINDOW, pOpen, WINDOW_FLAGS)) {
 			ImGui.end();
 			return;
 		}

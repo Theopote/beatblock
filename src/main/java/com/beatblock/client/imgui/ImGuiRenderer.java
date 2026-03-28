@@ -7,6 +7,7 @@ import imgui.ImGuiIO;
 import imgui.flag.ImGuiConfigFlags;
 import imgui.gl3.ImGuiImplGl3;
 import imgui.glfw.ImGuiImplGlfw;
+import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.util.Window;
 import org.lwjgl.glfw.GLFW;
@@ -21,6 +22,8 @@ import org.lwjgl.opengl.GL30;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
@@ -66,7 +69,15 @@ public class ImGuiRenderer {
 		ImGuiIO io = ImGui.getIO();
 		int configFlags = ImGuiConfigFlags.NavEnableKeyboard | ImGuiConfigFlags.DockingEnable;
 		io.setConfigFlags(configFlags);
-		io.setIniFilename("config/beatblock/imgui.ini");
+		try {
+			Path beatblockConfig = FabricLoader.getInstance().getConfigDir().resolve("beatblock");
+			Files.createDirectories(beatblockConfig);
+			Path iniPath = beatblockConfig.resolve("imgui.ini");
+			io.setIniFilename(iniPath.toAbsolutePath().toString());
+		} catch (Exception e) {
+			LOGGER.warn("BeatBlock: 无法创建 ImGui ini 目录，使用相对路径", e);
+			io.setIniFilename("config/beatblock/imgui.ini");
+		}
 
 		ImGuiFontManager.initializeFonts(io);
 		ImGui.styleColorsDark();

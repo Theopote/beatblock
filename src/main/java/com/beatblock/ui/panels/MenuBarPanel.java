@@ -2,8 +2,10 @@ package com.beatblock.ui.panels;
 
 import com.beatblock.BeatBlock;
 import com.beatblock.timeline.project.OscProjectStore;
+import com.beatblock.ui.BeatBlockPanelVisibility;
 import imgui.ImGui;
 import imgui.flag.ImGuiWindowFlags;
+import imgui.type.ImBoolean;
 import imgui.type.ImString;
 
 import java.nio.file.Path;
@@ -16,11 +18,10 @@ public class MenuBarPanel {
 	private static final int IMPORT_PATH_CAPACITY = 512;
 
 	private final Runnable onCloseRequest;
-	private final Runnable onToggleAnimationLibrary;
+	private final BeatBlockPanelVisibility panels;
 	private final Runnable onOpenSmartAutoMap;
-	private final Runnable onToggleSelectionProperties;
-	private boolean animationLibraryVisible;
-	private boolean selectionPropertiesVisible;
+	private final Runnable onResetLayout;
+	private final Runnable onSaveLayout;
 	private boolean showImportDialog;
 	private boolean showOpenProjectDialog;
 	private boolean showSaveProjectDialog;
@@ -30,24 +31,13 @@ public class MenuBarPanel {
 	private final ImString saveProjectPath = new ImString(IMPORT_PATH_CAPACITY);
 	private String projectDialogMessage = "";
 
-	public MenuBarPanel(Runnable onCloseRequest, Runnable onToggleAnimationLibrary, Runnable onOpenSmartAutoMap,
-		Runnable onToggleSelectionProperties) {
+	public MenuBarPanel(Runnable onCloseRequest, BeatBlockPanelVisibility panels, Runnable onOpenSmartAutoMap,
+			Runnable onResetLayout, Runnable onSaveLayout) {
 		this.onCloseRequest = onCloseRequest;
-		this.onToggleAnimationLibrary = onToggleAnimationLibrary;
+		this.panels = panels != null ? panels : new BeatBlockPanelVisibility();
 		this.onOpenSmartAutoMap = onOpenSmartAutoMap != null ? onOpenSmartAutoMap : () -> {};
-		this.onToggleSelectionProperties = onToggleSelectionProperties != null ? onToggleSelectionProperties : () -> {};
-	}
-
-	public void setAnimationLibraryVisible(boolean visible) {
-		animationLibraryVisible = visible;
-	}
-
-	public boolean isAnimationLibraryVisible() {
-		return animationLibraryVisible;
-	}
-
-	public void setSelectionPropertiesVisible(boolean visible) {
-		selectionPropertiesVisible = visible;
+		this.onResetLayout = onResetLayout != null ? onResetLayout : () -> {};
+		this.onSaveLayout = onSaveLayout != null ? onSaveLayout : () -> {};
 	}
 
 	public void render() {
@@ -93,13 +83,34 @@ public class MenuBarPanel {
 			}
 			// 视图
 			if (ImGui.beginMenu("视图")) {
-				if (ImGui.menuItem("动画库", null, animationLibraryVisible)) {
-					animationLibraryVisible = !animationLibraryVisible;
-					if (onToggleAnimationLibrary != null) onToggleAnimationLibrary.run();
+				if (ImGui.menuItem("关闭所有面板")) {
+					panels.closeAll();
 				}
-				if (ImGui.menuItem("选择属性", null, selectionPropertiesVisible)) {
-					selectionPropertiesVisible = !selectionPropertiesVisible;
-                    onToggleSelectionProperties.run();
+				if (ImGui.menuItem("打开所有面板")) {
+					panels.openAll();
+				}
+				ImGui.separator();
+				if (ImGui.menuItem("重置布局")) {
+					onResetLayout.run();
+				}
+				if (ImGui.isItemHovered()) {
+					ImGui.setTooltip("恢复默认 Dock 分区（侧栏/底栏比例）。各面板显示开关保持当前状态。");
+				}
+				if (ImGui.menuItem("保存当前布局")) {
+					onSaveLayout.run();
+				}
+				if (ImGui.isItemHovered()) {
+					ImGui.setTooltip("将窗口停靠与尺寸写入配置文件（config/beatblock/imgui.ini）。");
+				}
+				ImGui.separator();
+				if (ImGui.beginMenu("面板")) {
+					panelToggleItem("音频解析", panels.audioAnalysis);
+					panelToggleItem("工具", panels.tool);
+					panelToggleItem("事件属性", panels.eventProperties);
+					panelToggleItem("时间线", panels.timeline);
+					panelToggleItem("动画库", panels.animationLibrary);
+					panelToggleItem("选择属性", panels.selectionProperties);
+					ImGui.endMenu();
 				}
 				ImGui.endMenu();
 			}
@@ -125,6 +136,13 @@ public class MenuBarPanel {
 		renderOpenProjectDialog();
 		renderSaveProjectDialog();
 		renderAboutDialog();
+	}
+
+	private static void panelToggleItem(String label, ImBoolean open) {
+		boolean v = open.get();
+		if (ImGui.menuItem(label, null, v)) {
+			open.set(!v);
+		}
 	}
 
 	private void renderImportDialog() {

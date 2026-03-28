@@ -84,8 +84,11 @@ public class ToolPanel {
 	/** 上次生成统计 */
 	private SmartAutoMapEngine.AutoMapResult lastAutoMapResult = null;
 
-	public void render() {
-		if (!ImGui.begin(BeatBlockDockSpaceLayoutBuilder.TOOL_PANEL_WINDOW, WINDOW_FLAGS)) {
+	public void render(ImBoolean pOpen) {
+		if (!pOpen.get()) {
+			return;
+		}
+		if (!ImGui.begin(BeatBlockDockSpaceLayoutBuilder.TOOL_PANEL_WINDOW, pOpen, WINDOW_FLAGS)) {
 			ImGui.end();
 			return;
 		}

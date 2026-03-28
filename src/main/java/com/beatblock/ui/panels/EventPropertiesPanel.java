@@ -18,6 +18,7 @@ import com.beatblock.timeline.rendering.TrackRegistry;
 import com.beatblock.ui.layout.BeatBlockDockSpaceLayoutBuilder;
 import imgui.ImGui;
 import imgui.flag.ImGuiWindowFlags;
+import imgui.type.ImBoolean;
 import imgui.type.ImInt;
 import imgui.type.ImString;
 import net.minecraft.registry.Registries;
@@ -48,8 +49,11 @@ public class EventPropertiesPanel {
 	private record EventRef(Track track, Clip clip, TimelineEvent event) {}
 	private record Option(String id, String label) {}
 
-	public void render() {
-		if (!ImGui.begin(BeatBlockDockSpaceLayoutBuilder.EVENT_PROPERTIES_WINDOW, WINDOW_FLAGS)) {
+	public void render(ImBoolean pOpen) {
+		if (!pOpen.get()) {
+			return;
+		}
+		if (!ImGui.begin(BeatBlockDockSpaceLayoutBuilder.EVENT_PROPERTIES_WINDOW, pOpen, WINDOW_FLAGS)) {
 			ImGui.end();
 			return;
 		}

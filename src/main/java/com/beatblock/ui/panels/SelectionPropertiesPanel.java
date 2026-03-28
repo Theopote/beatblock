@@ -46,8 +46,11 @@ public class SelectionPropertiesPanel {
 	};
 	private final ImBoolean selectionFillProxy = new ImBoolean(false);
 
-	public void render() {
-		if (!ImGui.begin(BeatBlockDockSpaceLayoutBuilder.SELECTION_PROPERTIES_WINDOW, WINDOW_FLAGS)) {
+	public void render(ImBoolean pOpen) {
+		if (!pOpen.get()) {
+			return;
+		}
+		if (!ImGui.begin(BeatBlockDockSpaceLayoutBuilder.SELECTION_PROPERTIES_WINDOW, pOpen, WINDOW_FLAGS)) {
 			ImGui.end();
 			return;
 		}

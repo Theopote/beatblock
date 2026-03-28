@@ -4,6 +4,7 @@ import com.beatblock.BeatBlock;
 import com.beatblock.audio.AudioAnalysisService;
 import com.beatblock.timeline.rendering.TimelineLayout;
 import com.beatblock.ui.icons.Icons;
+import com.beatblock.ui.layout.BeatBlockDockSpaceLayoutBuilder;
 import com.beatblock.client.imgui.ImGuiFontManager;
 import com.beatblock.client.imgui.ImGuiRenderer;
 import com.beatblock.ui.imgui.IconButtonStyle;
@@ -114,9 +115,12 @@ public final class AudioAnalysisPanel {
     private final Set<String> expandedDetailRows = new HashSet<>();
     // ── 公共入口 ─────────────────────────────────────────────────────────────
 
-    public void render() {
+    public void render(ImBoolean pOpen) {
+        if (!pOpen.get()) {
+            return;
+        }
         ImGui.pushStyleVar(ImGuiStyleVar.WindowPadding, PANEL_OUTER_PADDING_X, PANEL_OUTER_PADDING_Y);
-        if (!ImGui.begin("音频解析###AudioAnalysisPanel", WINDOW_FLAGS)) {
+        if (!ImGui.begin(BeatBlockDockSpaceLayoutBuilder.AUDIO_ANALYSIS_WINDOW, pOpen, WINDOW_FLAGS)) {
             ImGui.popStyleVar();
             ImGui.end();
             return;

@@ -4,6 +4,7 @@ import com.beatblock.client.render.BeatBlockLassoOverlay;
 import com.beatblock.ui.layout.BeatBlockDockSpaceLayoutBuilder;
 import com.beatblock.ui.panels.*;
 import imgui.ImGui;
+import imgui.ImGuiIO;
 import imgui.flag.ImGuiCol;
 import imgui.flag.ImGuiStyleVar;
 import imgui.flag.ImGuiWindowFlags;
@@ -34,8 +35,7 @@ public class BeatBlockUIManager {
 	private final AnimationLibraryPanel animationLibraryPanel;
 	private final SelectionPropertiesPanel selectionPropertiesPanel;
 
-	private boolean animationLibraryVisible = false;
-	private boolean selectionPropertiesVisible = false;
+	private final BeatBlockPanelVisibility panelVisibility = new BeatBlockPanelVisibility();
 	private boolean firstLayout = true;
 	private Runnable onCloseRequest;
 
@@ -43,8 +43,8 @@ public class BeatBlockUIManager {
 		this.onCloseRequest = onCloseRequest;
 		this.toolPanel = new ToolPanel(this::openSelectionPropertiesForTool);
 		this.audioAnalysisPanel = new AudioAnalysisPanel();
-		this.menuBarPanel = new MenuBarPanel(onCloseRequest, this::toggleAnimationLibrary,
-			() -> toolPanel.setShowAutoMapSettings(true), this::toggleSelectionProperties);
+		this.menuBarPanel = new MenuBarPanel(onCloseRequest, panelVisibility,
+			() -> toolPanel.setShowAutoMapSettings(true), this::resetLayoutState, this::saveCurrentLayout);
 		this.eventPropertiesPanel = new EventPropertiesPanel();
 		this.timelinePanel = new TimelinePanel();
 		this.animationLibraryPanel = new AnimationLibraryPanel();
@@ -55,20 +55,22 @@ public class BeatBlockUIManager {
 		this.onCloseRequest = onCloseRequest;
 	}
 
-	private void toggleAnimationLibrary() {
-		animationLibraryVisible = !animationLibraryVisible;
-		menuBarPanel.setAnimationLibraryVisible(animationLibraryVisible);
-	}
-
-	private void toggleSelectionProperties() {
-		selectionPropertiesVisible = !selectionPropertiesVisible;
-		menuBarPanel.setSelectionPropertiesVisible(selectionPropertiesVisible);
-	}
-
-	/** 切换方块选择工具时自动打开并勾选「选择属性」面板。 */
+	/** 切换方块选择工具时自动打开「选择属性」面板。 */
 	private void openSelectionPropertiesForTool() {
-		selectionPropertiesVisible = true;
-		menuBarPanel.setSelectionPropertiesVisible(true);
+		panelVisibility.selectionProperties.set(true);
+	}
+
+	private void saveCurrentLayout() {
+		try {
+			ImGuiIO io = ImGui.getIO();
+			if (io != null) {
+				String path = io.getIniFilename();
+				if (path != null && !path.isBlank()) {
+					ImGui.saveIniSettingsToDisk(path);
+				}
+			}
+		} catch (Throwable ignored) {
+		}
 	}
 
 	public void render() {
@@ -111,32 +113,13 @@ public class BeatBlockUIManager {
 		ImGui.pushStyleColor(ImGuiCol.TitleBg, 0.125f, 0.125f, 0.14f, 1f);         // 标题栏
 		ImGui.pushStyleColor(ImGuiCol.TitleBgActive, 0.16f, 0.16f, 0.18f, 1f);
 		ImGui.pushStyleColor(ImGuiCol.TitleBgCollapsed, 0.11f, 0.11f, 0.12f, 1f);
-		audioAnalysisPanel.render();
-		toolPanel.render();
-		eventPropertiesPanel.render();
-		timelinePanel.render();
+		audioAnalysisPanel.render(panelVisibility.audioAnalysis);
+		toolPanel.render(panelVisibility.tool);
+		eventPropertiesPanel.render(panelVisibility.eventProperties);
+		timelinePanel.render(panelVisibility.timeline);
+		animationLibraryPanel.render(panelVisibility.animationLibrary);
+		selectionPropertiesPanel.render(panelVisibility.selectionProperties);
 		ImGui.popStyleColor(5);
-
-		// 4. 动画库（可选）
-		if (animationLibraryVisible) {
-			ImGui.pushStyleColor(ImGuiCol.WindowBg, 0.09f, 0.09f, 0.1f, 1f);
-			ImGui.pushStyleColor(ImGuiCol.Text, 0.86f, 0.86f, 0.86f, 1f);
-			ImGui.pushStyleColor(ImGuiCol.TitleBg, 0.125f, 0.125f, 0.14f, 1f);
-			ImGui.pushStyleColor(ImGuiCol.TitleBgActive, 0.16f, 0.16f, 0.18f, 1f);
-			ImGui.pushStyleColor(ImGuiCol.TitleBgCollapsed, 0.11f, 0.11f, 0.12f, 1f);
-			animationLibraryPanel.render();
-			ImGui.popStyleColor(5);
-		}
-
-		if (selectionPropertiesVisible) {
-			ImGui.pushStyleColor(ImGuiCol.WindowBg, 0.09f, 0.09f, 0.1f, 1f);
-			ImGui.pushStyleColor(ImGuiCol.Text, 0.86f, 0.86f, 0.86f, 1f);
-			ImGui.pushStyleColor(ImGuiCol.TitleBg, 0.125f, 0.125f, 0.14f, 1f);
-			ImGui.pushStyleColor(ImGuiCol.TitleBgActive, 0.16f, 0.16f, 0.18f, 1f);
-			ImGui.pushStyleColor(ImGuiCol.TitleBgCollapsed, 0.11f, 0.11f, 0.12f, 1f);
-			selectionPropertiesPanel.render();
-			ImGui.popStyleColor(5);
-		}
 
 		BeatBlockLassoOverlay.render();
 	}

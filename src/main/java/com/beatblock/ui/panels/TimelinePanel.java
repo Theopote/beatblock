@@ -8,6 +8,7 @@ import com.beatblock.timeline.util.MusicTimeFormatter;
 import imgui.ImGui;
 import imgui.ImVec2;
 import imgui.flag.ImGuiWindowFlags;
+import imgui.type.ImBoolean;
 
 /**
  * 底部通栏时间线面板：固定工具栏 + 固定时间刻度，轨道区在可滚动子窗口中一行一行显示。
@@ -17,8 +18,11 @@ public class TimelinePanel {
 	private static final int WINDOW_FLAGS = ImGuiWindowFlags.NoCollapse;
 	private final TimelineToolbar toolbar = new TimelineToolbar();
 
-	public void render() {
-		if (!ImGui.begin(BeatBlockDockSpaceLayoutBuilder.TIMELINE_PANEL_WINDOW, WINDOW_FLAGS)) {
+	public void render(ImBoolean pOpen) {
+		if (!pOpen.get()) {
+			return;
+		}
+		if (!ImGui.begin(BeatBlockDockSpaceLayoutBuilder.TIMELINE_PANEL_WINDOW, pOpen, WINDOW_FLAGS)) {
 			ImGui.end();
 			return;
 		}
