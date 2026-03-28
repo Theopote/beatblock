@@ -8,7 +8,8 @@ import java.util.Locale;
 public enum TimelineAnimationActionMode {
 	ANIMATE,
 	PLACE,
-	CLEAR;
+	CLEAR,
+	BUILD;
 
 	public static TimelineAnimationActionMode fromValue(Object value) {
 		if (value == null) return ANIMATE;

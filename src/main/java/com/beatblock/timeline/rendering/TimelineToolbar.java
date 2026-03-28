@@ -101,8 +101,8 @@ public final class TimelineToolbar {
 	};
 	private static final String DEMUCS_ADVANCED_POPUP_ID = "tlDemucsMappingAdvanced";
 	private static final String BINDING_EDITOR_POPUP_ID = "tlBindingEditor";
-	private static final String[] BINDING_ACTION_LABELS = { "动画", "放置", "清除" };
-	private static final String[] BINDING_ACTION_VALUES = { "ANIMATE", "PLACE", "CLEAR" };
+	private static final String[] BINDING_ACTION_LABELS = { "动画", "放置", "清除", "建造" };
+	private static final String[] BINDING_ACTION_VALUES = { "ANIMATE", "PLACE", "CLEAR", "BUILD" };
 	private static final String[] BINDING_SPATIAL_LABELS = { "ALL", "SEQUENTIAL", "RADIAL", "RANDOM", "SPIRAL" };
 	private static final String[] BINDING_SPATIAL_VALUES = { "ALL", "SEQUENTIAL", "RADIAL", "RANDOM", "SPIRAL" };
     private static final String BINDING_SECTION_ALL = "ALL";
@@ -813,6 +813,25 @@ public final class TimelineToolbar {
 					if (ImGui.sliderFloat("Meteor Scatter", meteorScatter, 0f, 8f, "%.1f")) changed = true;
 					extraCopy.put("meteorHeight", meteorHeight[0]);
 					extraCopy.put("meteorScatter", meteorScatter[0]);
+				}
+
+				String uiAction = BINDING_ACTION_VALUES[actionIndex];
+				if ("BUILD".equalsIgnoreCase(uiAction)) {
+					String[] buildModeLabels = { "WALL", "BRIDGE", "TOWER", "DISSOLVE" };
+					int bmIdx = indexOfValue(buildModeLabels, String.valueOf(extraCopy.getOrDefault("buildMode", "WALL")));
+					ImInt bmCombo = new ImInt(Math.max(0, bmIdx));
+					if (ImGui.combo("Build Mode", bmCombo, buildModeLabels)) changed = true;
+					extraCopy.put("buildMode", buildModeLabels[Math.max(0, Math.min(bmCombo.get(), buildModeLabels.length - 1))]);
+
+					ImString blockBuf = new ImString(128);
+					blockBuf.set(String.valueOf(extraCopy.getOrDefault("placeBlock", "minecraft:diamond_block")));
+					if (ImGui.inputText("Block ID##buildBlockId", blockBuf)) changed = true;
+					extraCopy.put("placeBlock", blockBuf.get().trim());
+
+					imgui.type.ImBoolean dissolveFlag = new imgui.type.ImBoolean(
+						"true".equalsIgnoreCase(String.valueOf(extraCopy.getOrDefault("buildDissolve", "false"))));
+					if (ImGui.checkbox("Dissolve (reverse)", dissolveFlag)) changed = true;
+					extraCopy.put("buildDissolve", String.valueOf(dissolveFlag.get()));
 				}
 
 				if (changed) {

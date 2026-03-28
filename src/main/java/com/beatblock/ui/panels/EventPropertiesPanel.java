@@ -346,6 +346,7 @@ public class EventPropertiesPanel {
 				case ANIMATE -> "动画";
 				case PLACE -> "放置";
 				case CLEAR -> "清除";
+				case BUILD -> "建造";
 			};
 			options.add(new Option(mode.name(), label + " [" + mode.name() + "]"));
 		}

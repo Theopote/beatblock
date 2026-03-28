@@ -20,6 +20,7 @@ public final class EventRenderer {
 	private static final int KEYFRAME_COLOR     = 0xFF_FF_CC_66;
 	private static final int ACTION_PLACE_COLOR = 0xFF_57_C4_A0;
 	private static final int ACTION_CLEAR_COLOR = 0xFF_66_66_FF;
+	private static final int ACTION_BUILD_COLOR = 0xFF_FF_99_33;
 	private static final int GLOBAL_EVENT_COLOR = 0xFF_AA_FF_AA;
 	private static final int SELECTED_BORDER_COLOR = 0xFF_FF_FF_00;
 	private static final int STATUS_APPLIED_COLOR = 0xFF_57_C4_A0;
@@ -197,6 +198,7 @@ public final class EventRenderer {
 			int resolvedFillColor = switch (e.getActionMode()) {
 				case PLACE -> ACTION_PLACE_COLOR;
 				case CLEAR -> ACTION_CLEAR_COLOR;
+				case BUILD -> ACTION_BUILD_COLOR;
 				case ANIMATE -> fillColor;
 			};
 			ImGui.getWindowDrawList().addRectFilled(baseX + x, y0, baseX + x + w, y1, resolvedFillColor, 2f);

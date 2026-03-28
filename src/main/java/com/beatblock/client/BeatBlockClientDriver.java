@@ -80,6 +80,11 @@ public final class BeatBlockClientDriver {
 		if (BeatBlock.blockAnimationEngine != null) {
 			syncTimelineBlockAnimationEvents(currentTime);
 			BeatBlock.blockAnimationEngine.tick(currentTime);
+			MinecraftClient mc2 = MinecraftClient.getInstance();
+			World tickWorld = mc2 != null ? mc2.world : null;
+			if (tickWorld != null) {
+				BeatBlock.blockAnimationEngine.getBuildSequencer().tick(currentTime, tickWorld);
+			}
 		}
 
 		Vec3d base = BeatBlock.stageManager.getCurrentStage()
@@ -240,6 +245,16 @@ public final class BeatBlockClientDriver {
 		if (actionMode == TimelineAnimationActionMode.ANIMATE) {
 			BeatBlock.blockAnimationEngine.scheduleTimelineEvent(event);
 			recordActionReport(event, 0, "ANIMATE", "scheduled");
+			return;
+		}
+
+		if (actionMode == TimelineAnimationActionMode.BUILD) {
+			var inst = BeatBlock.blockAnimationEngine.getBuildSequencer().schedule(event);
+			if (inst != null) {
+				recordActionReport(event, inst.getTotalBlocks(), "BUILD", "scheduled-" + inst.getTotalBlocks() + "-blocks");
+			} else {
+				recordActionReport(event, 0, "SKIPPED", "build-no-target");
+			}
 			return;
 		}
 

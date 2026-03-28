@@ -62,7 +62,8 @@ public final class BlockControlExecutor {
 		}
 
 		TimelineAnimationActionMode actionMode = event.getActionMode();
-		if (actionMode == TimelineAnimationActionMode.ANIMATE) {
+		if (actionMode == TimelineAnimationActionMode.ANIMATE
+				|| actionMode == TimelineAnimationActionMode.BUILD) {
 			return new ControlPlan(actionMode, event.getTargetObjectId(), mutations,
 				ControlSkipReason.ANIMATE_MODE, 0, 0);
 		}

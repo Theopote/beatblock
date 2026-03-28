@@ -27,6 +27,7 @@ public final class BlockAnimationEngine {
 	private final AnimationLibrary animationLibrary = new AnimationLibrary();
 	private final AnimationPlayer animationPlayer = new AnimationPlayer();
 	private final BlockControlExecutor blockControlExecutor = new BlockControlExecutor(stageObjectSystem);
+	private final BuildSequencer buildSequencer = new BuildSequencer(stageObjectSystem);
 
 	public StageObjectSystem getStageObjectSystem() {
 		return stageObjectSystem;
@@ -42,6 +43,10 @@ public final class BlockAnimationEngine {
 
 	public BlockControlExecutor getBlockControlExecutor() {
 		return blockControlExecutor;
+	}
+
+	public BuildSequencer getBuildSequencer() {
+		return buildSequencer;
 	}
 
 	/**
@@ -218,5 +223,6 @@ public final class BlockAnimationEngine {
 
 	public void clear() {
 		animationPlayer.clear();
+		buildSequencer.clear();
 	}
 }
