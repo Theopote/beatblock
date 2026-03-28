@@ -521,6 +521,8 @@ public final class AudioAnalysisPanel {
             ImGui.text("排队中");
         }
         ImGui.popStyleColor();
+        ImGui.sameLine();
+        renderQueueBadge(asset);
 
         if (ImGui.beginDragDropSource(imgui.flag.ImGuiDragDropFlags.SourceAllowNullID)) {
             ImGui.setDragDropPayload("BB_AUDIO_QUEUE_ID", asset.getId().getBytes(), ImGuiCond.Once);
@@ -818,6 +820,14 @@ public final class AudioAnalysisPanel {
         detailRow("缓存来源",       cacheSourceLabel(asset.getCacheSource()));
         detailRowColored("踩点数量", asset.getBeatCount() + " 个",               COLOR_MID);
         detailRow("识别段落",        asset.getSectionCount() + " 段");
+
+        if (asset.getRequestedAnalysisMode() == AudioAnalysisMode.DEMUCS
+                && asset.getResolvedAnalysisMode() == AudioAnalysisMode.BASIC) {
+            ImGui.spacing();
+            renderWarningBanner("已请求 Demucs，但本次实际以 Basic 完成。通常表示 Demucs 不可用、回退执行，或命中了 Basic 缓存。");
+        }
+        ImGui.sameLine();
+        renderCacheBadge(asset.getCacheSource());
 
         ImGui.spacing();
 
@@ -1261,6 +1271,46 @@ public final class AudioAnalysisPanel {
             : new ImVec4(0.94f, 0.62f, 0.16f, 1f);
         ImGui.pushStyleColor(ImGuiCol.Text, color.x, color.y, color.z, color.w);
         ImGui.textDisabled("[" + analysisModeLabel(mode) + "]");
+        ImGui.popStyleColor();
+    }
+
+    private void renderQueueBadge(AudioAsset asset) {
+        String label = analysisModeLabel(asset.getRequestedAnalysisMode()) + " / " + queueStageLabel(asset);
+        ImVec4 color = asset.getRequestedAnalysisMode() == AudioAnalysisMode.DEMUCS
+            ? new ImVec4(0.22f, 0.78f, 0.82f, 1f)
+            : new ImVec4(0.94f, 0.62f, 0.16f, 1f);
+        ImGui.pushStyleColor(ImGuiCol.Text, color.x, color.y, color.z, color.w);
+        ImGui.textDisabled("[" + label + "]");
+        ImGui.popStyleColor();
+    }
+
+    private String queueStageLabel(AudioAsset asset) {
+        if (asset == null) return "-";
+        return switch (asset.getStatus()) {
+            case QUEUED -> "等待";
+            case ANALYZING -> analysisPhaseLabel(asset.getProcessingStatusText());
+            case COMPLETED -> "完成";
+            case FAILED -> "失败";
+            default -> "待处理";
+        };
+    }
+
+    private void renderCacheBadge(String cacheSource) {
+        if (cacheSource == null || cacheSource.isBlank()) return;
+        ImVec4 color = switch (cacheSource) {
+            case "beatmap-cache" -> new ImVec4(0.58f, 0.72f, 0.30f, 1f);
+            case "stem-cache-reuse" -> new ImVec4(0.22f, 0.78f, 0.82f, 1f);
+            case "fresh" -> new ImVec4(0.62f, 0.64f, 0.70f, 1f);
+            default -> new ImVec4(0.80f, 0.80f, 0.80f, 1f);
+        };
+        ImGui.pushStyleColor(ImGuiCol.Text, color.x, color.y, color.z, color.w);
+        ImGui.textDisabled("[" + cacheSourceLabel(cacheSource) + "]");
+        ImGui.popStyleColor();
+    }
+
+    private void renderWarningBanner(String text) {
+        ImGui.pushStyleColor(ImGuiCol.Text, 0.94f, 0.62f, 0.16f, 1f);
+        ImGui.textWrapped(Icons.Action.WARNING + " " + text);
         ImGui.popStyleColor();
     }
 
