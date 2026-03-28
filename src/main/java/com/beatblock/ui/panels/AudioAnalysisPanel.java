@@ -586,6 +586,8 @@ public final class AudioAnalysisPanel {
         ImGui.popStyleColor();
 
         // Demucs 茎分离标识
+        ImGui.sameLine();
+        renderCacheBadge(asset.getCacheSource());
         Beatmap bm = asset.getBeatmap();
         if (bm != null && bm.meta != null && bm.meta.hasStemSeparation()) {
             ImGui.sameLine();
@@ -900,6 +902,23 @@ public final class AudioAnalysisPanel {
         ImGui.spacing();
 
         // ── 拖拽到时间线 ──────────────────────────────────────────────
+        AudioAnalysisMode compareMode = asset.getResolvedAnalysisMode() == AudioAnalysisMode.DEMUCS
+                ? AudioAnalysisMode.BASIC
+                : AudioAnalysisMode.DEMUCS;
+        String compareLabel = compareMode == AudioAnalysisMode.DEMUCS
+                ? "用 Demucs 做对比##detailCompareDemucs"
+                : "用 Basic 做对比##detailCompareBasic";
+        if (ImGui.button(compareLabel, ImGui.getContentRegionAvailX(), 24f)) {
+            String result = AudioAssetManager.getInstance().clearCacheAndReanalyze(asset, compareMode);
+            setPanelHint(result, result.contains("未初始化") || result.contains("无效"));
+        }
+        if (ImGui.isItemHovered()) {
+            ImGui.setTooltip(compareMode == AudioAnalysisMode.DEMUCS
+                    ? "清缓存后用 Demucs 重跑，方便和当前结果对比"
+                    : "清缓存后用 Basic 重跑，方便和当前结果对比");
+        }
+        ImGui.spacing();
+
         float btnW = ImGui.getContentRegionAvailX();
         ImGui.pushStyleColor(ImGuiCol.Button,        0.28f, 0.26f, 0.45f, 1f);
         ImGui.pushStyleColor(ImGuiCol.ButtonHovered, 0.35f, 0.33f, 0.55f, 1f);
