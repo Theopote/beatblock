@@ -9,6 +9,7 @@ import com.beatblock.client.imgui.ImGuiRenderer;
 import com.beatblock.ui.imgui.IconButtonStyle;
 import com.beatblock.audio.assets.AudioAnalysisStep;
 import com.beatblock.audio.assets.AudioAnalysisMode;
+import com.beatblock.audio.assets.AudioAnalysisPhase;
 import com.beatblock.audio.assets.AudioAsset;
 import com.beatblock.audio.assets.AudioAssetManager;
 import com.beatblock.audio.assets.AudioAssetStatus;
@@ -27,7 +28,6 @@ import imgui.type.ImString;
 import java.awt.EventQueue;
 import java.awt.FileDialog;
 import java.awt.Frame;
-import java.awt.HeadlessException;
 import java.awt.Toolkit;
 import javax.swing.JFileChooser;
 import javax.swing.SwingUtilities;
@@ -476,7 +476,7 @@ public final class AudioAnalysisPanel {
                 COLOR_PROGRESS_FG.x, COLOR_PROGRESS_FG.y, COLOR_PROGRESS_FG.z, COLOR_PROGRESS_FG.w);
             ImGui.textWrapped("正在处理：" + statusText);
             ImGui.popStyleColor();
-            ImGui.textDisabled("阶段：" + analysisPhaseLabel(statusText));
+            ImGui.textDisabled("阶段：" + analysisPhaseLabel(asset));
         }
 
         if (asset.getInfoMessage() != null && !asset.getInfoMessage().isBlank()) {
@@ -824,7 +824,7 @@ public final class AudioAnalysisPanel {
         if (asset.getRequestedAnalysisMode() == AudioAnalysisMode.DEMUCS
                 && asset.getResolvedAnalysisMode() == AudioAnalysisMode.BASIC) {
             ImGui.spacing();
-            renderWarningBanner("已请求 Demucs，但本次实际以 Basic 完成。通常表示 Demucs 不可用、回退执行，或命中了 Basic 缓存。");
+            renderWarningBanner();
         }
         ImGui.sameLine();
         renderCacheBadge(asset.getCacheSource());
@@ -940,7 +940,7 @@ public final class AudioAnalysisPanel {
                 COLOR_PROGRESS_FG.x, COLOR_PROGRESS_FG.y, COLOR_PROGRESS_FG.z, COLOR_PROGRESS_FG.w);
             ImGui.textWrapped("正在处理：" + statusText);
             ImGui.popStyleColor();
-            ImGui.textDisabled("当前阶段：" + analysisPhaseLabel(statusText));
+            ImGui.textDisabled("当前阶段：" + analysisPhaseLabel(asset));
         }
 
         if (asset.getInfoMessage() != null && !asset.getInfoMessage().isBlank()) {
@@ -1288,7 +1288,7 @@ public final class AudioAnalysisPanel {
         if (asset == null) return "-";
         return switch (asset.getStatus()) {
             case QUEUED -> "等待";
-            case ANALYZING -> analysisPhaseLabel(asset.getProcessingStatusText());
+            case ANALYZING -> analysisPhaseLabel(asset);
             case COMPLETED -> "完成";
             case FAILED -> "失败";
             default -> "待处理";
@@ -1308,22 +1308,28 @@ public final class AudioAnalysisPanel {
         ImGui.popStyleColor();
     }
 
-    private void renderWarningBanner(String text) {
+    private void renderWarningBanner() {
         ImGui.pushStyleColor(ImGuiCol.Text, 0.94f, 0.62f, 0.16f, 1f);
-        ImGui.textWrapped(Icons.Action.WARNING + " " + text);
+        ImGui.textWrapped(Icons.Action.WARNING + " " + "已请求 Demucs，但本次实际以 Basic 完成。通常表示 Demucs 不可用、回退执行，或命中了 Basic 缓存。");
         ImGui.popStyleColor();
     }
 
-    private String analysisPhaseLabel(String statusText) {
-        if (statusText == null || statusText.isBlank()) return "-";
-        String s = statusText.toLowerCase();
-        if (s.contains("安装") || s.contains("依赖") || s.contains("检查")) return "环境准备";
-        if (s.contains("demucs") || s.contains("茎")) return "茎分离";
-        if (s.contains("bpm") || s.contains("踩点") || s.contains("频段")) return "节拍分析";
-        if (s.contains("段落")) return "结构分析";
-        if (s.contains("wave") || s.contains("波形")) return "波形生成";
-        if (s.contains("beatmap") || s.contains("写入")) return "结果写入";
-        return "分析中";
+    private String analysisPhaseLabel(AudioAsset asset) {
+        if (asset == null) return "-";
+        AudioAnalysisPhase phase = asset.getAnalysisPhase();
+        if (phase == null) return "分析中";
+        return switch (phase) {
+            case PENDING -> "待处理";
+            case QUEUED -> "等待";
+            case ENVIRONMENT -> "环境准备";
+            case STEM_SEPARATION -> "茎分离";
+            case RHYTHM -> "节拍分析";
+            case STRUCTURE -> "结构分析";
+            case WAVEFORM -> "波形生成";
+            case WRITE_RESULT -> "结果写入";
+            case COMPLETED -> "完成";
+            case FAILED -> "失败";
+        };
     }
 
     private boolean handleIncomingAudioPath(String path) {

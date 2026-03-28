@@ -320,6 +320,7 @@ public final class AudioAssetManager {
 			return;
 		}
 		asset.setStatus(AudioAssetStatus.QUEUED);
+		asset.setAnalysisPhase(AudioAnalysisPhase.QUEUED);
 		asset.setQueueTicket(nextQueueTicket++);
 		asset.setAnalysisProgressPercent(0);
 		asset.setProcessingStatusText("排队中");
@@ -334,6 +335,7 @@ public final class AudioAssetManager {
 		AudioAnalysisService service = BeatBlock.externalAudioAnalyzer;
 		if (service == null) {
 			asset.setStatus(AudioAssetStatus.FAILED);
+			asset.setAnalysisPhase(AudioAnalysisPhase.FAILED);
 			asset.setQueueTicket(-1L);
 			asset.setErrorMessage("外部音频分析器未初始化");
 			return;
@@ -344,38 +346,21 @@ public final class AudioAssetManager {
 			(step, pct) -> {
 				asset.setAnalysisProgressPercent(pct);
 				asset.setProcessingStatusText(stepDisplayName(step));
+				asset.setAnalysisPhase(mapPhase(step));
 				// 解析 Python 步骤名映射到 UI 步骤
 				switch (step) {
 					case "DEPENDENCY_INSTALL" -> {
 						// 依赖安装是前置步骤，不映射到 beatmap 步骤枚举
 					}
-					case "DEMUCS_DEP_CHECK" -> {
-						asset.setInfoMessage("正在检查 Demucs 依赖...");
-					}
-					case "DEMUCS_DEP_INSTALL" -> {
-						asset.setInfoMessage("正在自动安装 Demucs 依赖，请稍候...");
-					}
-					case "DEMUCS_DEP_INSTALL_SUCCESS" -> {
-						asset.setInfoMessage("Demucs 依赖已就绪，继续进行分轨分析");
-					}
-					case "DEMUCS_DEP_INSTALL_FAILED_NETWORK" -> {
-						asset.setInfoMessage("Demucs 自动安装失败：网络或证书问题");
-					}
-					case "DEMUCS_DEP_INSTALL_FAILED_PERMISSION" -> {
-						asset.setInfoMessage("Demucs 自动安装失败：权限不足");
-					}
-					case "DEMUCS_DEP_INSTALL_FAILED_VERSION" -> {
-						asset.setInfoMessage("Demucs 自动安装失败：Python 版本/平台不匹配");
-					}
-					case "DEMUCS_DEP_INSTALL_FAILED_PIP" -> {
-						asset.setInfoMessage("Demucs 自动安装失败：当前 Python 缺少 pip");
-					}
-					case "DEMUCS_DEP_INSTALL_FAILED_DLL" -> {
-						asset.setInfoMessage("Demucs 自动安装失败：二进制依赖加载失败");
-					}
-					case "DEMUCS_DEP_INSTALL_FAILED_UNKNOWN" -> {
-						asset.setInfoMessage("Demucs 自动安装失败：未知原因");
-					}
+					case "DEMUCS_DEP_CHECK" -> asset.setInfoMessage("正在检查 Demucs 依赖...");
+					case "DEMUCS_DEP_INSTALL" -> asset.setInfoMessage("正在自动安装 Demucs 依赖，请稍候...");
+					case "DEMUCS_DEP_INSTALL_SUCCESS" -> asset.setInfoMessage("Demucs 依赖已就绪，继续进行分轨分析");
+					case "DEMUCS_DEP_INSTALL_FAILED_NETWORK" -> asset.setInfoMessage("Demucs 自动安装失败：网络或证书问题");
+					case "DEMUCS_DEP_INSTALL_FAILED_PERMISSION" -> asset.setInfoMessage("Demucs 自动安装失败：权限不足");
+					case "DEMUCS_DEP_INSTALL_FAILED_VERSION" -> asset.setInfoMessage("Demucs 自动安装失败：Python 版本/平台不匹配");
+					case "DEMUCS_DEP_INSTALL_FAILED_PIP" -> asset.setInfoMessage("Demucs 自动安装失败：当前 Python 缺少 pip");
+					case "DEMUCS_DEP_INSTALL_FAILED_DLL" -> asset.setInfoMessage("Demucs 自动安装失败：二进制依赖加载失败");
+					case "DEMUCS_DEP_INSTALL_FAILED_UNKNOWN" -> asset.setInfoMessage("Demucs 自动安装失败：未知原因");
 					case "DEMUCS_DEP_INSTALL_FAILED" -> {
 						if (asset.getInfoMessage() == null || asset.getInfoMessage().isBlank()) {
 							asset.setInfoMessage("Demucs 依赖自动安装失败");
@@ -431,11 +416,13 @@ public final class AudioAssetManager {
 				}
 
 				asset.setStatus(AudioAssetStatus.COMPLETED);
+				asset.setAnalysisPhase(AudioAnalysisPhase.COMPLETED);
 				analysisTasks.remove(asset.getId());
 			},
 			err -> {
 				LOGGER.warn("BeatBlock AudioAssetManager: 外部解析失败: {}", err);
 				asset.setStatus(AudioAssetStatus.FAILED);
+				asset.setAnalysisPhase(AudioAnalysisPhase.FAILED);
 				asset.setAnalysisProgressPercent(0);
 				asset.setProcessingStatusText(null);
 				asset.setQueueTicket(-1L);
@@ -460,12 +447,25 @@ public final class AudioAssetManager {
 			},
 			() -> {
 				asset.setStatus(AudioAssetStatus.ANALYZING);
+				asset.setAnalysisPhase(AudioAnalysisPhase.ENVIRONMENT);
 				asset.setQueueTicket(-1L);
 				asset.setProcessingStatusText("正在分析");
 			},
 			asset.getRequestedAnalysisMode() == AudioAnalysisMode.DEMUCS
 		);
 		analysisTasks.put(asset.getId(), task);
+	}
+
+	private AudioAnalysisPhase mapPhase(String step) {
+		if (step == null || step.isBlank()) return AudioAnalysisPhase.ENVIRONMENT;
+		return switch (step) {
+            case "DEMUCS_SEPARATE", "DEMUCS_FALLBACK", "STEM_ANALYSIS" -> AudioAnalysisPhase.STEM_SEPARATION;
+			case "BPM_DETECTION", "BEAT_DETECTION" -> AudioAnalysisPhase.RHYTHM;
+			case "SECTION_DETECTION" -> AudioAnalysisPhase.STRUCTURE;
+			case "WAVEFORM" -> AudioAnalysisPhase.WAVEFORM;
+			case "WRITE_BEATMAP" -> AudioAnalysisPhase.WRITE_RESULT;
+			default -> AudioAnalysisPhase.ENVIRONMENT;
+		};
 	}
 
 	private String stepDisplayName(String step) {

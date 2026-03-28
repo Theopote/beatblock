@@ -30,6 +30,7 @@ public final class AudioAsset {
 	private long queueTicket = -1L;
 	private int analysisProgressPercent;
 	private String processingStatusText;
+	private AudioAnalysisPhase analysisPhase = AudioAnalysisPhase.PENDING;
 	private final EnumSet<AudioAnalysisStep> finishedSteps = EnumSet.noneOf(AudioAnalysisStep.class);
 	private String errorMessage;
 	private String infoMessage;
@@ -92,6 +93,11 @@ public final class AudioAsset {
 
 	public String getProcessingStatusText() { return processingStatusText; }
 	public void setProcessingStatusText(String processingStatusText) { this.processingStatusText = processingStatusText; }
+
+	public AudioAnalysisPhase getAnalysisPhase() { return analysisPhase; }
+	public void setAnalysisPhase(AudioAnalysisPhase analysisPhase) {
+		this.analysisPhase = analysisPhase != null ? analysisPhase : AudioAnalysisPhase.PENDING;
+	}
 
 	public EnumSet<AudioAnalysisStep> getFinishedSteps() { return finishedSteps; }
 	public void markStepFinished(AudioAnalysisStep step) {
