@@ -7,7 +7,8 @@
 		"InGameHudMixin",
 		"KeyboardMixin",
 		"MouseMixin",
-		"RenderSystemMixin"
+		"RenderSystemMixin",
+		"WorldRendererMixin"
 	],
 	"client": [],
 	"injectors": {

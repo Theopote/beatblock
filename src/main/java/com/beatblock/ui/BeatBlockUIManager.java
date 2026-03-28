@@ -6,8 +6,6 @@ import imgui.ImGui;
 import imgui.flag.ImGuiCol;
 import imgui.flag.ImGuiStyleVar;
 import imgui.flag.ImGuiWindowFlags;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * BeatBlock 主 UI 管理器：菜单栏 + Dockspace + 各面板。
@@ -15,7 +13,6 @@ import org.slf4j.LoggerFactory;
  */
 public class BeatBlockUIManager {
 
-	private static final Logger LOGGER = LoggerFactory.getLogger(BeatBlockUIManager.class);
 	private static final String DOCKSPACE_WINDOW_NAME = "BeatBlockDockSpace";
 	private static final String DOCKSPACE_ID = "BeatBlockDockSpace";
 	// 与 ChronoBlocks 一致：NoBackground + 完全透明，否则整屏一块黑半透明遮挡

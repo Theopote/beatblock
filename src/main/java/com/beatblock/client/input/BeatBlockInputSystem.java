@@ -187,10 +187,6 @@ public final class BeatBlockInputSystem {
 		return null;
 	}
 
-	public static BlockHitResult getCurrentBlockRay() {
-		return cachedBlockRay;
-	}
-
 	public static void clearCache() {
 		cachedBlockRay = null;
 		lastCameraPos = null;
