@@ -6,6 +6,7 @@ import com.beatblock.timeline.FeatureEvent;
 import com.beatblock.timeline.FeatureTrack;
 import com.beatblock.timeline.MarkerType;
 import com.beatblock.timeline.Timeline;
+import com.beatblock.timeline.TimelineAnimationActionMode;
 import com.beatblock.timeline.TimelineAnimationEvent;
 import com.beatblock.timeline.TimelineMarker;
 import com.beatblock.timeline.Track;
@@ -14,6 +15,7 @@ import com.beatblock.timeline.rendering.TimelineTrackMeta;
 import com.beatblock.timeline.rendering.TrackRegistry;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -28,6 +30,8 @@ public final class AnimationBindingEngine {
 
 	public static final String METADATA_RULES_KEY = "animationBindingRules";
 	public static final String GENERATED_BY_MARK = "audio-binding-rule";
+	public static final String TEMPLATE_RHYTHM_PARKOUR = "rhythm_parkour";
+	public static final String TEMPLATE_ARCHITECTURAL_SHOW = "architectural_show";
 
 	private AnimationBindingEngine() {}
 
@@ -151,6 +155,210 @@ public final class AnimationBindingEngine {
 		return rules;
 	}
 
+	public static List<AnimationBindingRule> createTemplateRules(Timeline timeline, String templateId) {
+		if (timeline == null) return List.of();
+		String targetObjectId = resolveDefaultTargetObjectId();
+		if (targetObjectId.isBlank()) return List.of();
+
+		String key = templateId != null ? templateId.trim().toLowerCase(Locale.ROOT) : "";
+		return switch (key) {
+			case TEMPLATE_RHYTHM_PARKOUR -> createRhythmParkourTemplate(timeline, targetObjectId);
+			case TEMPLATE_ARCHITECTURAL_SHOW -> createArchitecturalShowTemplate(timeline, targetObjectId);
+			default -> createDefaultRules(timeline);
+		};
+	}
+
+	private static List<AnimationBindingRule> createRhythmParkourTemplate(Timeline timeline, String targetObjectId) {
+		String kick = resolveFeatureKey(timeline, "kick", "low");
+		String snare = resolveFeatureKey(timeline, "snare", "mid");
+		String hihat = resolveFeatureKey(timeline, "hihat", "high", "hihat_open", "snare_hi");
+		String bass = resolveFeatureKey(timeline, "bass");
+		String vocals = resolveFeatureKey(timeline, "vocals", "other");
+
+		Map<String, Object> waveParams = new HashMap<>();
+		waveParams.put("waveAmplitude", 1.1f);
+		waveParams.put("wavePhaseOffset", 0.45f);
+
+		List<AnimationBindingRule> rules = new ArrayList<>();
+		rules.add(AnimationBindingRule.builder()
+			.name("Rhythm Kick Jump")
+			.sourceFeatureKey(kick)
+			.animationTypeId("BlockJump")
+			.actionMode(TimelineAnimationActionMode.ANIMATE)
+			.targetObjectId(targetObjectId)
+			.energyThreshold(0.28f)
+			.energyScale(1.0f)
+			.durationSeconds(0.55)
+			.cooldownSeconds(0.08)
+			.probability(1.0f)
+			.spatialMode(SpatialDispatchMode.ALL)
+			.sequentialDelaySeconds(0.0)
+			.build());
+		rules.add(AnimationBindingRule.builder()
+			.name("Rhythm Snare Wave")
+			.sourceFeatureKey(snare)
+			.animationTypeId("WaveMotion")
+			.actionMode(TimelineAnimationActionMode.ANIMATE)
+			.targetObjectId(targetObjectId)
+			.energyThreshold(0.21f)
+			.energyScale(1.05f)
+			.durationSeconds(0.92)
+			.cooldownSeconds(0.12)
+			.probability(1.0f)
+			.spatialMode(SpatialDispatchMode.SEQUENTIAL)
+			.sequentialDelaySeconds(0.03)
+			.extraParams(waveParams)
+			.build());
+		rules.add(AnimationBindingRule.builder()
+			.name("Rhythm Hat Pulse")
+			.sourceFeatureKey(hihat)
+			.animationTypeId("Pulse")
+			.actionMode(TimelineAnimationActionMode.ANIMATE)
+			.targetObjectId(targetObjectId)
+			.energyThreshold(0.17f)
+			.energyScale(1.0f)
+			.durationSeconds(0.30)
+			.cooldownSeconds(0.06)
+			.probability(1.0f)
+			.spatialMode(SpatialDispatchMode.ALL)
+			.sequentialDelaySeconds(0.0)
+			.build());
+		rules.add(AnimationBindingRule.builder()
+			.name("Rhythm Bass Spiral")
+			.sourceFeatureKey(bass)
+			.animationTypeId("SpiralLift")
+			.actionMode(TimelineAnimationActionMode.ANIMATE)
+			.targetObjectId(targetObjectId)
+			.energyThreshold(0.22f)
+			.energyScale(1.0f)
+			.durationSeconds(1.35)
+			.cooldownSeconds(0.18)
+			.probability(0.9f)
+			.spatialMode(SpatialDispatchMode.SPIRAL)
+			.sequentialDelaySeconds(0.0)
+			.build());
+		rules.add(AnimationBindingRule.builder()
+			.name("Rhythm Vocal Orbit")
+			.sourceFeatureKey(vocals)
+			.animationTypeId("Orbit")
+			.actionMode(TimelineAnimationActionMode.ANIMATE)
+			.targetObjectId(targetObjectId)
+			.energyThreshold(0.20f)
+			.energyScale(0.95f)
+			.durationSeconds(1.05)
+			.cooldownSeconds(0.20)
+			.probability(0.85f)
+			.spatialMode(SpatialDispatchMode.RADIAL)
+			.sequentialDelaySeconds(0.02)
+			.build());
+		return rules;
+	}
+
+	private static List<AnimationBindingRule> createArchitecturalShowTemplate(Timeline timeline, String targetObjectId) {
+		String kick = resolveFeatureKey(timeline, "kick", "low");
+		String snare = resolveFeatureKey(timeline, "snare", "mid");
+		String bass = resolveFeatureKey(timeline, "bass", "other");
+		String hihat = resolveFeatureKey(timeline, "hihat", "high", "hihat_open", "snare_hi");
+
+		Map<String, Object> wallParams = new HashMap<>();
+		wallParams.put("buildMode", "WALL");
+		wallParams.put("placeBlock", "minecraft:light_gray_concrete");
+
+		Map<String, Object> bridgeParams = new HashMap<>();
+		bridgeParams.put("buildMode", "BRIDGE");
+		bridgeParams.put("placeBlock", "minecraft:smooth_stone");
+
+		Map<String, Object> towerParams = new HashMap<>();
+		towerParams.put("buildMode", "TOWER");
+		towerParams.put("placeBlock", "minecraft:quartz_block");
+
+		Map<String, Object> dissolveParams = new HashMap<>();
+		dissolveParams.put("buildMode", "DISSOLVE");
+		dissolveParams.put("buildDissolve", "true");
+
+		List<AnimationBindingRule> rules = new ArrayList<>();
+		rules.add(AnimationBindingRule.builder()
+			.name("Build Kick Wall")
+			.sourceFeatureKey(kick)
+			.animationTypeId("Pulse")
+			.actionMode(TimelineAnimationActionMode.BUILD)
+			.targetObjectId(targetObjectId)
+			.energyThreshold(0.30f)
+			.energyScale(1.0f)
+			.durationSeconds(1.60)
+			.cooldownSeconds(0.28)
+			.probability(1.0f)
+			.spatialMode(SpatialDispatchMode.ALL)
+			.sequentialDelaySeconds(0.0)
+			.extraParams(wallParams)
+			.build());
+		rules.add(AnimationBindingRule.builder()
+			.name("Build Snare Bridge")
+			.sourceFeatureKey(snare)
+			.animationTypeId("Pulse")
+			.actionMode(TimelineAnimationActionMode.BUILD)
+			.targetObjectId(targetObjectId)
+			.energyThreshold(0.24f)
+			.energyScale(1.0f)
+			.durationSeconds(1.90)
+			.cooldownSeconds(0.34)
+			.probability(0.85f)
+			.spatialMode(SpatialDispatchMode.ALL)
+			.sequentialDelaySeconds(0.0)
+			.extraParams(bridgeParams)
+			.build());
+		rules.add(AnimationBindingRule.builder()
+			.name("Build Bass Tower")
+			.sourceFeatureKey(bass)
+			.animationTypeId("Pulse")
+			.actionMode(TimelineAnimationActionMode.BUILD)
+			.targetObjectId(targetObjectId)
+			.energyThreshold(0.20f)
+			.energyScale(1.0f)
+			.durationSeconds(2.30)
+			.cooldownSeconds(0.55)
+			.probability(0.75f)
+			.spatialMode(SpatialDispatchMode.ALL)
+			.sequentialDelaySeconds(0.0)
+			.extraParams(towerParams)
+			.build());
+		rules.add(AnimationBindingRule.builder()
+			.name("Build Hat Dissolve")
+			.sourceFeatureKey(hihat)
+			.animationTypeId("Pulse")
+			.actionMode(TimelineAnimationActionMode.BUILD)
+			.targetObjectId(targetObjectId)
+			.energyThreshold(0.26f)
+			.energyScale(1.0f)
+			.durationSeconds(1.20)
+			.cooldownSeconds(0.40)
+			.probability(0.35f)
+			.spatialMode(SpatialDispatchMode.ALL)
+			.sequentialDelaySeconds(0.0)
+			.extraParams(dissolveParams)
+			.build());
+		return rules;
+	}
+
+	private static String resolveFeatureKey(Timeline timeline, String preferred, String... aliases) {
+		if (timeline == null || timeline.getFeatureTracks().isEmpty()) {
+			return preferred != null ? preferred : "other";
+		}
+		List<String> keys = new ArrayList<>(timeline.getFeatureTracks().keySet());
+		for (String key : keys) {
+			if (key != null && key.equalsIgnoreCase(preferred)) return key;
+		}
+		if (aliases != null) {
+			for (String alias : aliases) {
+				for (String key : keys) {
+					if (key != null && key.equalsIgnoreCase(alias)) return key;
+				}
+			}
+		}
+		Collections.sort(keys, String.CASE_INSENSITIVE_ORDER);
+		return keys.isEmpty() ? (preferred != null ? preferred : "other") : keys.get(0);
+	}
+
 	private static AnimationBindingRule defaultRuleForFeature(String featureKey, String targetObjectId) {
 		if (featureKey == null || featureKey.isBlank()) return null;
 		String key = featureKey.trim().toLowerCase(Locale.ROOT);
@@ -158,7 +366,7 @@ public final class AnimationBindingEngine {
 			.name("Bind " + key)
 			.sourceFeatureKey(key)
 			.targetObjectId(targetObjectId)
-			.actionMode(com.beatblock.timeline.TimelineAnimationActionMode.ANIMATE)
+			.actionMode(TimelineAnimationActionMode.ANIMATE)
 			.probability(1.0f)
 			.energyScale(1.0f);
 

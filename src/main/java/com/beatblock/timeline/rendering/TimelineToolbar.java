@@ -80,6 +80,7 @@ public final class TimelineToolbar {
 	private static final String TOOLTIP_ACTION_ROLLBACK_STATUS = "当前 PLACE/CLEAR 执行策略状态";
 	private static final String TOOLTIP_BINDING_MAP = "按绑定规则将音频特征批量转换为动画事件；无规则时自动创建默认规则";
 	private static final String TOOLTIP_BINDING_EDITOR = "编辑特征绑定规则：来源特征、动作、目标对象、阈值和冷却";
+	private static final String TOOLTIP_BINDING_TEMPLATE = "规则模板：一键覆盖当前绑定规则集";
 
 	/** Zoom 预设：显示名与对应的缩放倍数（相对基准 1x） */
 	private static final String[] ZOOM_PRESET_LABELS = { "0.25x", "0.5x", "1x", "2x", "3x", "4x" };
@@ -101,6 +102,11 @@ public final class TimelineToolbar {
 	};
 	private static final String DEMUCS_ADVANCED_POPUP_ID = "tlDemucsMappingAdvanced";
 	private static final String BINDING_EDITOR_POPUP_ID = "tlBindingEditor";
+	private static final String[] BINDING_TEMPLATE_LABELS = { "Rhythm Parkour", "Architectural Show" };
+	private static final String[] BINDING_TEMPLATE_VALUES = {
+		AnimationBindingEngine.TEMPLATE_RHYTHM_PARKOUR,
+		AnimationBindingEngine.TEMPLATE_ARCHITECTURAL_SHOW
+	};
 	private static final String[] BINDING_ACTION_LABELS = { "动画", "放置", "清除", "建造" };
 	private static final String[] BINDING_ACTION_VALUES = { "ANIMATE", "PLACE", "CLEAR", "BUILD" };
 	private static final String[] BINDING_SPATIAL_LABELS = { "ALL", "SEQUENTIAL", "RADIAL", "RANDOM", "SPIRAL" };
@@ -124,6 +130,7 @@ public final class TimelineToolbar {
 	private final ImInt demucsPresetComboIndex = new ImInt(1); // 默认 balanced
 	private final ImInt clipGenerationModeComboIndex = new ImInt(0); // 默认 mixed
 	private final ImInt actionRollbackComboIndex = new ImInt(0); // 默认 preview
+	private final ImInt bindingTemplateComboIndex = new ImInt(0);
 	private boolean demucsMappingConfigLoaded;
 	private boolean actionExecutionConfigLoaded;
 
@@ -707,6 +714,20 @@ public final class TimelineToolbar {
 			AnimationBindingRule added = buildAddedRule(featureKeys, targetDisplays, targetDisplayToId);
 			if (added != null) {
 				rules.add(added);
+				AnimationBindingEngine.saveRules(timeline, rules);
+			}
+		}
+
+		ImGui.setNextItemWidth(comboWidthForLabels(BINDING_TEMPLATE_LABELS));
+		ImGui.combo("Template##bindingTemplate", bindingTemplateComboIndex, BINDING_TEMPLATE_LABELS);
+		if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_BINDING_TEMPLATE);
+		ImGui.sameLine();
+		if (ImGui.button("Apply Template##bindingApplyTemplate")) {
+			int idx = Math.max(0, Math.min(bindingTemplateComboIndex.get(), BINDING_TEMPLATE_VALUES.length - 1));
+			List<AnimationBindingRule> templated = new ArrayList<>(
+				AnimationBindingEngine.createTemplateRules(timeline, BINDING_TEMPLATE_VALUES[idx]));
+			if (!templated.isEmpty()) {
+				rules = templated;
 				AnimationBindingEngine.saveRules(timeline, rules);
 			}
 		}
