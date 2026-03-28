@@ -1,6 +1,7 @@
 package com.beatblock.ui.panels;
 
 import com.beatblock.selection.BeatBlockSelectionManager;
+import com.beatblock.selection.BrushShape;
 import com.beatblock.selection.SelectionMode;
 import com.beatblock.selection.SelectionOperation;
 import com.beatblock.ui.layout.BeatBlockDockSpaceLayoutBuilder;
@@ -36,22 +37,31 @@ public class SelectionPropertiesPanel {
 				mgr.setOperation(op);
 			}
 		}
-		ImGui.textWrapped("说明：新建=替换选区。点击 / 球 / 连通 / 整列 下按住 Shift 可强制加选（与点击工具一致）。");
+		ImGui.textWrapped("说明：新建=替换选区。单击类工具（含平面切片、选区魔棒）按住 Shift 可强制加选；笔刷涂抹同样适用。");
 
 		sphereRadiusScratch[0] = mgr.getSphereBrushRadius();
 		ImGui.setNextItemWidth(160f);
-		if (ImGui.sliderInt("球选半径（格）##selSphereR", sphereRadiusScratch, 1, 32)) {
+		if (ImGui.sliderInt("球选 / 笔刷半径（格）##selSphereR", sphereRadiusScratch, 1, 32)) {
 			mgr.setSphereBrushRadius(sphereRadiusScratch[0]);
 		}
 		if (ImGui.isItemHovered()) {
-			ImGui.setTooltip("欧氏距离 ≤ 半径的方块计入球选（预览为包络盒）。");
+			ImGui.setTooltip("球选：欧氏球；立方笔刷：轴对齐立方体边长 2r+1；预览均为包络盒。");
+		}
+
+		ImGui.textDisabled("笔刷形状");
+		if (ImGui.radioButton("球体##brushSph", mgr.getBrushShape() == BrushShape.SPHERE)) {
+			mgr.setBrushShape(BrushShape.SPHERE);
+		}
+		ImGui.sameLine();
+		if (ImGui.radioButton("立方体##brushCube", mgr.getBrushShape() == BrushShape.CUBE)) {
+			mgr.setBrushShape(BrushShape.CUBE);
 		}
 
 		connectedFullStateProxy.set(mgr.isConnectedMatchFullState());
 		ImGui.checkbox("魔棒：完整方块状态一致##selConnFull", connectedFullStateProxy);
 		mgr.setConnectedMatchFullState(connectedFullStateProxy.get());
 		if (ImGui.isItemHovered()) {
-			ImGui.setTooltip("勾选：与起点 BlockState 完全相同才算同色；关闭：仅方块类型一致。");
+			ImGui.setTooltip("勾选：与起点 BlockState 完全相同才算同色；关闭：仅方块类型一致。对「连通」与「选区魔棒」均生效。");
 		}
 
 		includeAirProxy.set(mgr.isIncludeAir());
@@ -64,7 +74,7 @@ public class SelectionPropertiesPanel {
 			mgr.setMaxBlocks(maxBlocksScratch[0]);
 		}
 		if (ImGui.isItemHovered()) {
-			ImGui.setTooltip("框选体积、线选经过格数、球内方块数、连通展开数等超过此值时拒绝或截断，避免卡死。");
+			ImGui.setTooltip("框/线/球/立方/列/切片体积、连通与选区魔棒展开、笔刷单次盖章等超过此值时拒绝或截断。");
 		}
 
 		ImGui.separator();

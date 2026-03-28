@@ -120,7 +120,16 @@ public class ToolPanel {
 		if (ImGui.radioButton("整列（同 XZ 全高度）##bselCol", mgr.getMode() == SelectionMode.COLUMN)) {
 			mgr.setMode(SelectionMode.COLUMN);
 		}
-		ImGui.textWrapped("在场景区左键操作。框选/线选为两点；球/连通/列为单击。操作模式、空气、上限、球半径与魔棒匹配见「视图 → 选择属性」。选区以金色包围盒显示。");
+		if (ImGui.radioButton("平面切片（按击中面，有选区则切在包围盒内）##bselPlane", mgr.getMode() == SelectionMode.PLANE_SLICE)) {
+			mgr.setMode(SelectionMode.PLANE_SLICE);
+		}
+		if (ImGui.radioButton("选区魔棒（仅包围盒内连通）##bselSelWand", mgr.getMode() == SelectionMode.SELECTION_WAND)) {
+			mgr.setMode(SelectionMode.SELECTION_WAND);
+		}
+		if (ImGui.radioButton("笔刷（场景区按住左键涂抹）##bselBrush", mgr.getMode() == SelectionMode.BRUSH)) {
+			mgr.setMode(SelectionMode.BRUSH);
+		}
+		ImGui.textWrapped("框选/线选：两点；球/连通/列/切片/选区魔棒：单击；笔刷：按住左键拖动。半径与笔刷形状、魔棒匹配见「视图 → 选择属性」。");
 		ImGui.separator();
 	}
 
