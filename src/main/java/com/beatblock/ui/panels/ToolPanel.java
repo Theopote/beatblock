@@ -104,7 +104,7 @@ public class ToolPanel {
 		if (ImGui.radioButton("点击选择##bselClick", mgr.getMode() == SelectionMode.CLICK)) {
 			mgr.setMode(SelectionMode.CLICK);
 		}
-		if (ImGui.radioButton("框选（两次左键对角）##bselBox", mgr.getMode() == SelectionMode.BOX)) {
+		if (ImGui.radioButton("框选（先点一角，移动预览，再点对角）##bselBox", mgr.getMode() == SelectionMode.BOX)) {
 			mgr.setMode(SelectionMode.BOX);
 		}
 		ImGui.textWrapped("在场景区用左键选方块。详细模式、上限见菜单「视图 → 选择属性」。选区以金色包围盒显示。");

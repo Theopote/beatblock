@@ -62,7 +62,7 @@ public class SelectionPropertiesPanel {
 		if (mgr.getMode() == SelectionMode.BOX && mgr.getBoxFirstCorner() != null) {
 			var c = mgr.getBoxFirstCorner();
 			ImGui.textWrapped(String.format(Locale.ROOT,
-				"框选进行中：角点 A = %d, %d, %d（再点 B）", c.getX(), c.getY(), c.getZ()));
+				"框选进行中：角点 A = %d, %d, %d。在场景区移动鼠标可预览选框，再左键点 B。", c.getX(), c.getY(), c.getZ()));
 			if (ImGui.button("取消角点 A##selCancelBoxA")) {
 				mgr.cancelBoxCorner();
 			}
