@@ -44,8 +44,7 @@ public final class AudioAsset {
 	public AudioAsset(Path path) {
 		this.id = UUID.randomUUID().toString();
 		this.path = path;
-		String name = path != null ? path.getFileName().toString() : "";
-		this.fileName = name != null ? name : "";
+        this.fileName = path != null ? path.getFileName().toString() : "";
 	}
 
 	public String getId() { return id; }
@@ -53,8 +52,7 @@ public final class AudioAsset {
 	public String getFileName() { return fileName; }
 	public void setPath(Path path) {
 		this.path = path;
-		String name = path != null ? path.getFileName().toString() : "";
-		this.fileName = name != null ? name : "";
+        this.fileName = path != null ? path.getFileName().toString() : "";
 	}
 
 	public double getDurationSeconds() { return durationSeconds; }

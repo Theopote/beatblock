@@ -835,7 +835,7 @@ public final class AudioAnalysisService {
 		if (Files.exists(configPath)) {
 			try {
 				String txt = Files.readString(configPath).trim();
-				if (!txt.isEmpty() && isExecutable(txt, "-version")) return txt;
+				if (!txt.isEmpty() && isExecutable(txt)) return txt;
 			} catch (IOException ignored) {
 				// ignore and fall back to common locations
 			}
@@ -849,18 +849,18 @@ public final class AudioAnalysisService {
 			gameDir.resolve("ffmpeg/bin/ffmpeg")
 		);
 		for (Path p : candidates) {
-			if (Files.isRegularFile(p) && isExecutable(p.toAbsolutePath().toString(), "-version")) {
+			if (Files.isRegularFile(p) && isExecutable(p.toAbsolutePath().toString())) {
 				return p.toAbsolutePath().toString();
 			}
 		}
 
-		if (isExecutable("ffmpeg", "-version")) return "ffmpeg";
+		if (isExecutable("ffmpeg")) return "ffmpeg";
 		return null;
 	}
 
-	private boolean isExecutable(String executable, String arg) {
+	private boolean isExecutable(String executable) {
 		try {
-			Process p = new ProcessBuilder(executable, arg)
+			Process p = new ProcessBuilder(executable, "-version")
 				.redirectErrorStream(true)
 				.start();
 			boolean finished = p.waitFor(3, TimeUnit.SECONDS);

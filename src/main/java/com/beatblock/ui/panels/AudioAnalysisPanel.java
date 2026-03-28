@@ -21,6 +21,7 @@ import imgui.flag.ImGuiCol;
 import imgui.flag.ImGuiCond;
 import imgui.flag.ImGuiMouseCursor;
 import imgui.flag.ImGuiStyleVar;
+import imgui.flag.ImGuiTreeNodeFlags;
 import imgui.flag.ImGuiWindowFlags;
 import imgui.type.ImBoolean;
 import imgui.type.ImString;
@@ -40,7 +41,9 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.Base64;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * 音频解析面板 / 媒体箱
@@ -90,6 +93,8 @@ public final class AudioAnalysisPanel {
     private static final float ICON_BTN = TimelineLayout.ROW_HEIGHT;
     private static final float MIN_LIST_PANEL_WIDTH = 96f;
     private static final float MIN_DETAIL_PANEL_WIDTH = 96f;
+    private static final float PANEL_GAP = 4f;
+    private static final int COLLAPSED_TEXT_MAX_CHARS = 56;
 
     // ── 状态字段 ────────────────────────────────────────────────────────────
     private final ImString importPath = new ImString(512);
@@ -100,6 +105,7 @@ public final class AudioAnalysisPanel {
 	private boolean panelHintError;
 	private long panelHintExpireAtMs;
     private final ImBoolean demucsToggle = new ImBoolean(false);
+    private final Set<String> expandedDetailRows = new HashSet<>();
 
     // ── 公共入口 ─────────────────────────────────────────────────────────────
 
@@ -116,7 +122,7 @@ public final class AudioAnalysisPanel {
 
         float totalW = ImGui.getContentRegionAvailX();
         float totalH = ImGui.getContentRegionAvailY() - 32f; // 为底栏留空间
-        float splitterW = detailExpanded ? 3f : 0f;
+        float splitterW = detailExpanded ? PANEL_GAP : 0f;
 
         float detailW = 0f;
         float listW = totalW;
@@ -158,12 +164,6 @@ public final class AudioAnalysisPanel {
                 float detailPercent = detailRatio * 100f;
                 ImGui.setTooltip(String.format("%.0f : %.0f", listPercent, detailPercent));
             }
-
-            float splitX = ImGui.getItemRectMinX() + splitterW * 0.5f;
-            float splitY0 = ImGui.getItemRectMinY() + 4f;
-            float splitY1 = ImGui.getItemRectMaxY() - 4f;
-            int lineColor = ImGui.isItemActive() ? 0xFFB9B0FF : (ImGui.isItemHovered() ? 0xFF9A90E8 : 0xFF6B6488);
-            ImGui.getWindowDrawList().addLine(splitX, splitY0, splitX, splitY1, lineColor, 2f);
 
             ImGui.sameLine(0f, 0f);
             ImGui.pushStyleVar(ImGuiStyleVar.ChildRounding, 4f);
@@ -232,8 +232,8 @@ public final class AudioAnalysisPanel {
         if (BeatBlock.externalAudioAnalyzer == null) return;
         String py = BeatBlock.externalAudioAnalyzer.getPythonRuntimeSummary();
         if (py == null || py.isBlank()) return;
-        ImGui.textDisabled(py);
-        renderRuntimeHealth(BeatBlock.externalAudioAnalyzer.getRuntimeHealthSnapshot());
+        AudioAnalysisService.RuntimeHealthSnapshot snapshot = BeatBlock.externalAudioAnalyzer.getRuntimeHealthSnapshot();
+        renderRuntimeHealth(py, snapshot);
         ImGui.separator();
     }
 
@@ -255,7 +255,7 @@ public final class AudioAnalysisPanel {
         if (importPath.get().isBlank()) {
             ImGui.textDisabled("尚未选择文件");
         } else {
-            ImGui.textWrapped(importPath.get());
+            renderCollapsedInlineValue(importPath.get(), "##importPathPreview", null);
         }
 
         ImGui.spacing();
@@ -755,46 +755,49 @@ public final class AudioAnalysisPanel {
     }
 
     private void renderDetailQueued(AudioAsset asset) {
-        sectionHeader("队列状态");
         AudioAssetManager manager = AudioAssetManager.getInstance();
         int pos = manager.getQueuePosition(asset.getId());
-        detailRow("当前状态", "排队中");
-        if (pos > 0) {
-            detailRowColored("队列位次", "#" + pos, new ImVec4(0.95f, 0.78f, 0.38f, 1f));
-        }
-        ImGui.spacing();
-        textDisabledWrapped("当前分析器为串行执行，前序任务完成后将自动开始。你可以继续添加文件，系统会按顺序处理。");
-        textDisabledWrapped("提示：左侧列表支持拖动队列项直接改顺序。");
-        ImGui.spacing();
-
-        boolean canMoveUp = manager.canMoveQueueUp(asset.getId());
-        boolean canMoveDown = manager.canMoveQueueDown(asset.getId());
-
-        float half = (ImGui.getContentRegionAvailX() - 6f) * 0.5f;
-        if (canMoveUp) {
-            if (ImGui.button("上移优先级##detailQueueUp", half, 26f)) {
-                manager.moveQueueUp(asset.getId());
+        if (beginDetailSection("queued_status", "队列状态", true)) {
+            detailRowCompact("文件名", asset.getFileName());
+            detailRowCompact("当前状态", "排队中");
+            if (pos > 0) {
+                detailRowCompact("队列位次", "#" + pos, new ImVec4(0.95f, 0.78f, 0.38f, 1f));
             }
-        } else {
-            ImGui.beginDisabled();
-            ImGui.button("上移优先级##detailQueueUpDisabled", half, 26f);
-            ImGui.endDisabled();
+            compactGap();
+            textDisabledWrapped("当前分析器为串行执行，前序任务完成后将自动开始。你可以继续添加文件，系统会按顺序处理。");
+            textDisabledWrapped("提示：左侧列表支持拖动队列项直接改顺序。");
+            endDetailSection();
         }
-        ImGui.sameLine();
-        if (canMoveDown) {
-            if (ImGui.button("下移优先级##detailQueueDown", half, 26f)) {
-                manager.moveQueueDown(asset.getId());
-            }
-        } else {
-            ImGui.beginDisabled();
-            ImGui.button("下移优先级##detailQueueDownDisabled", half, 26f);
-            ImGui.endDisabled();
-        }
-        ImGui.spacing();
 
-        if (ImGui.button("移除队列项##detailRemoveQueued", ImGui.getContentRegionAvailX(), 26f)) {
-            manager.remove(asset.getId());
-            if (asset == selectedAsset) selectedAsset = null;
+        if (beginDetailSection("queued_actions", "操作", true)) {
+            boolean canMoveUp = manager.canMoveQueueUp(asset.getId());
+            boolean canMoveDown = manager.canMoveQueueDown(asset.getId());
+            float half = (ImGui.getContentRegionAvailX() - 6f) * 0.5f;
+            if (canMoveUp) {
+                if (ImGui.button("上移优先级##detailQueueUp", half, 26f)) {
+                    manager.moveQueueUp(asset.getId());
+                }
+            } else {
+                ImGui.beginDisabled();
+                ImGui.button("上移优先级##detailQueueUpDisabled", half, 26f);
+                ImGui.endDisabled();
+            }
+            ImGui.sameLine();
+            if (canMoveDown) {
+                if (ImGui.button("下移优先级##detailQueueDown", half, 26f)) {
+                    manager.moveQueueDown(asset.getId());
+                }
+            } else {
+                ImGui.beginDisabled();
+                ImGui.button("下移优先级##detailQueueDownDisabled", half, 26f);
+                ImGui.endDisabled();
+            }
+            compactGap();
+            if (ImGui.button("移除队列项##detailRemoveQueued", ImGui.getContentRegionAvailX(), 26f)) {
+                manager.remove(asset.getId());
+                if (asset == selectedAsset) selectedAsset = null;
+            }
+            endDetailSection();
         }
     }
 
@@ -804,229 +807,230 @@ public final class AudioAnalysisPanel {
             && detailBm.meta != null
             && detailBm.meta.hasStemSeparation();
 
-        // ── 基本信息 ───────────────────────────────────────────────────
-        sectionHeader("基本信息");
-        detailRow("文件名",   asset.getFileName());
-        detailRow("时长",     String.format("%.1f 秒", asset.getDurationSeconds()));
-        detailRow("采样率",   asset.getSampleRate() + " Hz");
-
-        ImGui.spacing();
-
-        // ── 解析结果 ───────────────────────────────────────────────────
-        sectionHeader("解析结果");
-        detailRowColored("BPM",    String.format("%.1f", asset.getBpm()),       COLOR_PROGRESS_FG);
-        detailRow("拍号",           "4/4");
-        detailRow("解析模式",       hasStemSeparation ? "Demucs 语义茎分离" : "传统频段分离");
-        detailRow("请求模式",       analysisModeLabel(asset.getRequestedAnalysisMode()));
-        detailRow("实际模式",       analysisModeLabel(asset.getResolvedAnalysisMode()));
-        detailRow("缓存来源",       cacheSourceLabel(asset.getCacheSource()));
-        detailRowColored("踩点数量", asset.getBeatCount() + " 个",               COLOR_MID);
-        detailRow("识别段落",        asset.getSectionCount() + " 段");
-
-        if (asset.getRequestedAnalysisMode() == AudioAnalysisMode.DEMUCS
-                && asset.getResolvedAnalysisMode() == AudioAnalysisMode.BASIC) {
-            ImGui.spacing();
-            renderWarningBanner();
-        }
-        ImGui.sameLine();
-        renderCacheBadge(asset.getCacheSource());
-
-        ImGui.spacing();
-
-        // ── 分布信息（传统频段 / Demucs 语义茎）──────────────────────────
-        if (!hasStemSeparation) {
-            sectionHeader("频段踩点分布");
-            detailRowColored("低频（鼓点）", asset.getLowCount()  + " 个", COLOR_LOW);
-            detailRowColored("中频（旋律）", asset.getMidCount()  + " 个", COLOR_MID);
-            detailRowColored("高频（打击）", asset.getHighCount() + " 个", COLOR_HIGH);
-        } else {
-            sectionHeader("语义茎轨道");
-            detailRowColored("鼓组（drums）", stemStateLabel(detailBm, "drums"), new ImVec4(0.87f, 0.53f, 0.25f, 1f));
-            detailRowColored("贝斯（bass）",  stemStateLabel(detailBm, "bass"),  new ImVec4(0.27f, 0.60f, 0.87f, 1f));
-            detailRowColored("人声（vocals）", stemStateLabel(detailBm, "vocals"), new ImVec4(0.67f, 0.38f, 0.84f, 1f));
-            detailRowColored("其他（other）",  stemStateLabel(detailBm, "other"),  new ImVec4(0.58f, 0.72f, 0.30f, 1f));
-            textDisabledWrapped("提示：静音/独奏请在时间线音频子轨上操作。鼓类特征轨(kick/snare/hihat)会共同影响 drums 茎。");
+        if (beginDetailSection("completed_basic", "基本信息", true)) {
+            detailRowCompact("文件名", asset.getFileName());
+            detailRowCompact("时长", String.format("%.1f 秒", asset.getDurationSeconds()));
+            detailRowCompact("采样率", asset.getSampleRate() + " Hz");
+            endDetailSection();
         }
 
-        if (asset.getInfoMessage() != null && !asset.getInfoMessage().isBlank()) {
-            ImGui.spacing();
-            textDisabledWrapped(asset.getInfoMessage());
+        if (beginDetailSection("completed_result", "解析结果", true)) {
+            detailRowCompact("BPM", String.format("%.1f", asset.getBpm()), COLOR_PROGRESS_FG);
+            detailRowCompact("拍号", "4/4");
+            detailRowCompact("解析模式", hasStemSeparation ? "Demucs 语义茎分离" : "传统频段分离");
+            detailRowCompact("请求模式", analysisModeLabel(asset.getRequestedAnalysisMode()));
+            detailRowCompact("实际模式", analysisModeLabel(asset.getResolvedAnalysisMode()));
+            detailRowCompact("缓存来源", cacheSourceLabel(asset.getCacheSource()));
+            detailRowCompact("踩点数量", asset.getBeatCount() + " 个", COLOR_MID);
+            detailRowCompact("识别段落", asset.getSectionCount() + " 段");
+            if (asset.getRequestedAnalysisMode() == AudioAnalysisMode.DEMUCS
+                    && asset.getResolvedAnalysisMode() == AudioAnalysisMode.BASIC) {
+                compactGap();
+                renderWarningBanner();
+            }
+            compactGap();
+            renderCacheBadge(asset.getCacheSource());
+            if (asset.getInfoMessage() != null && !asset.getInfoMessage().isBlank()) {
+                compactGap();
+                textDisabledWrapped(asset.getInfoMessage());
+            }
+            endDetailSection();
         }
 
-        // 简易频段占比条（仅传统频段模式）
-        if (!hasStemSeparation) {
-            ImGui.spacing();
-            renderBandBar(asset);
+        if (beginDetailSection("completed_distribution", hasStemSeparation ? "语义茎轨道" : "频段踩点分布", true)) {
+            if (!hasStemSeparation) {
+                detailRowCompact("低频（鼓点）", asset.getLowCount() + " 个", COLOR_LOW);
+                detailRowCompact("中频（旋律）", asset.getMidCount() + " 个", COLOR_MID);
+                detailRowCompact("高频（打击）", asset.getHighCount() + " 个", COLOR_HIGH);
+                compactGap();
+                renderBandBar(asset);
+            } else {
+                detailRowCompact("鼓组（drums）", stemStateLabel(detailBm, "drums"), new ImVec4(0.87f, 0.53f, 0.25f, 1f));
+                detailRowCompact("贝斯（bass）", stemStateLabel(detailBm, "bass"), new ImVec4(0.27f, 0.60f, 0.87f, 1f));
+                detailRowCompact("人声（vocals）", stemStateLabel(detailBm, "vocals"), new ImVec4(0.67f, 0.38f, 0.84f, 1f));
+                detailRowCompact("其他（other）", stemStateLabel(detailBm, "other"), new ImVec4(0.58f, 0.72f, 0.30f, 1f));
+                compactGap();
+                textDisabledWrapped("提示：静音/独奏请在时间线音频子轨上操作。鼓类特征轨(kick/snare/hihat)会共同影响 drums 茎。");
+            }
+            endDetailSection();
         }
 
-        // ── Demucs 茎分离详情（无论是否拆分都显示状态）──────────────────────
-        ImGui.spacing();
-        sectionHeader("Demucs 拆分结果");
-        if (hasStemSeparation) {
-            detailRowColored("状态", "已生成", new ImVec4(0.36f, 0.79f, 0.65f, 1f));
-            ImGui.setNextItemOpen(true, ImGuiCond.Once);
-            if (ImGui.treeNodeEx("查看拆分明细##demucsSplitDetails")) {
+        if (beginDetailSection("completed_demucs", "Demucs 拆分结果", false)) {
+            if (hasStemSeparation) {
+                detailRowCompact("状态", "已生成", new ImVec4(0.36f, 0.79f, 0.65f, 1f));
                 String separationMode = detailBm.meta.separationMode();
-                detailRowColored("分离模式", separationMode != null && !separationMode.isBlank() ? separationMode : "demucs", new ImVec4(0.22f, 0.78f, 0.82f, 1f));
+                detailRowCompact("分离模式", separationMode != null && !separationMode.isBlank() ? separationMode : "demucs",
+                        new ImVec4(0.22f, 0.78f, 0.82f, 1f));
                 renderStemDetailRow(detailBm, "drums", "鼓组（drums）", new ImVec4(0.87f, 0.53f, 0.25f, 1f));
                 renderStemDetailRow(detailBm, "bass", "贝斯（bass）", new ImVec4(0.27f, 0.60f, 0.87f, 1f));
                 renderStemDetailRow(detailBm, "vocals", "人声（vocals）", new ImVec4(0.67f, 0.38f, 0.84f, 1f));
                 renderStemDetailRow(detailBm, "other", "其他（other）", new ImVec4(0.58f, 0.72f, 0.30f, 1f));
-                ImGui.treePop();
+            } else {
+                detailRowCompact("状态", "未生成（当前为基础分析 Basic）", new ImVec4(0.94f, 0.62f, 0.16f, 1f));
+                compactGap();
+                textDisabledWrapped("当前结果来自基础分析缓存或 Demucs 回退模式，因此没有 drums/bass/vocals/other 的拆分文件。若需查看拆分结果，请确保 Demucs 依赖可用后重新解析。");
             }
-        } else {
-            detailRowColored("状态", "未生成（当前为基础分析 Basic）", new ImVec4(0.94f, 0.62f, 0.16f, 1f));
-            textDisabledWrapped("当前结果来自基础分析缓存或 Demucs 回退模式，因此没有 drums/bass/vocals/other 的拆分文件。若需查看拆分结果，请确保 Demucs 依赖可用后重新解析。");
+            endDetailSection();
         }
 
-        ImGui.spacing();
-        ImGui.separator();
-        ImGui.spacing();
+        if (beginDetailSection("completed_actions", "操作", true)) {
+            float actionW = (ImGui.getContentRegionAvailX() - 6f) * 0.5f;
+            if (ImGui.button("清缓存并用 Demucs 重解析##detailReanalyzeDemucs", actionW, 26f)) {
+                String result = AudioAssetManager.getInstance().clearCacheAndReanalyze(asset, AudioAnalysisMode.DEMUCS);
+                setPanelHint(result, result.contains("未初始化") || result.contains("无效"));
+            }
+            if (ImGui.isItemHovered()) {
+                ImGui.setTooltip("删除该音频对应的 beatmap 和 stem 缓存后，以 Demucs 模式重新分析");
+            }
+            ImGui.sameLine();
+            if (ImGui.button("清缓存并用 Basic 重解析##detailReanalyzeBasic", actionW, 26f)) {
+                String result = AudioAssetManager.getInstance().clearCacheAndReanalyze(asset, AudioAnalysisMode.BASIC);
+                setPanelHint(result, result.contains("未初始化") || result.contains("无效"));
+            }
+            if (ImGui.isItemHovered()) {
+                ImGui.setTooltip("删除该音频对应的 beatmap 和 stem 缓存后，以 Basic 模式重新分析");
+            }
 
-        float actionW = (ImGui.getContentRegionAvailX() - 6f) * 0.5f;
-        if (ImGui.button("清缓存并用 Demucs 重解析##detailReanalyzeDemucs", actionW, 26f)) {
-            String result = AudioAssetManager.getInstance().clearCacheAndReanalyze(asset, AudioAnalysisMode.DEMUCS);
-            setPanelHint(result, result.contains("未初始化") || result.contains("无效"));
-        }
-        if (ImGui.isItemHovered()) {
-            ImGui.setTooltip("删除该音频对应的 beatmap 和 stem 缓存后，以 Demucs 模式重新分析");
-        }
-        ImGui.sameLine();
-        if (ImGui.button("清缓存并用 Basic 重解析##detailReanalyzeBasic", actionW, 26f)) {
-            String result = AudioAssetManager.getInstance().clearCacheAndReanalyze(asset, AudioAnalysisMode.BASIC);
-            setPanelHint(result, result.contains("未初始化") || result.contains("无效"));
-        }
-        if (ImGui.isItemHovered()) {
-            ImGui.setTooltip("删除该音频对应的 beatmap 和 stem 缓存后，以 Basic 模式重新分析");
-        }
-        ImGui.spacing();
+            compactGap();
+            AudioAnalysisMode compareMode = asset.getResolvedAnalysisMode() == AudioAnalysisMode.DEMUCS
+                    ? AudioAnalysisMode.BASIC
+                    : AudioAnalysisMode.DEMUCS;
+            String compareLabel = compareMode == AudioAnalysisMode.DEMUCS
+                    ? "用 Demucs 做对比##detailCompareDemucs"
+                    : "用 Basic 做对比##detailCompareBasic";
+            if (ImGui.button(compareLabel, ImGui.getContentRegionAvailX(), 24f)) {
+                String result = AudioAssetManager.getInstance().clearCacheAndReanalyze(asset, compareMode);
+                setPanelHint(result, result.contains("未初始化") || result.contains("无效"));
+            }
+            if (ImGui.isItemHovered()) {
+                ImGui.setTooltip(compareMode == AudioAnalysisMode.DEMUCS
+                        ? "清缓存后用 Demucs 重跑，方便和当前结果对比"
+                        : "清缓存后用 Basic 重跑，方便和当前结果对比");
+            }
 
-        // ── 拖拽到时间线 ──────────────────────────────────────────────
-        AudioAnalysisMode compareMode = asset.getResolvedAnalysisMode() == AudioAnalysisMode.DEMUCS
-                ? AudioAnalysisMode.BASIC
-                : AudioAnalysisMode.DEMUCS;
-        String compareLabel = compareMode == AudioAnalysisMode.DEMUCS
-                ? "用 Demucs 做对比##detailCompareDemucs"
-                : "用 Basic 做对比##detailCompareBasic";
-        if (ImGui.button(compareLabel, ImGui.getContentRegionAvailX(), 24f)) {
-            String result = AudioAssetManager.getInstance().clearCacheAndReanalyze(asset, compareMode);
-            setPanelHint(result, result.contains("未初始化") || result.contains("无效"));
-        }
-        if (ImGui.isItemHovered()) {
-            ImGui.setTooltip(compareMode == AudioAnalysisMode.DEMUCS
-                    ? "清缓存后用 Demucs 重跑，方便和当前结果对比"
-                    : "清缓存后用 Basic 重跑，方便和当前结果对比");
-        }
-        ImGui.spacing();
+            compactGap();
+            float btnW = ImGui.getContentRegionAvailX();
+            ImGui.pushStyleColor(ImGuiCol.Button, 0.28f, 0.26f, 0.45f, 1f);
+            ImGui.pushStyleColor(ImGuiCol.ButtonHovered, 0.35f, 0.33f, 0.55f, 1f);
+            ImGui.pushStyleColor(ImGuiCol.ButtonActive, 0.45f, 0.43f, 0.65f, 1f);
+            ImGui.button(Icons.MENU + "  拖动到时间线##dragBtn", btnW, 28f);
+            ImGui.popStyleColor(3);
 
-        float btnW = ImGui.getContentRegionAvailX();
-        ImGui.pushStyleColor(ImGuiCol.Button,        0.28f, 0.26f, 0.45f, 1f);
-        ImGui.pushStyleColor(ImGuiCol.ButtonHovered, 0.35f, 0.33f, 0.55f, 1f);
-        ImGui.pushStyleColor(ImGuiCol.ButtonActive,  0.45f, 0.43f, 0.65f, 1f);
-        ImGui.button(Icons.MENU + "  拖动到时间线##dragBtn", btnW, 28f);
-        ImGui.popStyleColor(3);
-
-        if (ImGui.beginDragDropSource(imgui.flag.ImGuiDragDropFlags.SourceAllowNullID)) {
-            AudioAssetManager.getInstance().setCurrentDragAsset(asset);
-            ImGui.setDragDropPayload(
-                    "BB_AUDIO_ASSET_ID",
-                    asset.getId().getBytes(),
-                    ImGuiCond.Once
-            );
-            ImGui.text(Icons.MUSIC_NOTE + " " + asset.getFileName());
-            ImGui.textDisabled(String.format("%.1f BPM · %d 踩点",
-                    asset.getBpm(), asset.getBeatCount()));
-            ImGui.endDragDropSource();
+            if (ImGui.beginDragDropSource(imgui.flag.ImGuiDragDropFlags.SourceAllowNullID)) {
+                AudioAssetManager.getInstance().setCurrentDragAsset(asset);
+                ImGui.setDragDropPayload(
+                        "BB_AUDIO_ASSET_ID",
+                        asset.getId().getBytes(),
+                        ImGuiCond.Once
+                );
+                ImGui.text(Icons.MUSIC_NOTE + " " + asset.getFileName());
+                ImGui.textDisabled(String.format("%.1f BPM · %d 踩点",
+                        asset.getBpm(), asset.getBeatCount()));
+                ImGui.endDragDropSource();
+            }
+            endDetailSection();
         }
     }
 
     private void renderDetailAnalyzing(AudioAsset asset) {
-        sectionHeader("解析进度");
         float progress = computeProgress(asset);
-
-        ImGui.pushStyleColor(ImGuiCol.PlotHistogram,
-                COLOR_PROGRESS_FG.x, COLOR_PROGRESS_FG.y, COLOR_PROGRESS_FG.z, COLOR_PROGRESS_FG.w);
-        ImGui.pushStyleColor(ImGuiCol.FrameBg,
-                COLOR_PROGRESS_BG.x, COLOR_PROGRESS_BG.y, COLOR_PROGRESS_BG.z, COLOR_PROGRESS_BG.w);
-        ImGui.progressBar(progress, ImGui.getContentRegionAvailX(), 8f,
-                String.format("%.0f%%", progress * 100f));
-        ImGui.popStyleColor(2);
-
         String statusText = asset.getProcessingStatusText();
-        if (statusText != null && !statusText.isBlank()) {
-            ImGui.spacing();
-            ImGui.pushStyleColor(ImGuiCol.Text,
-                COLOR_PROGRESS_FG.x, COLOR_PROGRESS_FG.y, COLOR_PROGRESS_FG.z, COLOR_PROGRESS_FG.w);
-            ImGui.textWrapped("正在处理：" + statusText);
-            ImGui.popStyleColor();
-            ImGui.textDisabled("当前阶段：" + analysisPhaseLabel(asset));
-        }
 
-        if (asset.getInfoMessage() != null && !asset.getInfoMessage().isBlank()) {
-            ImGui.spacing();
-            textDisabledWrapped(asset.getInfoMessage());
+        if (beginDetailSection("analyzing_progress", "解析进度", true)) {
+            ImGui.pushStyleColor(ImGuiCol.PlotHistogram,
+                    COLOR_PROGRESS_FG.x, COLOR_PROGRESS_FG.y, COLOR_PROGRESS_FG.z, COLOR_PROGRESS_FG.w);
+            ImGui.pushStyleColor(ImGuiCol.FrameBg,
+                    COLOR_PROGRESS_BG.x, COLOR_PROGRESS_BG.y, COLOR_PROGRESS_BG.z, COLOR_PROGRESS_BG.w);
+            ImGui.progressBar(progress, ImGui.getContentRegionAvailX(), 8f,
+                    String.format("%.0f%%", progress * 100f));
+            ImGui.popStyleColor(2);
+
+            if (statusText != null && !statusText.isBlank()) {
+                compactGap();
+                ImGui.pushStyleColor(ImGuiCol.Text,
+                    COLOR_PROGRESS_FG.x, COLOR_PROGRESS_FG.y, COLOR_PROGRESS_FG.z, COLOR_PROGRESS_FG.w);
+                ImGui.textWrapped("正在处理：" + statusText);
+                ImGui.popStyleColor();
+                ImGui.textDisabled("当前阶段：" + analysisPhaseLabel(asset));
+            }
+
+            if (asset.getInfoMessage() != null && !asset.getInfoMessage().isBlank()) {
+                compactGap();
+                textDisabledWrapped(asset.getInfoMessage());
+            }
+            endDetailSection();
         }
 
         if (statusText != null && !statusText.isBlank()) {
             return;
         }
 
-        ImGui.spacing();
-        for (AudioAnalysisStep step : AudioAnalysisStep.values()) {
-            boolean done   = asset.getFinishedSteps().contains(step);
-            boolean active = isActiveStep(asset, step);
-            String label   = stepLabel(step);
-            if (done) {
-                ImGui.pushStyleColor(ImGuiCol.Text,
-                        COLOR_MID.x, COLOR_MID.y, COLOR_MID.z, COLOR_MID.w);
-                ImGui.text(Icons.CHECK + "  " + label);
-                ImGui.popStyleColor();
-            } else if (active) {
-                ImGui.pushStyleColor(ImGuiCol.Text,
-                        COLOR_PROGRESS_FG.x, COLOR_PROGRESS_FG.y, COLOR_PROGRESS_FG.z, COLOR_PROGRESS_FG.w);
-                ImGui.text("▷  " + label + "...");
-                ImGui.popStyleColor();
-            } else {
-                ImGui.textDisabled("     " + label);
+        if (beginDetailSection("analyzing_steps", "步骤明细", false)) {
+            for (AudioAnalysisStep step : AudioAnalysisStep.values()) {
+                boolean done   = asset.getFinishedSteps().contains(step);
+                boolean active = isActiveStep(asset, step);
+                String label   = stepLabel(step);
+                if (done) {
+                    ImGui.pushStyleColor(ImGuiCol.Text,
+                            COLOR_MID.x, COLOR_MID.y, COLOR_MID.z, COLOR_MID.w);
+                    ImGui.text(Icons.CHECK + "  " + label);
+                    ImGui.popStyleColor();
+                } else if (active) {
+                    ImGui.pushStyleColor(ImGuiCol.Text,
+                            COLOR_PROGRESS_FG.x, COLOR_PROGRESS_FG.y, COLOR_PROGRESS_FG.z, COLOR_PROGRESS_FG.w);
+                    ImGui.text("▷  " + label + "...");
+                    ImGui.popStyleColor();
+                } else {
+                    ImGui.textDisabled("     " + label);
+                }
             }
+            endDetailSection();
         }
     }
 
     private void renderDetailPending(AudioAsset asset) {
-        sectionHeader("基本信息");
-        detailRow("文件名", asset.getFileName());
-        detailRow("时长",   String.format("%.1f 秒", asset.getDurationSeconds()));
-        ImGui.spacing();
-        ImGui.textDisabled("尚未解析，点击「解析」开始。");
-        ImGui.spacing();
-        if (ImGui.button("开始解析##detailAnalyze", ImGui.getContentRegionAvailX(), 26f)) {
-            AudioAssetManager.getInstance().startAnalysis(asset);
+        if (beginDetailSection("pending_basic", "基本信息", true)) {
+            detailRowCompact("文件名", asset.getFileName());
+            detailRowCompact("时长", String.format("%.1f 秒", asset.getDurationSeconds()));
+            compactGap();
+            ImGui.textDisabled("尚未解析，点击“开始解析”即可提交任务。");
+            endDetailSection();
+        }
+        if (beginDetailSection("pending_actions", "操作", true)) {
+            if (ImGui.button("开始解析##detailAnalyze", ImGui.getContentRegionAvailX(), 26f)) {
+                AudioAssetManager.getInstance().startAnalysis(asset);
+            }
+            endDetailSection();
         }
     }
 
     private void renderDetailFailed(AudioAsset asset) {
-        sectionHeader("错误信息");
-        ImGui.pushStyleColor(ImGuiCol.Text, 0.87f, 0.30f, 0.30f, 1f);
-        ImGui.textWrapped(asset.getErrorMessage() != null
-                ? asset.getErrorMessage()
-                : "未知错误");
-        ImGui.popStyleColor();
-        if (asset.getInfoMessage() != null && !asset.getInfoMessage().isBlank()) {
-            ImGui.spacing();
-            textDisabledWrapped(asset.getInfoMessage());
-        }
-        ImGui.spacing();
-        ImGui.textDisabled("支持格式：MP3 · WAV · OGG · FLAC");
-        ImGui.spacing();
-        if (ImGui.button("一键转换为 MP3##detailConvert", ImGui.getContentRegionAvailX(), 26f)) {
-            boolean accepted = AudioAssetManager.getInstance().requestConvertToMp3(asset);
-            if (!accepted) {
-                asset.setErrorMessage("已记录转换请求。当前版本暂未接入自动转换器，请先手动转为 MP3/WAV 后重试。");
+        if (beginDetailSection("failed_error", "错误信息", true)) {
+            ImGui.pushStyleColor(ImGuiCol.Text, 0.87f, 0.30f, 0.30f, 1f);
+            ImGui.textWrapped(asset.getErrorMessage() != null
+                    ? asset.getErrorMessage()
+                    : "未知错误");
+            ImGui.popStyleColor();
+            if (asset.getInfoMessage() != null && !asset.getInfoMessage().isBlank()) {
+                compactGap();
+                textDisabledWrapped(asset.getInfoMessage());
             }
+            compactGap();
+            ImGui.textDisabled("支持格式：MP3 · WAV · OGG · FLAC");
+            endDetailSection();
         }
-        ImGui.spacing();
-        if (ImGui.button("重试##detailRetry", ImGui.getContentRegionAvailX(), 26f)) {
-            AudioAssetManager.getInstance().startAnalysis(asset, asset.getRequestedAnalysisMode());
+        if (beginDetailSection("failed_actions", "操作", true)) {
+            if (ImGui.button("一键转换为 MP3##detailConvert", ImGui.getContentRegionAvailX(), 26f)) {
+                boolean accepted = AudioAssetManager.getInstance().requestConvertToMp3(asset);
+                if (!accepted) {
+                    asset.setErrorMessage("已记录转换请求。当前版本暂未接入自动转换器，请先手动转为 MP3/WAV 后重试。");
+                }
+            }
+            compactGap();
+            if (ImGui.button("重试##detailRetry", ImGui.getContentRegionAvailX(), 26f)) {
+                AudioAssetManager.getInstance().startAnalysis(asset, asset.getRequestedAnalysisMode());
+            }
+            endDetailSection();
         }
     }
 
@@ -1157,20 +1161,110 @@ public final class AudioAnalysisPanel {
         ImGui.popTextWrapPos();
     }
 
+    private boolean beginDetailSection(String id, String title, boolean defaultOpen) {
+        int flags = ImGuiTreeNodeFlags.SpanAvailWidth
+                | ImGuiTreeNodeFlags.Framed
+                | ImGuiTreeNodeFlags.FramePadding
+                | ImGuiTreeNodeFlags.NoTreePushOnOpen;
+        if (defaultOpen) {
+            flags |= ImGuiTreeNodeFlags.DefaultOpen;
+        }
+        boolean open = ImGui.treeNodeEx(title + "##" + id, flags);
+        if (open) {
+            ImGui.indent(6f);
+            compactGap();
+        }
+        return open;
+    }
+
+    private void endDetailSection() {
+        ImGui.unindent(6f);
+        compactGap();
+    }
+
+    private void compactGap() {
+        ImGui.dummy(0f, 4f);
+    }
+
+    private void renderCollapsedInlineValue(String text, String rowId, ImVec4 color) {
+        String normalized = text != null ? text : "-";
+        boolean expandable = shouldCollapseValue(normalized);
+        boolean expanded = expandable && expandedDetailRows.contains(rowId);
+        String display = expanded ? normalized : collapseText(normalized, COLLAPSED_TEXT_MAX_CHARS);
+        ImVec4 resolvedColor = color != null ? color : new ImVec4(1f, 1f, 1f, 1f);
+
+        ImGui.pushStyleColor(ImGuiCol.Text, resolvedColor.x, resolvedColor.y, resolvedColor.z, resolvedColor.w);
+        if (expanded) {
+            float wrapPos = ImGui.getCursorPosX() + Math.max(64f, ImGui.getContentRegionAvailX() - 52f);
+            ImGui.pushTextWrapPos(wrapPos);
+            ImGui.textWrapped(display);
+            ImGui.popTextWrapPos();
+        } else {
+            ImGui.text(display);
+        }
+        ImGui.popStyleColor();
+
+        if (expandable && !expanded && ImGui.isItemHovered()) {
+            ImGui.setTooltip(normalized);
+        }
+        if (expandable) {
+            ImGui.sameLine();
+            if (ImGui.smallButton((expanded ? "收起" : "展开") + rowId)) {
+                if (expanded) {
+                    expandedDetailRows.remove(rowId);
+                } else {
+                    expandedDetailRows.add(rowId);
+                }
+            }
+        }
+    }
+
+    private void detailRowCompact(String key, String value) {
+        detailRowCompact(key, value, null);
+    }
+
+    private void detailRowCompact(String key, String value, ImVec4 color) {
+        ImGui.textDisabled(key + "：");
+        ImGui.sameLine();
+        ImGui.setCursorPosX(ImGui.getCursorPosX() + 4f);
+        String rowId = "##detailCompact_" + Integer.toHexString((key + "|" + String.valueOf(value)).hashCode());
+        renderCollapsedInlineValue(value, rowId, color);
+    }
+
+    private boolean shouldCollapseValue(String text) {
+        if (text == null || text.isBlank()) return false;
+        return text.length() > COLLAPSED_TEXT_MAX_CHARS
+                || text.contains("\\")
+                || text.contains("/")
+                || text.contains(":");
+    }
+
+    private String collapseText(String text, int maxChars) {
+        if (text == null || text.length() <= maxChars) {
+            return text;
+        }
+        if (maxChars < 8) {
+            return text.substring(0, Math.max(1, maxChars - 1)) + "…";
+        }
+        int head = maxChars / 2 - 1;
+        int tail = maxChars - head - 1;
+        return text.substring(0, head) + "…" + text.substring(text.length() - tail);
+    }
+
     private void renderStemDetailRow(Beatmap bm, String stemKey, String label, ImVec4 color) {
         if (bm == null || bm.meta == null || bm.meta.stems() == null) {
-            detailRowColored(label, "未生成", color);
+            detailRowCompact(label, "未生成", color);
             return;
         }
         String relativePath = bm.meta.stems().get(stemKey);
         if (relativePath == null || relativePath.isBlank()) {
-            detailRowColored(label, "未生成", color);
+            detailRowCompact(label, "未生成", color);
             return;
         }
         String path = resolveStemDisplayPath(bm, relativePath);
         boolean fileExists = new File(path).isFile();
-        detailRowColored(label, fileExists ? "已生成" : "路径存在但文件缺失", color);
-        detailRow(label + " 路径", path);
+        detailRowCompact(label, fileExists ? "已生成" : "路径存在但文件缺失", color);
+        detailRowCompact(label + " 路径", path);
         renderCopyPathAction(path, stemKey, label);
     }
 
@@ -1252,20 +1346,32 @@ public final class AudioAnalysisPanel {
         };
     }
 
-    private void renderRuntimeHealth(AudioAnalysisService.RuntimeHealthSnapshot snapshot) {
-        if (snapshot == null) return;
-        ImGui.textDisabled("环境健康");
-        renderHealthInline("Python", snapshot.python());
-        ImGui.sameLine();
-        renderHealthInline("pip", snapshot.pip());
-        ImGui.sameLine();
-        renderHealthInline("librosa", snapshot.librosa());
-        ImGui.sameLine();
-        renderHealthInline("Demucs", snapshot.demucs());
-        ImGui.sameLine();
-        renderHealthInline("torch", snapshot.torch());
-        ImGui.sameLine();
-        renderHealthInline("ffmpeg", snapshot.ffmpeg());
+    private void renderRuntimeHealth(String pythonSummary, AudioAnalysisService.RuntimeHealthSnapshot snapshot) {
+        if (snapshot == null) {
+            ImGui.textDisabled("环境：检测中");
+            if (ImGui.isItemHovered()) {
+                ImGui.setTooltip(pythonSummary);
+            }
+            return;
+        }
+
+        String summary = buildRuntimeHealthSummary(snapshot);
+        ImVec4 color = runtimeStateColor(summaryState(snapshot));
+        ImGui.pushStyleColor(ImGuiCol.Text, color.x, color.y, color.z, color.w);
+        ImGui.textDisabled(summary);
+        ImGui.popStyleColor();
+
+        if (ImGui.isItemHovered()) {
+            StringBuilder tooltip = new StringBuilder();
+            tooltip.append(pythonSummary);
+            appendHealthTooltipLine(tooltip, "Python", snapshot.python());
+            appendHealthTooltipLine(tooltip, "pip", snapshot.pip());
+            appendHealthTooltipLine(tooltip, "librosa", snapshot.librosa());
+            appendHealthTooltipLine(tooltip, "Demucs", snapshot.demucs());
+            appendHealthTooltipLine(tooltip, "torch", snapshot.torch());
+            appendHealthTooltipLine(tooltip, "ffmpeg", snapshot.ffmpeg());
+            ImGui.setTooltip(tooltip.toString());
+        }
     }
 
     private void renderHealthInline(String label, AudioAnalysisService.HealthItem item) {
@@ -1283,6 +1389,101 @@ public final class AudioAnalysisPanel {
         }
     }
 
+    private String buildRuntimeHealthSummary(AudioAnalysisService.RuntimeHealthSnapshot snapshot) {
+        int issueCount = countRuntimeIssues(snapshot);
+        String pythonLabel = concisePythonLabel(snapshot.python());
+        if (issueCount == 0) {
+            return "环境正常 · " + pythonLabel;
+        }
+        return "环境异常 " + issueCount + " 项 · " + pythonLabel + " · " + firstRuntimeIssue(snapshot);
+    }
+
+    private int countRuntimeIssues(AudioAnalysisService.RuntimeHealthSnapshot snapshot) {
+        int count = 0;
+        count += isRuntimeIssue(snapshot.python()) ? 1 : 0;
+        count += isRuntimeIssue(snapshot.pip()) ? 1 : 0;
+        count += isRuntimeIssue(snapshot.librosa()) ? 1 : 0;
+        count += isRuntimeIssue(snapshot.demucs()) ? 1 : 0;
+        count += isRuntimeIssue(snapshot.torch()) ? 1 : 0;
+        count += isRuntimeIssue(snapshot.ffmpeg()) ? 1 : 0;
+        return count;
+    }
+
+    private String firstRuntimeIssue(AudioAnalysisService.RuntimeHealthSnapshot snapshot) {
+        AudioAnalysisService.HealthItem[] items = {
+                snapshot.python(), snapshot.pip(), snapshot.librosa(),
+                snapshot.demucs(), snapshot.torch(), snapshot.ffmpeg()
+        };
+        String[] labels = {"Python", "pip", "librosa", "Demucs", "torch", "ffmpeg"};
+        for (int i = 0; i < items.length; i++) {
+            if (isRuntimeIssue(items[i])) {
+                return labels[i] + " " + conciseHealthDetail(items[i]);
+            }
+        }
+        return "详情见提示";
+    }
+
+    private String summaryState(AudioAnalysisService.RuntimeHealthSnapshot snapshot) {
+        AudioAnalysisService.HealthItem[] items = {
+                snapshot.python(), snapshot.pip(), snapshot.librosa(),
+                snapshot.demucs(), snapshot.torch(), snapshot.ffmpeg()
+        };
+        boolean hasWarn = false;
+        for (AudioAnalysisService.HealthItem item : items) {
+            String state = item != null ? item.state() : "unknown";
+            if ("error".equals(state) || "missing".equals(state)) {
+                return "error";
+            }
+            if ("warn".equals(state) || "unknown".equals(state)) {
+                hasWarn = true;
+            }
+        }
+        return hasWarn ? "warn" : "ok";
+    }
+
+    private ImVec4 runtimeStateColor(String state) {
+        return switch (state) {
+            case "ok" -> new ImVec4(0.36f, 0.79f, 0.65f, 1f);
+            case "warn" -> new ImVec4(0.94f, 0.62f, 0.16f, 1f);
+            case "error" -> new ImVec4(0.87f, 0.30f, 0.30f, 1f);
+            default -> new ImVec4(0.62f, 0.64f, 0.70f, 1f);
+        };
+    }
+
+    private boolean isRuntimeIssue(AudioAnalysisService.HealthItem item) {
+        if (item == null || item.state() == null) return true;
+        return !"ok".equals(item.state());
+    }
+
+    private String concisePythonLabel(AudioAnalysisService.HealthItem item) {
+        if (item == null || item.detail() == null || item.detail().isBlank()) {
+            return "Python 未知";
+        }
+        String detail = item.detail().trim();
+        int versionIndex = detail.toLowerCase().indexOf("python");
+        if (versionIndex >= 0) {
+            return detail.substring(versionIndex);
+        }
+        return "Python 已检测";
+    }
+
+    private String conciseHealthDetail(AudioAnalysisService.HealthItem item) {
+        if (item == null || item.detail() == null || item.detail().isBlank()) {
+            return "不可用";
+        }
+        String detail = item.detail().trim();
+        if (detail.length() <= 28) {
+            return detail;
+        }
+        return detail.substring(0, 28) + "…";
+    }
+
+    private void appendHealthTooltipLine(StringBuilder tooltip, String label, AudioAnalysisService.HealthItem item) {
+        tooltip.append('\n')
+                .append(label)
+                .append(": ")
+                .append(item != null && item.detail() != null && !item.detail().isBlank() ? item.detail() : "未知");
+    }
     private void renderModeBadge(AudioAsset asset) {
         AudioAnalysisMode mode = asset.getRequestedAnalysisMode();
         ImVec4 color = mode == AudioAnalysisMode.DEMUCS
