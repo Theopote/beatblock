@@ -170,13 +170,21 @@ public final class AudioAssetManager {
 	 * @return 用户可读结果信息
 	 */
 	public String clearCacheAndReanalyze(AudioAsset asset) {
+		AudioAnalysisMode mode = BeatBlock.externalAudioAnalyzer != null && BeatBlock.externalAudioAnalyzer.isUseDemucs()
+			? AudioAnalysisMode.DEMUCS
+			: AudioAnalysisMode.BASIC;
+		return clearCacheAndReanalyze(asset, mode);
+	}
+
+	public String clearCacheAndReanalyze(AudioAsset asset, AudioAnalysisMode mode) {
 		if (asset == null || asset.getPath() == null) return "无效音频资产";
 		AudioAnalysisService service = BeatBlock.externalAudioAnalyzer;
 		if (service == null) return "外部音频分析器未初始化";
 
-		int removed = service.clearBeatmapCacheForAudio(asset.getPath());
-		startAnalysis(asset);
-		return "已清理 " + removed + " 个缓存文件，开始重新解析";
+		AudioAnalysisMode resolvedMode = mode != null ? mode : AudioAnalysisMode.BASIC;
+		int removed = service.clearAllAnalysisCacheForAudio(asset.getPath());
+		startAnalysis(asset, resolvedMode);
+		return "已清理 " + removed + " 个缓存文件（含 stem 缓存），开始以 " + resolvedMode.label() + " 重新解析";
 	}
 
 	public int getQueuePosition(String assetId) {
@@ -298,6 +306,13 @@ public final class AudioAssetManager {
 	 * 异步执行完整音频解析（Python + librosa），更新 asset 状态与统计信息。
 	 */
 	public void startAnalysis(AudioAsset asset) {
+		AudioAnalysisMode mode = BeatBlock.externalAudioAnalyzer != null && BeatBlock.externalAudioAnalyzer.isUseDemucs()
+			? AudioAnalysisMode.DEMUCS
+			: AudioAnalysisMode.BASIC;
+		startAnalysis(asset, mode);
+	}
+
+	public void startAnalysis(AudioAsset asset, AudioAnalysisMode requestedMode) {
 		if (asset == null) return;
 		Path path = asset.getPath();
 		if (path == null) return;
@@ -312,6 +327,9 @@ public final class AudioAssetManager {
 		asset.getFinishedSteps().clear();
 		asset.setErrorMessage(null);
 		asset.setInfoMessage(null);
+		asset.setRequestedAnalysisMode(requestedMode != null ? requestedMode : AudioAnalysisMode.BASIC);
+		asset.setResolvedAnalysisMode(null);
+		asset.setCacheSource("");
 
 		AudioAnalysisService service = BeatBlock.externalAudioAnalyzer;
 		if (service == null) {
@@ -407,6 +425,10 @@ public final class AudioAssetManager {
 				asset.setLowCount(low);
 				asset.setMidCount(mid);
 				asset.setHighCount(high);
+				asset.setResolvedAnalysisMode(meta.hasStemSeparation() ? AudioAnalysisMode.DEMUCS : AudioAnalysisMode.BASIC);
+				if (asset.getCacheSource() == null || asset.getCacheSource().isBlank()) {
+					asset.setCacheSource("unknown");
+				}
 
 				asset.setStatus(AudioAssetStatus.COMPLETED);
 				analysisTasks.remove(asset.getId());
@@ -433,12 +455,15 @@ public final class AudioAssetManager {
 				if (summary.sectionCount() >= 0) {
 					asset.setSectionCount(summary.sectionCount());
 				}
+				asset.setResolvedAnalysisMode("demucs".equalsIgnoreCase(summary.separationMode()) ? AudioAnalysisMode.DEMUCS : AudioAnalysisMode.BASIC);
+				asset.setCacheSource(summary.cacheSource());
 			},
 			() -> {
 				asset.setStatus(AudioAssetStatus.ANALYZING);
 				asset.setQueueTicket(-1L);
 				asset.setProcessingStatusText("正在分析");
-			}
+			},
+			asset.getRequestedAnalysisMode() == AudioAnalysisMode.DEMUCS
 		);
 		analysisTasks.put(asset.getId(), task);
 	}
@@ -498,4 +523,3 @@ public final class AudioAssetManager {
 		void requestConversion(AudioAsset asset, String targetFormat);
 	}
 }
-

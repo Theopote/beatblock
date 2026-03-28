@@ -7,6 +7,7 @@ import com.beatblock.client.imgui.ImGuiFontManager;
 import com.beatblock.client.imgui.ImGuiRenderer;
 import com.beatblock.ui.imgui.IconButtonStyle;
 import com.beatblock.audio.assets.AudioAnalysisStep;
+import com.beatblock.audio.assets.AudioAnalysisMode;
 import com.beatblock.audio.assets.AudioAsset;
 import com.beatblock.audio.assets.AudioAssetManager;
 import com.beatblock.audio.assets.AudioAssetStatus;
@@ -212,11 +213,11 @@ public final class AudioAnalysisPanel {
             ImGui.spacing();
             ImGui.sameLine();
             demucsToggle.set(BeatBlock.externalAudioAnalyzer.isUseDemucs());
-            if (ImGui.checkbox("Demucs##demucsToggle", demucsToggle)) {
+            if (ImGui.checkbox("新任务默认 Demucs##demucsToggle", demucsToggle)) {
                 BeatBlock.externalAudioAnalyzer.setUseDemucs(demucsToggle.get());
             }
             if (ImGui.isItemHovered()) {
-                ImGui.setTooltip("默认启用 Demucs 高质量茎分离\n将音频拆分为鼓/贝斯/人声/其他四个独立轨道\n关闭后使用仅 librosa 的快速分析模式");
+                ImGui.setTooltip("只影响之后新加入或重新提交的任务\n已在队列中的任务会保留提交时锁定的模式\n关闭后使用仅 librosa 的 Basic 快速分析模式");
             }
         }
 
@@ -618,7 +619,7 @@ public final class AudioAnalysisPanel {
 
         ImGui.spacing();
         if (ImGui.button("重试##retry_" + asset.getId())) {
-            AudioAssetManager.getInstance().startAnalysis(asset);
+            AudioAssetManager.getInstance().startAnalysis(asset, asset.getRequestedAnalysisMode());
         }
         ImGui.sameLine();
         if (ImGui.button("转换为MP3##convert_" + asset.getId())) {
@@ -806,6 +807,9 @@ public final class AudioAnalysisPanel {
         detailRowColored("BPM",    String.format("%.1f", asset.getBpm()),       COLOR_PROGRESS_FG);
         detailRow("拍号",           "4/4");
         detailRow("解析模式",       hasStemSeparation ? "Demucs 语义茎分离" : "传统频段分离");
+        detailRow("请求模式",       analysisModeLabel(asset.getRequestedAnalysisMode()));
+        detailRow("实际模式",       analysisModeLabel(asset.getResolvedAnalysisMode()));
+        detailRow("缓存来源",       cacheSourceLabel(asset.getCacheSource()));
         detailRowColored("踩点数量", asset.getBeatCount() + " 个",               COLOR_MID);
         detailRow("识别段落",        asset.getSectionCount() + " 段");
 
@@ -861,12 +865,21 @@ public final class AudioAnalysisPanel {
         ImGui.separator();
         ImGui.spacing();
 
-        if (ImGui.button("清缓存并重解析（优先 Demucs）##detailReanalyzeFresh", ImGui.getContentRegionAvailX(), 26f)) {
-            String result = AudioAssetManager.getInstance().clearCacheAndReanalyze(asset);
+        float actionW = (ImGui.getContentRegionAvailX() - 6f) * 0.5f;
+        if (ImGui.button("清缓存并用 Demucs 重解析##detailReanalyzeDemucs", actionW, 26f)) {
+            String result = AudioAssetManager.getInstance().clearCacheAndReanalyze(asset, AudioAnalysisMode.DEMUCS);
             setPanelHint(result, result.contains("未初始化") || result.contains("无效"));
         }
         if (ImGui.isItemHovered()) {
-            ImGui.setTooltip("删除该音频对应的 basic/demucs 缓存后重新分析，避免命中旧缓存");
+            ImGui.setTooltip("删除该音频对应的 beatmap 和 stem 缓存后，以 Demucs 模式重新分析");
+        }
+        ImGui.sameLine();
+        if (ImGui.button("清缓存并用 Basic 重解析##detailReanalyzeBasic", actionW, 26f)) {
+            String result = AudioAssetManager.getInstance().clearCacheAndReanalyze(asset, AudioAnalysisMode.BASIC);
+            setPanelHint(result, result.contains("未初始化") || result.contains("无效"));
+        }
+        if (ImGui.isItemHovered()) {
+            ImGui.setTooltip("删除该音频对应的 beatmap 和 stem 缓存后，以 Basic 模式重新分析");
         }
         ImGui.spacing();
 
@@ -977,7 +990,7 @@ public final class AudioAnalysisPanel {
         }
         ImGui.spacing();
         if (ImGui.button("重试##detailRetry", ImGui.getContentRegionAvailX(), 26f)) {
-            AudioAssetManager.getInstance().startAnalysis(asset);
+            AudioAssetManager.getInstance().startAnalysis(asset, asset.getRequestedAnalysisMode());
         }
     }
 
@@ -1185,6 +1198,22 @@ public final class AudioAnalysisPanel {
         if (bm == null || bm.meta == null || bm.meta.stems() == null) return "未生成";
         String path = bm.meta.stems().get(stemKey);
         return (path != null && !path.isBlank()) ? "已生成" : "未生成";
+    }
+
+    private String analysisModeLabel(AudioAnalysisMode mode) {
+        if (mode == null) return "-";
+        return mode == AudioAnalysisMode.DEMUCS ? "Demucs" : "Basic";
+    }
+
+    private String cacheSourceLabel(String cacheSource) {
+        if (cacheSource == null || cacheSource.isBlank()) return "-";
+        return switch (cacheSource) {
+            case "beatmap-cache" -> "Beatmap 缓存";
+            case "stem-cache-reuse" -> "Stem 缓存复用";
+            case "fresh" -> "全新解析";
+            case "unknown" -> "未知";
+            default -> cacheSource;
+        };
     }
 
     private boolean handleIncomingAudioPath(String path) {
@@ -1432,4 +1461,3 @@ public final class AudioAnalysisPanel {
         return raw.trim();
     }
 }
-

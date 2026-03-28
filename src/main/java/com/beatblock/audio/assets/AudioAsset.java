@@ -33,6 +33,9 @@ public final class AudioAsset {
 	private final EnumSet<AudioAnalysisStep> finishedSteps = EnumSet.noneOf(AudioAnalysisStep.class);
 	private String errorMessage;
 	private String infoMessage;
+	private AudioAnalysisMode requestedAnalysisMode = AudioAnalysisMode.BASIC;
+	private AudioAnalysisMode resolvedAnalysisMode;
+	private String cacheSource = "";
 
 	private AudioFeatureTimeline featureTimeline;
 	private Beatmap beatmap;
@@ -101,10 +104,20 @@ public final class AudioAsset {
 	public String getInfoMessage() { return infoMessage; }
 	public void setInfoMessage(String infoMessage) { this.infoMessage = infoMessage; }
 
+	public AudioAnalysisMode getRequestedAnalysisMode() { return requestedAnalysisMode; }
+	public void setRequestedAnalysisMode(AudioAnalysisMode requestedAnalysisMode) {
+		this.requestedAnalysisMode = requestedAnalysisMode != null ? requestedAnalysisMode : AudioAnalysisMode.BASIC;
+	}
+
+	public AudioAnalysisMode getResolvedAnalysisMode() { return resolvedAnalysisMode; }
+	public void setResolvedAnalysisMode(AudioAnalysisMode resolvedAnalysisMode) { this.resolvedAnalysisMode = resolvedAnalysisMode; }
+
+	public String getCacheSource() { return cacheSource; }
+	public void setCacheSource(String cacheSource) { this.cacheSource = cacheSource != null ? cacheSource : ""; }
+
 	public AudioFeatureTimeline getFeatureTimeline() { return featureTimeline; }
 	public void setFeatureTimeline(AudioFeatureTimeline featureTimeline) { this.featureTimeline = featureTimeline; }
 
 	public Beatmap getBeatmap() { return beatmap; }
 	public void setBeatmap(Beatmap beatmap) { this.beatmap = beatmap; }
 }
-

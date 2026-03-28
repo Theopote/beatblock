@@ -16,6 +16,8 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -105,12 +107,24 @@ public final class AudioAnalysisService {
 		Consumer<AnalysisSummary> onSummary,
 		Runnable onStarted
 	) {
+		return analyze(audioPath, onProgress, onComplete, onError, onSummary, onStarted, useDemucs);
+	}
+
+	public Future<?> analyze(
+		Path audioPath,
+		BiConsumer<String, Integer> onProgress,
+		Consumer<Beatmap> onComplete,
+		Consumer<String> onError,
+		Consumer<AnalysisSummary> onSummary,
+		Runnable onStarted,
+		boolean requestedDemucs
+	) {
 		AnalysisControl control = new AnalysisControl();
 		Future<?> delegate = executor.submit(() -> {
 			if (onStarted != null) {
 				onStarted.run();
 			}
-			runAnalysis(audioPath, onProgress, onComplete, onError, onSummary, control);
+			runAnalysis(audioPath, onProgress, onComplete, onError, onSummary, control, requestedDemucs);
 		});
 		return wrapCancelableFuture(delegate, control);
 	}
@@ -140,6 +154,13 @@ public final class AudioAnalysisService {
 		int removed = 0;
 		removed += deleteIfExists(basic);
 		removed += deleteIfExists(demucs);
+		return removed;
+	}
+
+	public int clearAllAnalysisCacheForAudio(Path audioPath) {
+		if (audioPath == null) return 0;
+		int removed = clearBeatmapCacheForAudio(audioPath);
+		removed += deleteStemCacheForAudio(audioPath);
 		return removed;
 	}
 
@@ -192,9 +213,9 @@ public final class AudioAnalysisService {
 		Consumer<Beatmap> onComplete,
 		Consumer<String> onError,
 		Consumer<AnalysisSummary> onSummary,
-		AnalysisControl control
+		AnalysisControl control,
+		boolean taskUseDemucs
 	) {
-		boolean taskUseDemucs = useDemucs;
 		runAnalysisInternal(audioPath, onProgress, onComplete, onError, onSummary, control, true, taskUseDemucs);
 	}
 
@@ -232,6 +253,16 @@ public final class AudioAnalysisService {
 					if (isBeatmapVersionCompatible(cached, analysisUseDemucs, beatmapPath)) {
 						LOGGER.info("BeatBlock AudioAnalysis: beatmap cache hit, skipping Python path={} beatmap={}",
 							audioPath.getFileName(), beatmapPath.getFileName());
+						if (onSummary != null && cached.meta != null) {
+							onSummary.accept(new AnalysisSummary(
+								(float) cached.meta.bpm(),
+								cached.beats.size(),
+								cached.sections.size(),
+								cached.meta.durationMs(),
+								cached.meta.hasStemSeparation() ? "demucs" : "basic",
+								"beatmap-cache"
+							));
+						}
 						onComplete.accept(cached);
 						return;
 					} else {
@@ -506,6 +537,43 @@ public final class AudioAnalysisService {
 		return outputDir.resolve(baseName + "-" + audioFingerprint + "-" + separationTag + ".beatmap");
 	}
 
+	private int deleteStemCacheForAudio(Path audioPath) {
+		Path outputDir;
+		try {
+			outputDir = AnalyzerInstaller.getBeatmapOutputDir();
+		} catch (Exception e) {
+			LOGGER.warn("BeatBlock AudioAnalysis: cannot resolve beatmap output dir for stem cache clear reason={}", e.toString());
+			return 0;
+		}
+		Path stemDir = outputDir.resolve("stems").resolve(stemCacheFingerprint(audioPath));
+		if (!Files.exists(stemDir)) return 0;
+		try (var walk = Files.walk(stemDir)) {
+			return walk.sorted(java.util.Comparator.reverseOrder())
+				.mapToInt(this::deleteIfExists)
+				.sum();
+		} catch (IOException e) {
+			LOGGER.warn("BeatBlock AudioAnalysis: failed to clear stem cache dir={} reason={}", stemDir, e.toString());
+			return 0;
+		}
+	}
+
+	private String stemCacheFingerprint(Path audioPath) {
+		String normalized = audioPath == null
+			? "audio"
+			: audioPath.toAbsolutePath().normalize().toString().toLowerCase();
+		try {
+			MessageDigest digest = MessageDigest.getInstance("SHA-1");
+			byte[] hash = digest.digest(normalized.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+			StringBuilder sb = new StringBuilder();
+			for (int i = 0; i < Math.min(hash.length, 8); i++) {
+				sb.append(String.format("%02x", hash[i]));
+			}
+			return sb.toString();
+		} catch (Exception e) {
+			return Integer.toHexString(normalized.hashCode());
+		}
+	}
+
 	private int deleteIfExists(Path p) {
 		if (p == null) return 0;
 		try {
@@ -524,7 +592,9 @@ public final class AudioAnalysisService {
 			int beatCount = o.has("beat_count") ? o.get("beat_count").getAsInt() : 0;
 			int sectionCount = o.has("section_count") ? o.get("section_count").getAsInt() : 0;
 			long durationMs = o.has("duration_ms") ? o.get("duration_ms").getAsLong() : 0L;
-			return new AnalysisSummary(bpm, beatCount, sectionCount, durationMs);
+			String separationMode = o.has("separation_mode") ? o.get("separation_mode").getAsString() : "basic";
+			String cacheSource = o.has("cache_source") ? o.get("cache_source").getAsString() : "fresh";
+			return new AnalysisSummary(bpm, beatCount, sectionCount, durationMs, separationMode, cacheSource);
 		} catch (Exception ignored) {
 			return null;
 		}
@@ -1004,7 +1074,14 @@ public final class AudioAnalysisService {
 		void accept(A a, B b);
 	}
 
-	public record AnalysisSummary(float bpm, int beatCount, int sectionCount, long durationMs) {}
+	public record AnalysisSummary(
+		float bpm,
+		int beatCount,
+		int sectionCount,
+		long durationMs,
+		String separationMode,
+		String cacheSource
+	) {}
 
 	private static final class PythonProbeInfo {
 		private final boolean probeOk;
@@ -1083,4 +1160,3 @@ public final class AudioAnalysisService {
 		}
 	}
 }
-

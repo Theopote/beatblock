@@ -458,7 +458,7 @@ def _get_demucs_model():
     return _DEMUCS_MODEL
 
 
-def _run_demucs(input_path: str, stems_dir: str) -> dict[str, str]:
+def _run_demucs(input_path: str, stems_dir: str) -> tuple[dict[str, str], bool]:
     """
     调用 demucs 分离音频为 4 条茎（drums/bass/vocals/other）。
     返回 {stem_name: wav_path} 字典。
@@ -481,7 +481,7 @@ def _run_demucs(input_path: str, stems_dir: str) -> dict[str, str]:
 
     if all_cached:
         progress("DEMUCS_SEPARATE", 40)
-        return stem_paths
+        return stem_paths, True
 
     # 运行 demucs 分离
     progress("DEMUCS_SEPARATE", 10)
@@ -531,7 +531,7 @@ def _run_demucs(input_path: str, stems_dir: str) -> dict[str, str]:
         sf.write(stem_paths[stem_name], audio_np.T, sample_rate, format="WAV", subtype="PCM_16")
 
     progress("DEMUCS_SEPARATE", 40)
-    return stem_paths
+    return stem_paths, False
 
 
 def analyze_demucs(input_path: str, output_path: str,
@@ -578,7 +578,7 @@ def analyze_demucs(input_path: str, output_path: str,
     audio_fingerprint = hashlib.sha1(normalized_input_path).hexdigest()[:16]
     output_parent = os.path.dirname(os.path.abspath(output_path))
     stems_dir = os.path.join(output_parent, "stems", audio_fingerprint)
-    stem_paths = _run_demucs(input_path, stems_dir)
+    stem_paths, stem_cache_reused = _run_demucs(input_path, stems_dir)
 
     # ── 5. 对每条茎做节拍分析 ────────────────────────────────────────────────
     # drums → 使用现有 HPSS+onset 流程（打击乐分析）
@@ -834,12 +834,17 @@ def main():
     progress("WRITE_BEATMAP", 100)
 
     # 最终结果摘要行（Java 端解析）
+    cache_source = "fresh"
+    if beatmap["meta"].get("separation_mode") == "demucs":
+        cache_source = "stem-cache-reuse" if 'stem_cache_reused' in locals() and stem_cache_reused else "fresh"
+
     summary = {
         "bpm":          beatmap["meta"]["bpm"],
         "beat_count":   len(beatmap["beats"]),
         "section_count":len(beatmap["sections"]),
         "duration_ms":  beatmap["meta"]["duration_ms"],
-        "separation_mode": beatmap["meta"].get("separation_mode", "none"),
+        "separation_mode": beatmap["meta"].get("separation_mode", "basic"),
+        "cache_source": cache_source,
     }
     print(f"RESULT {json.dumps(summary)}", flush=True)
 
