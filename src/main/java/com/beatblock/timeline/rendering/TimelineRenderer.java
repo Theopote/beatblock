@@ -6,6 +6,7 @@ import com.beatblock.audio.BeatBlockRuntime;
 import com.beatblock.audio.assets.AudioAsset;
 import com.beatblock.audio.assets.AudioAssetManager;
 import com.beatblock.audio.assets.AudioAssetStatus;
+import com.beatblock.timeline.binding.AnimationBindingEngine;
 import com.beatblock.timeline.*;
 import com.beatblock.timeline.editor.SelectionBox;
 import com.beatblock.timeline.editor.SelectionState;
@@ -850,6 +851,13 @@ public final class TimelineRenderer {
 		boolean toBlockTrack = targetRowIndex == TimelineTrackMeta.ROW_ANIM_BLOCK;
 		boolean toAutoTrack = targetRowIndex == TimelineTrackMeta.ROW_ANIM_AUTO;
 		if (!toBlockTrack && !toAutoTrack) return;
+
+		int bindingAdded = AnimationBindingEngine.applyRules(timeline, targetRowIndex, false);
+		if (bindingAdded > 0) {
+			LOGGER.info("BeatBlock Timeline: generated {} animation events from binding rules", bindingAdded);
+			return;
+		}
+
 		String clipGenerationMode = resolveClipGenerationMode(timeline);
 		boolean demucsSeparated = isDemucsSeparatedTimeline(timeline);
 		String mappingPreset = resolveDemucsMappingPreset(timeline, toBlockTrack);

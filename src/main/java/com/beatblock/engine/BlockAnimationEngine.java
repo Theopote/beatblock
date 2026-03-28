@@ -2,10 +2,16 @@ package com.beatblock.engine;
 
 import com.beatblock.timeline.TimelineAnimationActionMode;
 import com.beatblock.timeline.TimelineAnimationEvent;
+import com.beatblock.timeline.binding.SpatialDispatchMode;
 import java.util.Map;
 import java.util.List;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.Locale;
+import java.util.Objects;
 
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -61,6 +67,20 @@ public final class BlockAnimationEngine {
 		if (event == null) return;
 		TimelineAnimationActionMode actionMode = event.getActionMode();
 		if (actionMode == TimelineAnimationActionMode.ANIMATE) {
+			scheduleFromTimelineEventWithSpatial(event);
+		}
+	}
+
+	private void scheduleFromTimelineEventWithSpatial(TimelineAnimationEvent event) {
+		if (event == null) return;
+		AnimationDefinition def = animationLibrary.get(event.getAnimationTypeId());
+		StageObject target = stageObjectSystem.get(event.getTargetObjectId());
+		if (def == null || target == null) return;
+
+		Map<String, Object> params = event.getParameters();
+		SpatialDispatchMode spatialMode = SpatialDispatchMode.fromValue(params.get("spatialMode"));
+		double stepDelay = Math.max(0.0, readDouble(params.get("sequentialDelaySeconds"), 0.0));
+		if (spatialMode == SpatialDispatchMode.ALL || stepDelay <= 0.0 || target.getBlocks().size() <= 1) {
 			scheduleFromTimelineEvent(
 				event.getAnimationTypeId(),
 				event.getTargetObjectId(),
@@ -68,6 +88,95 @@ public final class BlockAnimationEngine {
 				event.getDurationSeconds(),
 				event.getEnergy()
 			);
+			return;
+		}
+
+		List<BlockPos> ordered = sortBlocksForSpatialMode(target, spatialMode, event);
+		Vec3d center = target.getCenter();
+		double baseStart = event.getTimeSeconds();
+		double duration = Math.max(0.01, event.getDurationSeconds());
+		float energy = event.getEnergy();
+		for (int i = 0; i < ordered.size(); i++) {
+			BlockPos block = ordered.get(i);
+			double start = baseStart + i * stepDelay;
+			double end = start + duration;
+			StageObject perBlockTarget = new StageObject(
+				target.getId() + "#" + i,
+				target.getName(),
+				List.of(block),
+				center
+			);
+			animationPlayer.addInstance(new EngineAnimationInstance(def, perBlockTarget, start, end, energy));
+		}
+	}
+
+	private List<BlockPos> sortBlocksForSpatialMode(StageObject target, SpatialDispatchMode mode, TimelineAnimationEvent event) {
+		List<BlockPos> blocks = new ArrayList<>(target.getBlocks());
+		if (blocks.size() <= 1 || mode == SpatialDispatchMode.ALL) return blocks;
+		Vec3d center = target.getCenter();
+		long seed = spatialSeed(event, target);
+
+		switch (mode) {
+			case SEQUENTIAL -> blocks.sort(Comparator
+				.comparingInt(BlockPos::getX)
+				.thenComparingInt(BlockPos::getZ)
+				.thenComparingInt(BlockPos::getY));
+			case RADIAL -> blocks.sort(Comparator
+				.comparingDouble((BlockPos p) -> distanceSqToCenter(p, center))
+				.thenComparingInt(BlockPos::getY));
+			case SPIRAL -> blocks.sort(Comparator
+				.comparingDouble((BlockPos p) -> angleAroundCenter(p, center))
+				.thenComparingDouble(p -> distanceSqToCenter(p, center)));
+			case RANDOM -> blocks.sort(Comparator.comparingLong(p -> mixedHash(seed, p)));
+			case ALL -> {
+				return blocks;
+			}
+		}
+		return blocks;
+	}
+
+	private static double distanceSqToCenter(BlockPos pos, Vec3d center) {
+		double dx = (pos.getX() + 0.5) - center.x;
+		double dy = pos.getY() - center.y;
+		double dz = (pos.getZ() + 0.5) - center.z;
+		return dx * dx + dy * dy + dz * dz;
+	}
+
+	private static double angleAroundCenter(BlockPos pos, Vec3d center) {
+		double dx = (pos.getX() + 0.5) - center.x;
+		double dz = (pos.getZ() + 0.5) - center.z;
+		double angle = Math.atan2(dz, dx);
+		if (angle < 0) angle += Math.PI * 2.0;
+		return angle;
+	}
+
+	private static long spatialSeed(TimelineAnimationEvent event, StageObject target) {
+		long t = Double.doubleToLongBits(event.getTimeSeconds());
+		long id = Objects.hashCode(event.getEventId());
+		long targetId = Objects.hashCode(target.getId());
+		return (t ^ (id * 31L) ^ (targetId * 131L));
+	}
+
+	private static long mixedHash(long seed, BlockPos p) {
+		long h = seed;
+		h ^= ((long) p.getX()) * 0x9E3779B185EBCA87L;
+		h ^= ((long) p.getY()) * 0xC2B2AE3D27D4EB4FL;
+		h ^= ((long) p.getZ()) * 0x165667B19E3779F9L;
+		h ^= (h >>> 33);
+		h *= 0xff51afd7ed558ccdL;
+		h ^= (h >>> 33);
+		h *= 0xc4ceb9fe1a85ec53L;
+		h ^= (h >>> 33);
+		return h;
+	}
+
+	private static double readDouble(Object raw, double fallback) {
+		if (raw instanceof Number n) return n.doubleValue();
+		if (raw == null) return fallback;
+		try {
+			return Double.parseDouble(String.valueOf(raw).trim());
+		} catch (Exception ex) {
+			return fallback;
 		}
 	}
 

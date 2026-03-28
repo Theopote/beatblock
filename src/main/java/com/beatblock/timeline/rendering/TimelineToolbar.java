@@ -4,12 +4,18 @@ import com.beatblock.BeatBlock;
 import com.beatblock.automap.AutoMapConfig;
 import com.beatblock.automap.AutoMapGenerator;
 import com.beatblock.client.BeatBlockClientDriver;
+import com.beatblock.timeline.binding.AnimationBindingEngine;
+import com.beatblock.timeline.binding.AnimationBindingRule;
+import com.beatblock.timeline.binding.SpatialDispatchMode;
+import com.beatblock.timeline.TimelineAnimationActionMode;
 import com.beatblock.timeline.Clip;
 import com.beatblock.timeline.Timeline;
 import com.beatblock.timeline.TimelineEditor;
 import com.beatblock.timeline.TimelineEvent;
 import com.beatblock.timeline.TimelineMarker;
 import com.beatblock.timeline.Track;
+import com.beatblock.engine.AnimationDefinition;
+import com.beatblock.engine.StageObject;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonObject;
@@ -18,6 +24,7 @@ import com.beatblock.ui.icons.Icons;
 import com.beatblock.ui.imgui.IconButtonStyle;
 import imgui.ImGui;
 import imgui.type.ImInt;
+import imgui.type.ImString;
 import net.fabricmc.loader.api.FabricLoader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -27,8 +34,12 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 /**
  * 时间线顶部工具栏：播放控制、吸附选项、Beat 网格、Auto Map。
@@ -66,6 +77,8 @@ public final class TimelineToolbar {
 	private static final String TOOLTIP_DEMUCS_ADVANCED = "高级参数：时长/能量阈值/最小间隔";
 	private static final String TOOLTIP_ACTION_ROLLBACK = "PLACE/CLEAR 预览回滚策略：Preview 会在停止/回退时恢复方块；Persistent 会保留写入结果";
 	private static final String TOOLTIP_ACTION_ROLLBACK_STATUS = "当前 PLACE/CLEAR 执行策略状态";
+	private static final String TOOLTIP_BINDING_MAP = "按绑定规则将音频特征批量转换为动画事件；无规则时自动创建默认规则";
+	private static final String TOOLTIP_BINDING_EDITOR = "编辑特征绑定规则：来源特征、动作、目标对象、阈值和冷却";
 
 	/** Zoom 预设：显示名与对应的缩放倍数（相对基准 1x） */
 	private static final String[] ZOOM_PRESET_LABELS = { "0.25x", "0.5x", "1x", "2x", "3x", "4x" };
@@ -86,6 +99,11 @@ public final class TimelineToolbar {
 		"Kick", "Snare", "HiHat", "HiHat Open", "Snare Hi", "Bass", "Vocals", "Other"
 	};
 	private static final String DEMUCS_ADVANCED_POPUP_ID = "tlDemucsMappingAdvanced";
+	private static final String BINDING_EDITOR_POPUP_ID = "tlBindingEditor";
+	private static final String[] BINDING_ACTION_LABELS = { "动画", "放置", "清除" };
+	private static final String[] BINDING_ACTION_VALUES = { "ANIMATE", "PLACE", "CLEAR" };
+	private static final String[] BINDING_SPATIAL_LABELS = { "ALL", "SEQUENTIAL", "RADIAL", "RANDOM", "SPIRAL" };
+	private static final String[] BINDING_SPATIAL_VALUES = { "ALL", "SEQUENTIAL", "RADIAL", "RANDOM", "SPIRAL" };
 	private static final Gson UI_CONFIG_GSON = new GsonBuilder().setPrettyPrinting().create();
 	private static final float TOOLBAR_ITEM_SPACING = 4f;
 	private static final float TOOLBAR_GROUP_SPACING = 8f;
@@ -96,6 +114,8 @@ public final class TimelineToolbar {
 
 	/** 上次 Auto Map 生成数量，用于提示 */
 	private int lastAutoMapCount = -1;
+	/** 上次 Binding Map 生成数量，用于提示 */
+	private int lastBindingMapCount = -1;
 	/** Zoom 下拉当前选中索引（由 Combo 更新） */
 	private final ImInt zoomComboIndex = new ImInt(2); // 默认 1x
 	private final ImInt speedComboIndex = new ImInt(2); // 默认 1x
@@ -327,6 +347,26 @@ public final class TimelineToolbar {
 		nextGroup();
 
 		// ----- 4. Auto Map -----
+		if (ImGui.button("Binding Map")) {
+			if (BeatBlock.timeline != null) {
+				lastBindingMapCount = AnimationBindingEngine.applyRules(BeatBlock.timeline, TimelineTrackMeta.ROW_ANIM_BLOCK, true);
+				editor.syncClockDuration();
+			} else {
+				lastBindingMapCount = -1;
+			}
+		}
+		if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_BINDING_MAP);
+		if (lastBindingMapCount >= 0) {
+			nextItemInGroup();
+			ImGui.textDisabled("(" + lastBindingMapCount + " bound)");
+		}
+		nextItemInGroup();
+		if (ImGui.button("Bindings...##tlBindingEditorOpen")) {
+			ImGui.openPopup(BINDING_EDITOR_POPUP_ID);
+		}
+		if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_BINDING_EDITOR);
+		renderBindingEditorPopup();
+		nextItemInGroup();
 		if (ImGui.button("Auto Map")) {
 			if (BeatBlock.timeline != null) {
 				AutoMapConfig config = AutoMapConfig.createDefault();
@@ -632,6 +672,261 @@ public final class TimelineToolbar {
 		}
 		if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_DEMUCS_ADVANCED);
 		renderDemucsAdvancedPopup();
+	}
+
+	private void renderBindingEditorPopup() {
+		if (!ImGui.beginPopup(BINDING_EDITOR_POPUP_ID)) return;
+		Timeline timeline = BeatBlock.timeline;
+		if (timeline == null) {
+			ImGui.textDisabled("Timeline 未初始化");
+			ImGui.endPopup();
+			return;
+		}
+
+		List<AnimationBindingRule> rules = new ArrayList<>(AnimationBindingEngine.loadRules(timeline));
+		List<String> featureKeys = new ArrayList<>(timeline.getFeatureTracks().keySet());
+		Collections.sort(featureKeys);
+
+		Map<String, String> targetDisplayToId = new HashMap<>();
+		List<String> targetDisplays = collectTargetDisplays(targetDisplayToId);
+		List<String> animationIds = collectAnimationIds();
+
+		ImGui.textDisabled("Binding Rules");
+		ImGui.sameLine();
+		ImGui.text("(" + rules.size() + ")");
+
+		if (ImGui.button("Create Defaults##bindingCreateDefaults")) {
+			rules = new ArrayList<>(AnimationBindingEngine.createDefaultRules(timeline));
+			AnimationBindingEngine.saveRules(timeline, rules);
+		}
+		ImGui.sameLine();
+		if (ImGui.button("Add Rule##bindingAddRule")) {
+			AnimationBindingRule added = buildAddedRule(featureKeys, targetDisplays, targetDisplayToId);
+			if (added != null) {
+				rules.add(added);
+				AnimationBindingEngine.saveRules(timeline, rules);
+			}
+		}
+
+		if (featureKeys.isEmpty()) {
+			ImGui.textDisabled("当前没有可用特征轨，请先导入并分析音频。\n");
+		}
+
+		if (rules.isEmpty()) {
+			ImGui.textDisabled("没有规则，可点击 Create Defaults 或 Add Rule。\n");
+		}
+
+		int removeIndex = -1;
+		boolean changedAny = false;
+		for (int i = 0; i < rules.size(); i++) {
+			AnimationBindingRule rule = rules.get(i);
+			String nodeLabel = rule.name() + "##bindingRuleNode_" + rule.id();
+			if (!ImGui.treeNode(nodeLabel)) continue;
+
+			ImGui.pushID("binding_rule_" + rule.id());
+			boolean changed = false;
+
+			boolean[] enabled = new boolean[] { rule.enabled() };
+			if (ImGui.checkbox("Enabled", enabled[0])) changed = true;
+
+			ImString nameBuf = new ImString(rule.name(), 128);
+			if (ImGui.inputText("Name", nameBuf)) changed = true;
+
+			if (!featureKeys.isEmpty()) {
+				int featureIndex = indexOfValue(featureKeys, rule.sourceFeatureKey());
+				ImInt featureCombo = new ImInt(Math.max(0, featureIndex));
+				if (ImGui.combo("Feature", featureCombo, toArray(featureKeys))) changed = true;
+				featureIndex = featureCombo.get();
+				if (featureIndex < 0 || featureIndex >= featureKeys.size()) featureIndex = 0;
+
+				int animationIndex = indexOfValue(animationIds, rule.animationTypeId());
+				ImInt animationCombo = new ImInt(Math.max(0, animationIndex));
+				if (ImGui.combo("Animation", animationCombo, toArray(animationIds))) changed = true;
+				animationIndex = animationCombo.get();
+				if (animationIndex < 0 || animationIndex >= animationIds.size()) animationIndex = 0;
+
+				int actionIndex = indexOfValue(BINDING_ACTION_VALUES, rule.actionMode().name());
+				ImInt actionCombo = new ImInt(Math.max(0, actionIndex));
+				if (ImGui.combo("Action", actionCombo, BINDING_ACTION_LABELS)) changed = true;
+				actionIndex = actionCombo.get();
+				if (actionIndex < 0 || actionIndex >= BINDING_ACTION_VALUES.length) actionIndex = 0;
+
+				int spatialIndex = indexOfValue(BINDING_SPATIAL_VALUES, rule.spatialMode().name());
+				ImInt spatialCombo = new ImInt(Math.max(0, spatialIndex));
+				if (ImGui.combo("Spatial", spatialCombo, BINDING_SPATIAL_LABELS)) changed = true;
+				spatialIndex = spatialCombo.get();
+				if (spatialIndex < 0 || spatialIndex >= BINDING_SPATIAL_VALUES.length) spatialIndex = 0;
+
+				int targetIndex = indexOfTargetDisplay(targetDisplays, targetDisplayToId, rule.targetObjectId());
+				ImInt targetCombo = new ImInt(Math.max(0, targetIndex));
+				if (!targetDisplays.isEmpty() && ImGui.combo("Target", targetCombo, toArray(targetDisplays))) changed = true;
+				targetIndex = targetCombo.get();
+				if (targetIndex < 0 || targetIndex >= targetDisplays.size()) targetIndex = 0;
+
+				float[] threshold = new float[] { rule.energyThreshold() };
+				if (ImGui.sliderFloat("Threshold", threshold, 0f, 1f, "%.2f")) changed = true;
+
+				float[] scale = new float[] { rule.energyScale() };
+				if (ImGui.sliderFloat("Energy Scale", scale, 0f, 2f, "%.2f")) changed = true;
+
+				float[] duration = new float[] { (float) rule.durationSeconds() };
+				if (ImGui.sliderFloat("Duration", duration, 0.05f, 4f, "%.2f s")) changed = true;
+
+				float[] cooldown = new float[] { (float) rule.cooldownSeconds() };
+				if (ImGui.sliderFloat("Cooldown", cooldown, 0f, 1.5f, "%.2f s")) changed = true;
+
+				float[] probability = new float[] { rule.probability() };
+				if (ImGui.sliderFloat("Probability", probability, 0f, 1f, "%.2f")) changed = true;
+
+				float[] seqDelay = new float[] { (float) rule.sequentialDelaySeconds() };
+				if (ImGui.sliderFloat("Step Delay", seqDelay, 0f, 0.5f, "%.2f s")) changed = true;
+
+				if (changed) {
+					String selectedFeature = featureKeys.get(featureIndex);
+					String selectedAnimation = animationIds.isEmpty() ? rule.animationTypeId() : animationIds.get(animationIndex);
+					String selectedTargetDisplay = targetDisplays.isEmpty() ? "" : targetDisplays.get(targetIndex);
+					String selectedTargetId = targetDisplayToId.getOrDefault(selectedTargetDisplay, rule.targetObjectId());
+					Map<String, Object> extraCopy = new HashMap<>(rule.extraParams());
+					AnimationBindingRule updated = AnimationBindingRule.builder()
+						.id(rule.id())
+						.name(nameBuf.get() == null || nameBuf.get().isBlank() ? rule.name() : nameBuf.get().trim())
+						.enabled(enabled[0])
+						.sourceFeatureKey(selectedFeature)
+						.animationTypeId(selectedAnimation)
+						.actionMode(TimelineAnimationActionMode.fromValue(BINDING_ACTION_VALUES[actionIndex]))
+						.targetObjectId(selectedTargetId)
+						.energyThreshold(threshold[0])
+						.energyScale(scale[0])
+						.durationSeconds(duration[0])
+						.cooldownSeconds(cooldown[0])
+						.probability(probability[0])
+						.spatialMode(SpatialDispatchMode.fromValue(BINDING_SPATIAL_VALUES[spatialIndex]))
+						.sequentialDelaySeconds(seqDelay[0])
+						.sectionFilter(rule.sectionFilter())
+						.extraParams(extraCopy)
+						.build();
+					rules.set(i, updated);
+					changedAny = true;
+				}
+			}
+
+			if (ImGui.button("Delete##bindingDelete_" + i)) {
+				removeIndex = i;
+			}
+
+			ImGui.popID();
+			ImGui.treePop();
+		}
+
+		if (removeIndex >= 0 && removeIndex < rules.size()) {
+			rules.remove(removeIndex);
+			changedAny = true;
+		}
+
+		if (changedAny) {
+			AnimationBindingEngine.saveRules(timeline, rules);
+		}
+
+		ImGui.separator();
+		if (ImGui.button("Apply To Block Track##bindingApplyBlock")) {
+			lastBindingMapCount = AnimationBindingEngine.applyRules(timeline, TimelineTrackMeta.ROW_ANIM_BLOCK, false);
+			if (BeatBlock.timelineEditor != null) BeatBlock.timelineEditor.syncClockDuration();
+		}
+		ImGui.sameLine();
+		if (ImGui.button("Apply To Auto Track##bindingApplyAuto")) {
+			lastBindingMapCount = AnimationBindingEngine.applyRules(timeline, TimelineTrackMeta.ROW_ANIM_AUTO, false);
+			if (BeatBlock.timelineEditor != null) BeatBlock.timelineEditor.syncClockDuration();
+		}
+
+		ImGui.endPopup();
+	}
+
+	private AnimationBindingRule buildAddedRule(List<String> featureKeys, List<String> targetDisplays, Map<String, String> targetDisplayToId) {
+		if (featureKeys == null || featureKeys.isEmpty()) return null;
+		if (targetDisplays == null || targetDisplays.isEmpty()) return null;
+		String feature = featureKeys.get(0);
+		String targetDisplay = targetDisplays.get(0);
+		String targetId = targetDisplayToId.getOrDefault(targetDisplay, "");
+		if (targetId.isBlank()) return null;
+		return AnimationBindingRule.builder()
+			.name("Bind " + feature)
+			.sourceFeatureKey(feature)
+			.animationTypeId("Pulse")
+			.actionMode(TimelineAnimationActionMode.ANIMATE)
+			.targetObjectId(targetId)
+			.energyThreshold(0.2f)
+			.energyScale(1.0f)
+			.durationSeconds(0.4)
+			.cooldownSeconds(0.08)
+			.probability(1.0f)
+			.spatialMode(SpatialDispatchMode.ALL)
+			.sequentialDelaySeconds(0.0)
+			.build();
+	}
+
+	private List<String> collectAnimationIds() {
+		List<String> ids = new ArrayList<>();
+		if (BeatBlock.blockAnimationEngine != null && BeatBlock.blockAnimationEngine.getAnimationLibrary() != null) {
+			List<AnimationDefinition> defs = new ArrayList<>(BeatBlock.blockAnimationEngine.getAnimationLibrary().getAll().values());
+			defs.sort(Comparator.comparing(AnimationDefinition::getId, String.CASE_INSENSITIVE_ORDER));
+			for (AnimationDefinition def : defs) {
+				ids.add(def.getId());
+			}
+		}
+		if (ids.isEmpty()) ids.add("Pulse");
+		return ids;
+	}
+
+	private List<String> collectTargetDisplays(Map<String, String> outDisplayToId) {
+		List<String> displays = new ArrayList<>();
+		if (outDisplayToId == null) return displays;
+		if (BeatBlock.blockAnimationEngine == null || BeatBlock.blockAnimationEngine.getStageObjectSystem() == null) {
+			return displays;
+		}
+		List<StageObject> objects = new ArrayList<>(BeatBlock.blockAnimationEngine.getStageObjectSystem().getAll());
+		objects.sort(Comparator.comparing(StageObject::getName, String.CASE_INSENSITIVE_ORDER));
+		for (StageObject object : objects) {
+			String display = object.getName() + " [" + object.getId() + "]";
+			if (outDisplayToId.containsKey(display)) continue;
+			outDisplayToId.put(display, object.getId());
+			displays.add(display);
+		}
+		return displays;
+	}
+
+	private static String[] toArray(List<String> values) {
+		if (values == null || values.isEmpty()) return new String[] { "" };
+		LinkedHashSet<String> dedup = new LinkedHashSet<>(values);
+		return dedup.toArray(new String[0]);
+	}
+
+	private static int indexOfValue(List<String> values, String target) {
+		if (values == null || values.isEmpty()) return 0;
+		if (target == null) return 0;
+		for (int i = 0; i < values.size(); i++) {
+			if (target.equalsIgnoreCase(values.get(i))) return i;
+		}
+		return 0;
+	}
+
+	private static int indexOfValue(String[] values, String target) {
+		if (values == null || values.length == 0) return 0;
+		if (target == null) return 0;
+		for (int i = 0; i < values.length; i++) {
+			if (target.equalsIgnoreCase(values[i])) return i;
+		}
+		return 0;
+	}
+
+	private static int indexOfTargetDisplay(List<String> targetDisplays, Map<String, String> displayToId, String targetId) {
+		if (targetDisplays == null || targetDisplays.isEmpty() || displayToId == null) return 0;
+		if (targetId == null || targetId.isBlank()) return 0;
+		for (int i = 0; i < targetDisplays.size(); i++) {
+			String display = targetDisplays.get(i);
+			String id = displayToId.get(display);
+			if (targetId.equals(id)) return i;
+		}
+		return 0;
 	}
 
 	private void renderDemucsAdvancedPopup() {
