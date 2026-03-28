@@ -131,6 +131,9 @@ public final class TimelineToolbar {
 	private final ImInt clipGenerationModeComboIndex = new ImInt(0); // 默认 mixed
 	private final ImInt actionRollbackComboIndex = new ImInt(0); // 默认 preview
 	private final ImInt bindingTemplateComboIndex = new ImInt(0);
+	private String lastToolActionFeedback = "";
+	private long lastToolActionFeedbackAtMs = 0L;
+	private boolean lastToolActionFeedbackSuccess = false;
 	private String lastTemplateApplyFeedback = "";
 	private long lastTemplateApplyFeedbackAtMs = 0L;
 	private boolean lastTemplateApplyFeedbackSuccess = false;
@@ -150,12 +153,12 @@ public final class TimelineToolbar {
 		// 图标按钮：与轨道行同高、零内边距，字形尽量铺满并居中
 		final float tBtn = TimelineLayout.ROW_HEIGHT;
 		boolean compactToolbar = shouldUseCompactToolbar(tBtn);
-		String transportTooltip = null;
+		String transportTooltip;
 		IconButtonStyle.pushBeatBlockIconButton();
 		if (ImGui.button(Icons.Play.REWIND_START + "##tlToStart", tBtn, tBtn)) {
 			seekTo(editor, 0);
 		}
-		transportTooltip = hoveredTooltip(transportTooltip, TOOLTIP_TO_START);
+		transportTooltip = hoveredTooltip(null, TOOLTIP_TO_START);
 		nextItemInGroup();
 		if (ImGui.button(Icons.Play.REWIND + "##tlBackBeat", tBtn, tBtn)) {
 			seekBy(editor, -stepSeek);
@@ -363,15 +366,13 @@ public final class TimelineToolbar {
 			if (BeatBlock.timeline != null) {
 				lastBindingMapCount = AnimationBindingEngine.applyRules(BeatBlock.timeline, TimelineTrackMeta.ROW_ANIM_BLOCK, true);
 				editor.syncClockDuration();
+				setToolActionFeedback("Binding Map generated " + lastBindingMapCount + " events", lastBindingMapCount > 0);
 			} else {
 				lastBindingMapCount = -1;
+				setToolActionFeedback("Binding Map skipped: timeline unavailable", false);
 			}
 		}
 		if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_BINDING_MAP);
-		if (lastBindingMapCount >= 0) {
-			nextItemInGroup();
-			ImGui.textDisabled("(" + lastBindingMapCount + " bound)");
-		}
 		nextItemInGroup();
 		if (ImGui.button("Bindings...##tlBindingEditorOpen")) {
 			ImGui.openPopup(BINDING_EDITOR_POPUP_ID);
@@ -384,15 +385,15 @@ public final class TimelineToolbar {
 				AutoMapConfig config = AutoMapConfig.createDefault();
 				lastAutoMapCount = AutoMapGenerator.generate(BeatBlock.timeline, config, true);
 				editor.syncClockDuration();
+				setToolActionFeedback("Auto Map generated " + lastAutoMapCount + " events", lastAutoMapCount > 0);
 			} else {
 				lastAutoMapCount = -1;
+				setToolActionFeedback("Auto Map skipped: timeline unavailable", false);
 			}
 		}
 		if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_AUTO_MAP);
-		if (lastAutoMapCount >= 0) {
-			nextItemInGroup();
-			ImGui.textDisabled("(" + lastAutoMapCount + " events)");
-		}
+		nextItemInGroup();
+		renderToolActionFeedback();
 
 		nextGroup();
 		renderDemucsMappingPresetControl(false);
@@ -501,15 +502,14 @@ public final class TimelineToolbar {
 				AutoMapConfig config = AutoMapConfig.createDefault();
 				lastAutoMapCount = AutoMapGenerator.generate(BeatBlock.timeline, config, true);
 				editor.syncClockDuration();
+				setToolActionFeedback("Auto Map generated " + lastAutoMapCount + " events", lastAutoMapCount > 0);
 			} else {
 				lastAutoMapCount = -1;
+				setToolActionFeedback("Auto Map skipped: timeline unavailable", false);
 			}
 		}
 		if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_AUTO_MAP);
-		if (lastAutoMapCount >= 0) {
-			ImGui.sameLine();
-			ImGui.textDisabled("(" + lastAutoMapCount + " events)");
-		}
+		renderToolActionFeedback();
 
 		renderDemucsMappingPresetControl(true);
 
@@ -564,7 +564,7 @@ public final class TimelineToolbar {
 			+ checkboxWidth("Loop");
 
 		float viewGroupWidth = comboTotalWidth("Zoom", ZOOM_PRESET_LABELS) + TOOLBAR_ITEM_SPACING + buttonWidth("Fit");
-		float trackHeightGroupWidth = sliderTotalWidth("Track H", 120f) + TOOLBAR_ITEM_SPACING + buttonWidth("Reset");
+		float trackHeightGroupWidth = sliderTotalWidth(120f) + TOOLBAR_ITEM_SPACING + buttonWidth("Reset");
 		float autoMapWidth = buttonWidth("Auto Map") + 70f;
 
 		return transportWidth
@@ -598,12 +598,12 @@ public final class TimelineToolbar {
 		return comboWidthForLabels(values) + ImGui.calcTextSize(label).x + 10f;
 	}
 
-	private static float sliderTotalWidth(String label, float sliderWidth) {
-		return sliderWidth + ImGui.calcTextSize(label).x + 10f;
+	private static float sliderTotalWidth(float sliderWidth) {
+		return sliderWidth + ImGui.calcTextSize("Track H").x + 10f;
 	}
 
 	private static void renderTrackHeightControl(TimelineEditor editor, boolean compactMode) {
-		if (editor == null || editor.getTrackListState() == null) return;
+		if (editor == null) return;
 		TimelineTrackListState trackState = editor.getTrackListState();
 		float min = trackState.getAudioRowHeightMin();
 		float max = trackState.getAudioRowHeightMax();
@@ -931,11 +931,13 @@ public final class TimelineToolbar {
 		if (ImGui.button("Apply To Block Track##bindingApplyBlock")) {
 			lastBindingMapCount = AnimationBindingEngine.applyRules(timeline, TimelineTrackMeta.ROW_ANIM_BLOCK, false);
 			if (BeatBlock.timelineEditor != null) BeatBlock.timelineEditor.syncClockDuration();
+			setTemplateApplyFeedback("Apply To Block Track generated " + lastBindingMapCount + " events", lastBindingMapCount > 0);
 		}
 		ImGui.sameLine();
 		if (ImGui.button("Apply To Auto Track##bindingApplyAuto")) {
 			lastBindingMapCount = AnimationBindingEngine.applyRules(timeline, TimelineTrackMeta.ROW_ANIM_AUTO, false);
 			if (BeatBlock.timelineEditor != null) BeatBlock.timelineEditor.syncClockDuration();
+			setTemplateApplyFeedback("Apply To Auto Track generated " + lastBindingMapCount + " events", lastBindingMapCount > 0);
 		}
 
 		ImGui.endPopup();
@@ -944,8 +946,8 @@ public final class TimelineToolbar {
 	private AnimationBindingRule buildAddedRule(List<String> featureKeys, List<String> targetDisplays, Map<String, String> targetDisplayToId) {
 		if (featureKeys == null || featureKeys.isEmpty()) return null;
 		if (targetDisplays == null || targetDisplays.isEmpty()) return null;
-		String feature = featureKeys.get(0);
-		String targetDisplay = targetDisplays.get(0);
+		String feature = featureKeys.getFirst();
+		String targetDisplay = targetDisplays.getFirst();
 		String targetId = targetDisplayToId.getOrDefault(targetDisplay, "");
 		if (targetId.isBlank()) return null;
 		return AnimationBindingRule.builder()
@@ -966,7 +968,7 @@ public final class TimelineToolbar {
 
 	private List<String> collectAnimationIds() {
 		List<String> ids = new ArrayList<>();
-		if (BeatBlock.blockAnimationEngine != null && BeatBlock.blockAnimationEngine.getAnimationLibrary() != null) {
+		if (BeatBlock.blockAnimationEngine != null) {
 			List<AnimationDefinition> defs = new ArrayList<>(BeatBlock.blockAnimationEngine.getAnimationLibrary().getAll().values());
 			defs.sort(Comparator.comparing(AnimationDefinition::getId, String.CASE_INSENSITIVE_ORDER));
 			for (AnimationDefinition def : defs) {
@@ -1003,7 +1005,7 @@ public final class TimelineToolbar {
 	private List<String> collectTargetDisplays(Map<String, String> outDisplayToId) {
 		List<String> displays = new ArrayList<>();
 		if (outDisplayToId == null) return displays;
-		if (BeatBlock.blockAnimationEngine == null || BeatBlock.blockAnimationEngine.getStageObjectSystem() == null) {
+		if (BeatBlock.blockAnimationEngine == null) {
 			return displays;
 		}
 		List<StageObject> objects = new ArrayList<>(BeatBlock.blockAnimationEngine.getStageObjectSystem().getAll());
@@ -1135,15 +1137,39 @@ public final class TimelineToolbar {
 		lastTemplateApplyFeedbackAtMs = System.currentTimeMillis();
 	}
 
+	private void setToolActionFeedback(String message, boolean success) {
+		lastToolActionFeedback = message != null ? message : "";
+		lastToolActionFeedbackSuccess = success;
+		lastToolActionFeedbackAtMs = System.currentTimeMillis();
+	}
+
+	private void renderToolActionFeedback() {
+		renderFadingFeedback(
+			lastToolActionFeedback,
+			lastToolActionFeedbackSuccess,
+			lastToolActionFeedbackAtMs,
+			msg -> lastToolActionFeedback = msg
+		);
+	}
+
 	private void renderTemplateApplyFeedback() {
-		if (lastTemplateApplyFeedback == null || lastTemplateApplyFeedback.isBlank()) return;
+		renderFadingFeedback(
+			lastTemplateApplyFeedback,
+			lastTemplateApplyFeedbackSuccess,
+			lastTemplateApplyFeedbackAtMs,
+			msg -> lastTemplateApplyFeedback = msg
+		);
+	}
+
+	private void renderFadingFeedback(String message, boolean success, long messageAtMs, java.util.function.Consumer<String> clearSink) {
+		if (message == null || message.isBlank()) return;
 		final long now = System.currentTimeMillis();
-		final long ageMs = Math.max(0L, now - lastTemplateApplyFeedbackAtMs);
+		final long ageMs = Math.max(0L, now - messageAtMs);
 		final long holdMs = 1700L;
 		final long fadeMs = 1300L;
 		final long ttlMs = holdMs + fadeMs;
 		if (ageMs >= ttlMs) {
-			lastTemplateApplyFeedback = "";
+			if (clearSink != null) clearSink.accept("");
 			return;
 		}
 
@@ -1153,10 +1179,10 @@ public final class TimelineToolbar {
 			alpha = Math.max(0f, 1.0f - t);
 		}
 
-		if (lastTemplateApplyFeedbackSuccess) {
-			ImGui.textColored(0.55f, 0.92f, 0.62f, alpha, lastTemplateApplyFeedback);
+		if (success) {
+			ImGui.textColored(0.55f, 0.92f, 0.62f, alpha, message);
 		} else {
-			ImGui.textColored(0.95f, 0.80f, 0.42f, alpha, lastTemplateApplyFeedback);
+			ImGui.textColored(0.95f, 0.80f, 0.42f, alpha, message);
 		}
 	}
 
@@ -1290,7 +1316,7 @@ public final class TimelineToolbar {
 		if (!Files.isRegularFile(configPath)) return;
 		try {
 			String txt = Files.readString(configPath, StandardCharsets.UTF_8);
-			if (txt == null || txt.isBlank()) return;
+			if (txt.isBlank()) return;
 			JsonObject root = JsonParser.parseString(txt).getAsJsonObject();
 			if (!root.has("demucsMapping") || !root.get("demucsMapping").isJsonObject()) return;
 			JsonObject dm = root.getAsJsonObject("demucsMapping");
@@ -1308,18 +1334,18 @@ public final class TimelineToolbar {
 				}
 			}
 
-			applyDefaultScaleFromJson(dm, "durationScale", "demucsMapDurationScale", 1.0, DEMUCS_SCALE_MIN, DEMUCS_SCALE_MAX);
-			applyDefaultScaleFromJson(dm, "energyScale", "demucsMapEnergyScale", 1.0, DEMUCS_ENERGY_SCALE_MIN, DEMUCS_ENERGY_SCALE_MAX);
-			applyDefaultScaleFromJson(dm, "gapScale", "demucsMapGapScale", 1.0, DEMUCS_SCALE_MIN, DEMUCS_SCALE_MAX);
+			applyDefaultScaleFromJson(dm, "durationScale", "demucsMapDurationScale", DEMUCS_SCALE_MIN, DEMUCS_SCALE_MAX);
+			applyDefaultScaleFromJson(dm, "energyScale", "demucsMapEnergyScale", DEMUCS_ENERGY_SCALE_MIN, DEMUCS_ENERGY_SCALE_MAX);
+			applyDefaultScaleFromJson(dm, "gapScale", "demucsMapGapScale", DEMUCS_SCALE_MIN, DEMUCS_SCALE_MAX);
 
 			if (dm.has("featureScale") && dm.get("featureScale").isJsonObject()) {
 				JsonObject featureScale = dm.getAsJsonObject("featureScale");
 				for (String featureKey : DEMUCS_FEATURE_KEYS) {
 					if (!featureScale.has(featureKey) || !featureScale.get(featureKey).isJsonObject()) continue;
 					JsonObject featureObj = featureScale.getAsJsonObject(featureKey);
-					applyDefaultScaleFromJson(featureObj, "durationScale", featureMetadataKey(featureKey, "duration"), 1.0, DEMUCS_SCALE_MIN, DEMUCS_SCALE_MAX);
-					applyDefaultScaleFromJson(featureObj, "energyScale", featureMetadataKey(featureKey, "energy"), 1.0, DEMUCS_ENERGY_SCALE_MIN, DEMUCS_ENERGY_SCALE_MAX);
-					applyDefaultScaleFromJson(featureObj, "gapScale", featureMetadataKey(featureKey, "gap"), 1.0, DEMUCS_SCALE_MIN, DEMUCS_SCALE_MAX);
+					applyDefaultScaleFromJson(featureObj, "durationScale", featureMetadataKey(featureKey, "duration"), DEMUCS_SCALE_MIN, DEMUCS_SCALE_MAX);
+					applyDefaultScaleFromJson(featureObj, "energyScale", featureMetadataKey(featureKey, "energy"), DEMUCS_ENERGY_SCALE_MIN, DEMUCS_ENERGY_SCALE_MAX);
+					applyDefaultScaleFromJson(featureObj, "gapScale", featureMetadataKey(featureKey, "gap"), DEMUCS_SCALE_MIN, DEMUCS_SCALE_MAX);
 				}
 			}
 		} catch (Exception e) {
@@ -1328,10 +1354,10 @@ public final class TimelineToolbar {
 	}
 
 	private void applyDefaultScaleFromJson(JsonObject dm, String jsonKey, String metadataKey,
-	                                     double defaultValue, double min, double max) {
+										   double min, double max) {
 		if (BeatBlock.timeline == null) return;
 		if (BeatBlock.timeline.getMetadata(metadataKey) != null) return;
-		double v = defaultValue;
+		double v = 1.0;
 		if (dm.has(jsonKey)) {
 			try {
 				v = dm.get(jsonKey).getAsDouble();
@@ -1348,7 +1374,7 @@ public final class TimelineToolbar {
 			JsonObject root = new JsonObject();
 			if (Files.isRegularFile(configPath)) {
 				String existing = Files.readString(configPath, StandardCharsets.UTF_8);
-				if (existing != null && !existing.isBlank()) {
+				if (!existing.isBlank()) {
 					root = JsonParser.parseString(existing).getAsJsonObject();
 				}
 			}
@@ -1409,7 +1435,7 @@ public final class TimelineToolbar {
 		if (!Files.isRegularFile(configPath)) return;
 		try {
 			String txt = Files.readString(configPath, StandardCharsets.UTF_8);
-			if (txt == null || txt.isBlank()) return;
+			if (txt.isBlank()) return;
 			JsonObject root = JsonParser.parseString(txt).getAsJsonObject();
 			if (!root.has("timelineActionExecution") || !root.get("timelineActionExecution").isJsonObject()) return;
 			JsonObject action = root.getAsJsonObject("timelineActionExecution");
@@ -1428,7 +1454,7 @@ public final class TimelineToolbar {
 			JsonObject root = new JsonObject();
 			if (Files.isRegularFile(configPath)) {
 				String existing = Files.readString(configPath, StandardCharsets.UTF_8);
-				if (existing != null && !existing.isBlank()) {
+				if (!existing.isBlank()) {
 					root = JsonParser.parseString(existing).getAsJsonObject();
 				}
 			}
