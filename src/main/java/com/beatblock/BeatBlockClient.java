@@ -2,6 +2,7 @@ package com.beatblock;
 
 import com.beatblock.client.BeatBlockClientDriver;
 import com.beatblock.client.BeatBlockUIScreen;
+import com.beatblock.client.render.BeatBlockAnimatedBlocksRenderer;
 import com.beatblock.client.render.BeatBlockHoverOutlineRenderer;
 import com.beatblock.client.render.BeatBlockSelectedBlocksRenderer;
 import com.beatblock.client.render.BeatBlockSelectionRenderer;
@@ -45,6 +46,7 @@ public class BeatBlockClient implements ClientModInitializer {
 			BeatBlockSelectedBlocksRenderer.renderIfNeeded(matrices, consumers);
 			BeatBlockSelectionRenderer.renderIfNeeded(matrices, consumers);
 			BeatBlockHoverOutlineRenderer.renderIfNeeded(matrices, consumers);
+			BeatBlockAnimatedBlocksRenderer.render(matrices, consumers);
 		});
 
 		BeatBlockClientDriver.setupBeatEventHandler();
