@@ -13,6 +13,7 @@ import com.beatblock.engine.StageObjectSystem;
 import com.beatblock.timeline.MarkerType;
 import com.beatblock.timeline.Timeline;
 import com.beatblock.timeline.TimelineMarker;
+import com.beatblock.ui.layout.BeatBlockDockPanelBegin;
 import com.beatblock.ui.layout.BeatBlockDockSpaceLayoutBuilder;
 import imgui.ImGui;
 import imgui.flag.ImGuiCol;
@@ -86,38 +87,39 @@ public class ToolPanel {
 
 	public void render(ImBoolean pOpen) {
 		if (!pOpen.get()) {
+			BeatBlockDockPanelBegin.markClosed(BeatBlockDockSpaceLayoutBuilder.TOOL_PANEL_WINDOW);
 			return;
 		}
-		if (!ImGui.begin(BeatBlockDockSpaceLayoutBuilder.TOOL_PANEL_WINDOW, pOpen, WINDOW_FLAGS)) {
-			ImGui.end();
+		if (!BeatBlockDockPanelBegin.begin(BeatBlockDockSpaceLayoutBuilder.TOOL_PANEL_WINDOW, pOpen, WINDOW_FLAGS)) {
 			return;
 		}
-		ImGui.text("工具");
-		ImGui.separator();
+		try {
+			ImGui.text("工具");
+			ImGui.separator();
 
-		renderBlockSelectionTools();
+			renderBlockSelectionTools();
 
-		if (ImGui.button("Smart Auto Map")) {
-			showAutoMapSettings = true;
+			if (ImGui.button("Smart Auto Map")) {
+				showAutoMapSettings = true;
+			}
+			if (ImGui.isItemHovered()) {
+				ImGui.setTooltip("自动编排：根据音乐生成方块动画、摄像机、粒子与节奏结构（先导入音乐）");
+			}
+			if (lastAutoMapResult != null) {
+				ImGui.sameLine();
+				ImGui.textDisabled(String.format("动画 %d, 镜头 %d, 粒子 %d",
+					lastAutoMapResult.getAnimationEvents(),
+					lastAutoMapResult.getCameraEvents(),
+					lastAutoMapResult.getParticleEvents()));
+			}
+			renderStageObjectCreator();
+			renderLastActionExecutionStatus();
+
+			renderMarkerManager();
+		} finally {
+			BeatBlockDockPanelBegin.endWithRecord(BeatBlockDockSpaceLayoutBuilder.TOOL_PANEL_WINDOW);
 		}
-		if (ImGui.isItemHovered()) {
-			ImGui.setTooltip("自动编排：根据音乐生成方块动画、摄像机、粒子与节奏结构（先导入音乐）");
-		}
-		if (lastAutoMapResult != null) {
-			ImGui.sameLine();
-			ImGui.textDisabled(String.format("动画 %d, 镜头 %d, 粒子 %d",
-				lastAutoMapResult.getAnimationEvents(),
-				lastAutoMapResult.getCameraEvents(),
-				lastAutoMapResult.getParticleEvents()));
-		}
-		renderStageObjectCreator();
-		renderLastActionExecutionStatus();
 
-		renderMarkerManager();
-
-		ImGui.end();
-
-		// 设置弹窗（独立窗口）
 		if (showAutoMapSettings) {
 			boolean done = autoMapSettingsPanel.render(res -> lastAutoMapResult = res);
 			if (done) showAutoMapSettings = false;

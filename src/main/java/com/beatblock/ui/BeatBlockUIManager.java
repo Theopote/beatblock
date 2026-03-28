@@ -44,7 +44,8 @@ public class BeatBlockUIManager {
 		this.toolPanel = new ToolPanel(this::openSelectionPropertiesForTool);
 		this.audioAnalysisPanel = new AudioAnalysisPanel();
 		this.menuBarPanel = new MenuBarPanel(onCloseRequest, panelVisibility,
-			() -> toolPanel.setShowAutoMapSettings(true), this::resetLayoutState, this::saveCurrentLayout);
+			() -> toolPanel.setShowAutoMapSettings(true), this::resetLayoutState, this::saveCurrentLayout,
+			this::loadSavedLayout);
 		this.eventPropertiesPanel = new EventPropertiesPanel();
 		this.timelinePanel = new TimelinePanel();
 		this.animationLibraryPanel = new AnimationLibraryPanel();
@@ -67,6 +68,19 @@ public class BeatBlockUIManager {
 				String path = io.getIniFilename();
 				if (path != null && !path.isBlank()) {
 					ImGui.saveIniSettingsToDisk(path);
+				}
+			}
+		} catch (Throwable ignored) {
+		}
+	}
+
+	private void loadSavedLayout() {
+		try {
+			ImGuiIO io = ImGui.getIO();
+			if (io != null) {
+				String path = io.getIniFilename();
+				if (path != null && !path.isBlank()) {
+					ImGui.loadIniSettingsFromDisk(path);
 				}
 			}
 		} catch (Throwable ignored) {

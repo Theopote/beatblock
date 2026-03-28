@@ -4,6 +4,7 @@ import com.beatblock.BeatBlock;
 import com.beatblock.audio.AudioAnalysisService;
 import com.beatblock.timeline.rendering.TimelineLayout;
 import com.beatblock.ui.icons.Icons;
+import com.beatblock.ui.layout.BeatBlockDockPanelBegin;
 import com.beatblock.ui.layout.BeatBlockDockSpaceLayoutBuilder;
 import com.beatblock.client.imgui.ImGuiFontManager;
 import com.beatblock.client.imgui.ImGuiRenderer;
@@ -117,15 +118,16 @@ public final class AudioAnalysisPanel {
 
     public void render(ImBoolean pOpen) {
         if (!pOpen.get()) {
+            BeatBlockDockPanelBegin.markClosed(BeatBlockDockSpaceLayoutBuilder.AUDIO_ANALYSIS_WINDOW);
             return;
         }
         ImGui.pushStyleVar(ImGuiStyleVar.WindowPadding, PANEL_OUTER_PADDING_X, PANEL_OUTER_PADDING_Y);
-        if (!ImGui.begin(BeatBlockDockSpaceLayoutBuilder.AUDIO_ANALYSIS_WINDOW, pOpen, WINDOW_FLAGS)) {
+        if (!BeatBlockDockPanelBegin.begin(BeatBlockDockSpaceLayoutBuilder.AUDIO_ANALYSIS_WINDOW, pOpen, WINDOW_FLAGS)) {
             ImGui.popStyleVar();
-            ImGui.end();
             return;
         }
         ImGui.popStyleVar();
+        try {
 
         renderToolbar();
 		renderPythonRuntimeHint();
@@ -202,7 +204,9 @@ public final class AudioAnalysisPanel {
         ImGui.separator();
         renderFooter(assets);
 
-        ImGui.end();
+        } finally {
+            BeatBlockDockPanelBegin.endWithRecord(BeatBlockDockSpaceLayoutBuilder.AUDIO_ANALYSIS_WINDOW);
+        }
     }
 
     // ── 工具栏（+ 按钮 / 弹窗）────────────────────────────────────────────

@@ -15,6 +15,7 @@ import com.beatblock.timeline.editor.SelectionState;
 import com.beatblock.timeline.rendering.TimelineTrackMeta;
 import com.beatblock.timeline.rendering.TrackDefinition;
 import com.beatblock.timeline.rendering.TrackRegistry;
+import com.beatblock.ui.layout.BeatBlockDockPanelBegin;
 import com.beatblock.ui.layout.BeatBlockDockSpaceLayoutBuilder;
 import imgui.ImGui;
 import imgui.flag.ImGuiWindowFlags;
@@ -51,58 +52,58 @@ public class EventPropertiesPanel {
 
 	public void render(ImBoolean pOpen) {
 		if (!pOpen.get()) {
+			BeatBlockDockPanelBegin.markClosed(BeatBlockDockSpaceLayoutBuilder.EVENT_PROPERTIES_WINDOW);
 			return;
 		}
-		if (!ImGui.begin(BeatBlockDockSpaceLayoutBuilder.EVENT_PROPERTIES_WINDOW, pOpen, WINDOW_FLAGS)) {
-			ImGui.end();
+		if (!BeatBlockDockPanelBegin.begin(BeatBlockDockSpaceLayoutBuilder.EVENT_PROPERTIES_WINDOW, pOpen, WINDOW_FLAGS)) {
 			return;
 		}
-		ImGui.text("事件属性");
-		ImGui.separator();
-
-		Timeline timeline = BeatBlock.timeline;
-		TimelineEditor editor = BeatBlock.timelineEditor;
-		if (timeline == null || editor == null) {
-			ImGui.textDisabled("时间线未初始化。");
-			ImGui.end();
-			return;
-		}
-
-		EventRef ref = resolveSelectedEventRef(timeline, editor.getSelectionState());
-		if (ref == null) {
-			boundEventId = null;
-			validationError = null;
-			ImGui.textWrapped("选中时间线上的事件后，可在此编辑属性。");
-			ImGui.end();
-			return;
-		}
-
-		if (!ref.event().getId().equals(boundEventId)) {
-			bindBuffers(ref.event());
-		}
-
-		renderEventSummary(ref, timeline);
-		ImGui.separator();
-
-		if (ref.event().getType() != EventType.ANIMATION) {
-			ImGui.textDisabled("当前仅支持在侧栏编辑动画事件。");
-			ImGui.end();
-			return;
-		}
-
-		boolean trackLocked = isTrackLocked(timeline, editor, ref.track().getId());
-		if (trackLocked) {
-			ImGui.textDisabled("当前轨道已锁定，属性只读。");
+		try {
+			ImGui.text("事件属性");
 			ImGui.separator();
-			ImGui.beginDisabled();
-		}
 
-		renderAnimationEditor(ref, timeline);
+			Timeline timeline = BeatBlock.timeline;
+			TimelineEditor editor = BeatBlock.timelineEditor;
+			if (timeline == null || editor == null) {
+				ImGui.textDisabled("时间线未初始化。");
+				return;
+			}
 
-		if (trackLocked) {
-			ImGui.endDisabled();
+			EventRef ref = resolveSelectedEventRef(timeline, editor.getSelectionState());
+			if (ref == null) {
+				boundEventId = null;
+				validationError = null;
+				ImGui.textWrapped("选中时间线上的事件后，可在此编辑属性。");
+				return;
+			}
+
+			if (!ref.event().getId().equals(boundEventId)) {
+				bindBuffers(ref.event());
+			}
+
+			renderEventSummary(ref, timeline);
+			ImGui.separator();
+
+			if (ref.event().getType() != EventType.ANIMATION) {
+				ImGui.textDisabled("当前仅支持在侧栏编辑动画事件。");
+				return;
+			}
+
+			boolean trackLocked = isTrackLocked(timeline, editor, ref.track().getId());
+			if (trackLocked) {
+				ImGui.textDisabled("当前轨道已锁定，属性只读。");
+				ImGui.separator();
+				ImGui.beginDisabled();
+			}
+
+			renderAnimationEditor(ref, timeline);
+
+			if (trackLocked) {
+				ImGui.endDisabled();
+			}
+		} finally {
+			BeatBlockDockPanelBegin.endWithRecord(BeatBlockDockSpaceLayoutBuilder.EVENT_PROPERTIES_WINDOW);
 		}
-		ImGui.end();
 	}
 
 	private void renderEventSummary(EventRef ref, Timeline timeline) {

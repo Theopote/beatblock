@@ -3,8 +3,8 @@ package com.beatblock.ui;
 import imgui.type.ImBoolean;
 
 /**
- * 各 Dock 面板的显示状态；与 {@link imgui.ImGui#begin(String, ImBoolean, int)} 共用同一引用，
- * 标题栏「×」与视图菜单中的勾选保持同步。
+ * 各 Dock 面板的显示状态。与 {@link com.beatblock.ui.layout.BeatBlockDockPanelBegin} 配合：
+ * 停靠时不显示「×」，浮动时显示「×」并与本处 {@link imgui.type.ImBoolean} 同步；视图菜单勾选亦同步。
  */
 public final class BeatBlockPanelVisibility {
 

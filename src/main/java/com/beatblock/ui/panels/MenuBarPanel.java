@@ -22,6 +22,7 @@ public class MenuBarPanel {
 	private final Runnable onOpenSmartAutoMap;
 	private final Runnable onResetLayout;
 	private final Runnable onSaveLayout;
+	private final Runnable onLoadLayout;
 	private boolean showImportDialog;
 	private boolean showOpenProjectDialog;
 	private boolean showSaveProjectDialog;
@@ -32,12 +33,13 @@ public class MenuBarPanel {
 	private String projectDialogMessage = "";
 
 	public MenuBarPanel(Runnable onCloseRequest, BeatBlockPanelVisibility panels, Runnable onOpenSmartAutoMap,
-			Runnable onResetLayout, Runnable onSaveLayout) {
+			Runnable onResetLayout, Runnable onSaveLayout, Runnable onLoadLayout) {
 		this.onCloseRequest = onCloseRequest;
 		this.panels = panels != null ? panels : new BeatBlockPanelVisibility();
 		this.onOpenSmartAutoMap = onOpenSmartAutoMap != null ? onOpenSmartAutoMap : () -> {};
 		this.onResetLayout = onResetLayout != null ? onResetLayout : () -> {};
 		this.onSaveLayout = onSaveLayout != null ? onSaveLayout : () -> {};
+		this.onLoadLayout = onLoadLayout != null ? onLoadLayout : () -> {};
 	}
 
 	public void render() {
@@ -100,7 +102,13 @@ public class MenuBarPanel {
 					onSaveLayout.run();
 				}
 				if (ImGui.isItemHovered()) {
-					ImGui.setTooltip("将窗口停靠与尺寸写入配置文件（config/beatblock/imgui.ini）。");
+					ImGui.setTooltip("将窗口停靠与尺寸写入配置文件（游戏目录下 config/beatblock/imgui.ini）。");
+				}
+				if (ImGui.menuItem("载入已保存布局")) {
+					onLoadLayout.run();
+				}
+				if (ImGui.isItemHovered()) {
+					ImGui.setTooltip("从 imgui.ini 重新载入窗口与停靠（需事先「保存当前布局」或存在该文件）。");
 				}
 				ImGui.separator();
 				if (ImGui.beginMenu("面板")) {

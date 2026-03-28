@@ -4,6 +4,7 @@ import com.beatblock.selection.BeatBlockSelectionManager;
 import com.beatblock.selection.BrushShape;
 import com.beatblock.selection.SelectionMode;
 import com.beatblock.selection.SelectionOperation;
+import com.beatblock.ui.layout.BeatBlockDockPanelBegin;
 import com.beatblock.ui.layout.BeatBlockDockSpaceLayoutBuilder;
 import imgui.ImGui;
 import imgui.flag.ImGuiCol;
@@ -48,13 +49,13 @@ public class SelectionPropertiesPanel {
 
 	public void render(ImBoolean pOpen) {
 		if (!pOpen.get()) {
+			BeatBlockDockPanelBegin.markClosed(BeatBlockDockSpaceLayoutBuilder.SELECTION_PROPERTIES_WINDOW);
 			return;
 		}
-		if (!ImGui.begin(BeatBlockDockSpaceLayoutBuilder.SELECTION_PROPERTIES_WINDOW, pOpen, WINDOW_FLAGS)) {
-			ImGui.end();
+		if (!BeatBlockDockPanelBegin.begin(BeatBlockDockSpaceLayoutBuilder.SELECTION_PROPERTIES_WINDOW, pOpen, WINDOW_FLAGS)) {
 			return;
 		}
-
+		try {
 		var mgr = BeatBlockSelectionManager.get();
 		ImGui.text("方块选择");
 		ImGui.pushStyleColor(ImGuiCol.Text, 0.55f, 0.75f, 1f, 1f);
@@ -201,7 +202,9 @@ public class SelectionPropertiesPanel {
 			mgr.clearMessage();
 		}
 
-		ImGui.end();
+		} finally {
+			BeatBlockDockPanelBegin.endWithRecord(BeatBlockDockSpaceLayoutBuilder.SELECTION_PROPERTIES_WINDOW);
+		}
 	}
 
 	private static String operationLabel(SelectionOperation op) {

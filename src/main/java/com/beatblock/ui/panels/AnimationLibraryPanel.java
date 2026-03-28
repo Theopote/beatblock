@@ -1,5 +1,6 @@
 package com.beatblock.ui.panels;
 
+import com.beatblock.ui.layout.BeatBlockDockPanelBegin;
 import com.beatblock.ui.layout.BeatBlockDockSpaceLayoutBuilder;
 import imgui.ImGui;
 import imgui.flag.ImGuiWindowFlags;
@@ -14,15 +15,18 @@ public class AnimationLibraryPanel {
 
 	public void render(ImBoolean pOpen) {
 		if (!pOpen.get()) {
+			BeatBlockDockPanelBegin.markClosed(BeatBlockDockSpaceLayoutBuilder.ANIMATION_LIBRARY_WINDOW);
 			return;
 		}
-		if (!ImGui.begin(BeatBlockDockSpaceLayoutBuilder.ANIMATION_LIBRARY_WINDOW, pOpen, WINDOW_FLAGS)) {
-			ImGui.end();
+		if (!BeatBlockDockPanelBegin.begin(BeatBlockDockSpaceLayoutBuilder.ANIMATION_LIBRARY_WINDOW, pOpen, WINDOW_FLAGS)) {
 			return;
 		}
-		ImGui.text("动画库");
-		ImGui.separator();
-		ImGui.textWrapped("预设动画模板（如 bounce、slide、pulse）将在此列出，可拖入时间线。");
-		ImGui.end();
+		try {
+			ImGui.text("动画库");
+			ImGui.separator();
+			ImGui.textWrapped("预设动画模板（如 bounce、slide、pulse）将在此列出，可拖入时间线。");
+		} finally {
+			BeatBlockDockPanelBegin.endWithRecord(BeatBlockDockSpaceLayoutBuilder.ANIMATION_LIBRARY_WINDOW);
+		}
 	}
 }
