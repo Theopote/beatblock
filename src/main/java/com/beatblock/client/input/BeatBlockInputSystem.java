@@ -73,6 +73,37 @@ public final class BeatBlockInputSystem {
 		double ndcX = (mouseX / (double) fbw) * 2.0 - 1.0;
 		double ndcY = 1.0 - (mouseY / (double) fbh) * 2.0;
 
+		BlockHitResult result = raycastFromNdc(camera, cameraPos, ndcX, ndcY);
+
+		lastCameraPos = cameraPos;
+		lastMouseX = mouseX;
+		lastMouseY = mouseY;
+		cachedBlockRay = result;
+		return result;
+	}
+
+	/**
+	 * 指定帧缓冲像素坐标（与 {@link #raycastFromImGui()} 相同坐标系）做方块射线，不读写 ImGui 射线缓存。
+	 */
+	public static BlockHitResult raycastFromFramebufferPixels(double framebufferMouseX, double framebufferMouseY) {
+		if (MC.world == null || MC.player == null || MC.getCameraEntity() == null) {
+			return null;
+		}
+		Camera camera = MC.gameRenderer.getCamera();
+		if (camera == null) {
+			return null;
+		}
+		int fbw = MC.getWindow().getFramebufferWidth();
+		int fbh = MC.getWindow().getFramebufferHeight();
+		if (fbw <= 0 || fbh <= 0) {
+			return null;
+		}
+		double ndcX = (framebufferMouseX / (double) fbw) * 2.0 - 1.0;
+		double ndcY = 1.0 - (framebufferMouseY / (double) fbh) * 2.0;
+		return raycastFromNdc(camera, camera.getCameraPos(), ndcX, ndcY);
+	}
+
+	private static BlockHitResult raycastFromNdc(Camera camera, Vec3d cameraPos, double ndcX, double ndcY) {
 		GameRenderer gr = MC.gameRenderer;
 		float tickDelta = getRenderTickDeltaSafe();
 		float fov;
@@ -95,19 +126,13 @@ public final class BeatBlockInputSystem {
 		Vec3d rayDir = rotateByQuaternion(viewDir, q.x, q.y, q.z, q.w);
 
 		Vec3d endPos = cameraPos.add(rayDir.multiply(MAX_RAYCAST_DISTANCE));
-		BlockHitResult result = MC.world.raycast(new RaycastContext(
+		return MC.world.raycast(new RaycastContext(
 			cameraPos,
 			endPos,
 			RaycastContext.ShapeType.OUTLINE,
 			RaycastContext.FluidHandling.NONE,
 			MC.player
 		));
-
-		lastCameraPos = cameraPos;
-		lastMouseX = mouseX;
-		lastMouseY = mouseY;
-		cachedBlockRay = result;
-		return result;
 	}
 
 	/**
@@ -207,7 +232,8 @@ public final class BeatBlockInputSystem {
 		return new Vec3d(rx, ry, rz).normalize();
 	}
 
-	private static float getRenderTickDeltaSafe() {
+	/** 供 {@link BeatBlockWorldToFramebuffer} 等与渲染 tick 对齐的投影使用。 */
+	public static float getRenderTickDeltaSafe() {
 		try {
 			Object rtc = MC.getRenderTickCounter();
 			if (rtc == null) return 0.0f;

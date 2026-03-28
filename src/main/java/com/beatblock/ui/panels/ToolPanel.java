@@ -114,7 +114,7 @@ public class ToolPanel {
 		if (ImGui.radioButton("球选（单击中心，属性里调半径）##bselSphere", mgr.getMode() == SelectionMode.SPHERE)) {
 			mgr.setMode(SelectionMode.SPHERE);
 		}
-		if (ImGui.radioButton("连通 / 魔棒（同色块六邻域）##bselConn", mgr.getMode() == SelectionMode.CONNECTED)) {
+		if (ImGui.radioButton("魔棒（同色六邻域连通）##bselConn", mgr.getMode() == SelectionMode.CONNECTED)) {
 			mgr.setMode(SelectionMode.CONNECTED);
 		}
 		if (ImGui.radioButton("整列（同 XZ 全高度）##bselCol", mgr.getMode() == SelectionMode.COLUMN)) {
@@ -129,7 +129,10 @@ public class ToolPanel {
 		if (ImGui.radioButton("笔刷（场景区按住左键涂抹）##bselBrush", mgr.getMode() == SelectionMode.BRUSH)) {
 			mgr.setMode(SelectionMode.BRUSH);
 		}
-		ImGui.textWrapped("框选/线选：两点；球/连通/列/切片/选区魔棒：单击；笔刷：按住左键拖动。半径与笔刷形状、魔棒匹配见「视图 → 选择属性」。");
+		if (ImGui.radioButton("套索（场景区按住左键拖闭合区域）##bselLasso", mgr.getMode() == SelectionMode.LASSO)) {
+			mgr.setMode(SelectionMode.LASSO);
+		}
+		ImGui.textWrapped("框选/线选：两点；魔棒等：单击；笔刷/套索：按住左键拖动。范围、半径与魔棒扩散见「视图 → 选择属性」。");
 		ImGui.separator();
 	}
 

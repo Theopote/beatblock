@@ -4,6 +4,7 @@ import com.beatblock.client.BeatBlockClientDriver;
 import com.beatblock.client.BeatBlockUIScreen;
 import com.beatblock.client.render.BeatBlockHoverOutlineRenderer;
 import com.beatblock.client.render.BeatBlockSelectionRenderer;
+import com.beatblock.client.selection.BeatBlockLassoInteraction;
 import com.beatblock.client.selection.BeatBlockSelectionBrushTick;
 import com.beatblock.ui.EditorScreen;
 import com.beatblock.ui.HUD;
@@ -49,6 +50,7 @@ public class BeatBlockClient implements ClientModInitializer {
 		ClientTickEvents.END_CLIENT_TICK.register(client -> {
 			BeatBlockClientDriver.onClientTick();
 			BeatBlockSelectionBrushTick.onEndClientTick(client);
+			BeatBlockLassoInteraction.onEndClientTick(client);
 		});
 
 		keyTogglePlayback = KeyBindingHelper.registerKeyBinding(new KeyBinding(

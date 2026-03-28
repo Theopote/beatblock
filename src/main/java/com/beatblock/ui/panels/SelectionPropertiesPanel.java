@@ -18,6 +18,8 @@ public class SelectionPropertiesPanel {
 	private static final int WINDOW_FLAGS = ImGuiWindowFlags.NoCollapse;
 	private final int[] maxBlocksScratch = new int[1];
 	private final int[] sphereRadiusScratch = new int[1];
+	private final int[] maxCameraDistScratch = new int[1];
+	private final int[] maxWandSpreadScratch = new int[1];
 	private final ImBoolean includeAirProxy = new ImBoolean(false);
 	private final ImBoolean connectedFullStateProxy = new ImBoolean(true);
 
@@ -37,7 +39,25 @@ public class SelectionPropertiesPanel {
 				mgr.setOperation(op);
 			}
 		}
-		ImGui.textWrapped("说明：新建=替换选区。单击类工具（含平面切片、选区魔棒）按住 Shift 可强制加选；笔刷涂抹同样适用。");
+		ImGui.textWrapped("说明：新建=替换选区。单击类工具（含平面切片、选区魔棒）按住 Shift 可强制加选；笔刷/套索涂抹同样适用。");
+
+		maxCameraDistScratch[0] = mgr.getMaxDistanceFromCamera();
+		ImGui.setNextItemWidth(200f);
+		if (ImGui.sliderInt("相对视角最大距离（格）##selCamDist", maxCameraDistScratch, 16, 512)) {
+			mgr.setMaxDistanceFromCamera(maxCameraDistScratch[0]);
+		}
+		if (ImGui.isItemHovered()) {
+			ImGui.setTooltip("候选方块中心到相机不能超过此距离。套索、魔棒、切片、框/线/球/列/笔刷等均生效，防止无界选中。");
+		}
+
+		maxWandSpreadScratch[0] = mgr.getMaxMagicWandSpreadFromSeed();
+		ImGui.setNextItemWidth(200f);
+		if (ImGui.sliderInt("魔棒最大扩散半径（格）##selWandSpread", maxWandSpreadScratch, 4, 256)) {
+			mgr.setMaxMagicWandSpreadFromSeed(maxWandSpreadScratch[0]);
+		}
+		if (ImGui.isItemHovered()) {
+			ImGui.setTooltip("从魔棒点击的种子方块算起，欧氏距离超过此值的格子不会入选（全图魔棒与选区魔棒均适用）。");
+		}
 
 		sphereRadiusScratch[0] = mgr.getSphereBrushRadius();
 		ImGui.setNextItemWidth(160f);

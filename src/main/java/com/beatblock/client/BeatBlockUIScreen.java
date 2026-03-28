@@ -167,10 +167,13 @@ public class BeatBlockUIScreen extends Screen {
 			if (hit.getType() == HitResult.Type.BLOCK && hit instanceof BlockHitResult blockHit) {
 				var sel = BeatBlockSelectionManager.get();
 				if (sel.getMode() != SelectionMode.OFF) {
+					sel.setInteractionCameraPos(client.gameRenderer.getCamera().getCameraPos());
 					long win = client.getWindow().getHandle();
 					boolean shift = GLFW.glfwGetKey(win, GLFW.GLFW_KEY_LEFT_SHIFT) == GLFW.GLFW_PRESS
 						|| GLFW.glfwGetKey(win, GLFW.GLFW_KEY_RIGHT_SHIFT) == GLFW.GLFW_PRESS;
-					sel.handleBlockSelectClick(client.world, blockHit, shift);
+					if (sel.getMode() != SelectionMode.LASSO) {
+						sel.handleBlockSelectClick(client.world, blockHit, shift);
+					}
 				}
 				BeatBlockWorldPick.setLastLeftClickedBlock(blockHit.getBlockPos());
 			} else if (hit.getType() == HitResult.Type.ENTITY && hit instanceof EntityHitResult entityHit) {

@@ -39,6 +39,8 @@ public final class BeatBlockSelectionBrushTick {
 		}
 		if (client.world == null || client.player == null || client.gameRenderer == null) return;
 
+		mgr.setInteractionCameraPos(client.gameRenderer.getCamera().getCameraPos());
+
 		BlockHitResult hit = BeatBlockInputSystem.raycastFromImGui();
 		if (hit == null || hit.getType() != HitResult.Type.BLOCK) return;
 

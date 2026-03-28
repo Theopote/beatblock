@@ -45,6 +45,15 @@ public final class BeatBlockSelectionManager {
 	private BrushShape brushShape = BrushShape.SPHERE;
 	private BlockPos brushLastStampBlock;
 	private boolean brushHadStroke;
+	/**
+	 * 相对相机：候选方块中心到该点的距离不得超过此值（格）。套索、魔棒、切片、球/列/框等均参与过滤，防止无界选区。
+	 */
+	private int maxDistanceFromCamera = 128;
+	/**
+	 * 魔棒（全图与选区内）从点击种子起的最大欧氏扩散半径（格）。
+	 */
+	private int maxMagicWandSpreadFromSeed = 64;
+	private Vec3d interactionCameraPos;
 	private String lastMessage = "";
 
 	private BeatBlockSelectionManager() {}
@@ -115,6 +124,42 @@ public final class BeatBlockSelectionManager {
 		this.brushShape = brushShape != null ? brushShape : BrushShape.SPHERE;
 	}
 
+	public int getMaxDistanceFromCamera() {
+		return maxDistanceFromCamera;
+	}
+
+	public void setMaxDistanceFromCamera(int maxDistanceFromCamera) {
+		this.maxDistanceFromCamera = Math.min(512, Math.max(8, maxDistanceFromCamera));
+	}
+
+	public int getMaxMagicWandSpreadFromSeed() {
+		return maxMagicWandSpreadFromSeed;
+	}
+
+	public void setMaxMagicWandSpreadFromSeed(int maxMagicWandSpreadFromSeed) {
+		this.maxMagicWandSpreadFromSeed = Math.min(256, Math.max(1, maxMagicWandSpreadFromSeed));
+	}
+
+	/** 客户端在点击/笔刷/套索前设置，用于距离过滤。 */
+	public void setInteractionCameraPos(Vec3d cameraPos) {
+		this.interactionCameraPos = cameraPos;
+	}
+
+	public void setSelectionFeedback(String message) {
+		if (message != null && !message.isBlank()) {
+			this.lastMessage = message;
+		}
+	}
+
+	/** 由套索提交选中方块（当前模式应为 {@link SelectionMode#LASSO}）。 */
+	public void commitLassoSelection(List<BlockPos> blocks, SelectionOperation op) {
+		if (blocks == null || blocks.isEmpty()) {
+			lastMessage = "套索：未选中任何方块。";
+			return;
+		}
+		mergeBlockListIntoSelection(blocks, op);
+	}
+
 	public Set<BlockPos> getSelectedBlocks() {
 		return Collections.unmodifiableSet(selected);
 	}
@@ -168,6 +213,9 @@ public final class BeatBlockSelectionManager {
 		sphereBrushRadius = 3;
 		connectedMatchFullState = true;
 		brushShape = BrushShape.SPHERE;
+		maxDistanceFromCamera = 128;
+		maxMagicWandSpreadFromSeed = 64;
+		interactionCameraPos = null;
 		clearBrushAnchor();
 		brushHadStroke = false;
 		lastMessage = "";
@@ -197,6 +245,7 @@ public final class BeatBlockSelectionManager {
 			case PLANE_SLICE -> handlePlaneSliceTool(world, pos, side, shiftDown);
 			case SELECTION_WAND -> handleSelectionWandTool(world, pos, shiftDown);
 			case BRUSH -> {}
+			case LASSO -> {}
 		}
 	}
 
@@ -242,7 +291,24 @@ public final class BeatBlockSelectionManager {
 		return computePlaneSliceBoundsInternal(world, pos, face);
 	}
 
+	private boolean isWithinCameraReach(BlockPos p) {
+		if (interactionCameraPos == null) {
+			return true;
+		}
+		double r = maxDistanceFromCamera;
+		return interactionCameraPos.squaredDistanceTo(Vec3d.ofCenter(p)) <= r * r;
+	}
+
+	private boolean isWithinWandSpreadFromSeed(BlockPos seed, BlockPos p) {
+		double r = maxMagicWandSpreadFromSeed;
+		return Vec3d.ofCenter(seed).squaredDistanceTo(Vec3d.ofCenter(p)) <= r * r;
+	}
+
 	private void handleClickTool(World world, BlockPos pos, boolean shiftDown) {
+		if (!isWithinCameraReach(pos)) {
+			lastMessage = "点击选择：该方块超出「相对视角最大距离」。";
+			return;
+		}
 		SelectionOperation op = shiftDown ? SelectionOperation.ADD : operation;
 		switch (op) {
 			case NEW -> {
@@ -323,6 +389,9 @@ public final class BeatBlockSelectionManager {
 	private void handleConnectedTool(World world, BlockPos pos, boolean shiftDown) {
 		SelectionOperation op = shiftDown ? SelectionOperation.ADD : operation;
 		List<BlockPos> blocks = collectConnected(world, pos);
+		if (blocks == null) {
+			return;
+		}
 		mergeBlockListIntoSelection(blocks, op);
 	}
 
@@ -357,6 +426,9 @@ public final class BeatBlockSelectionManager {
 		}
 		SelectionOperation op = shiftDown ? SelectionOperation.ADD : operation;
 		List<BlockPos> blocks = collectConnectedInBounds(world, pos, bMin, bMax);
+		if (blocks == null) {
+			return;
+		}
 		mergeBlockListIntoSelection(blocks, op);
 	}
 
@@ -436,6 +508,7 @@ public final class BeatBlockSelectionManager {
 			for (int y = b.minY(); y <= b.maxY(); y++) {
 				for (int z = b.minZ(); z <= b.maxZ(); z++) {
 					BlockPos p = new BlockPos(x, y, z);
+					if (!isWithinCameraReach(p)) continue;
 					if (!includeAir && world.getBlockState(p).isAir()) continue;
 					out.add(p.toImmutable());
 					if (out.size() > maxBlocks) {
@@ -449,12 +522,16 @@ public final class BeatBlockSelectionManager {
 	}
 
 	private List<BlockPos> collectConnectedInBounds(World world, BlockPos start, BlockPos bMin, BlockPos bMax) {
+		BlockPos startImm = start.toImmutable();
+		if (!isWithinCameraReach(startImm)) {
+			lastMessage = "选区魔棒：起点超出「相对视角最大距离」。";
+			return null;
+		}
 		BlockState anchor = world.getBlockState(start);
 		ArrayDeque<BlockPos> queue = new ArrayDeque<>();
 		HashSet<BlockPos> visited = new HashSet<>();
 		List<BlockPos> result = new ArrayList<>();
 
-		BlockPos startImm = start.toImmutable();
 		queue.add(startImm);
 		visited.add(startImm);
 
@@ -470,6 +547,8 @@ public final class BeatBlockSelectionManager {
 				BlockPos n = p.offset(d);
 				if (visited.contains(n)) continue;
 				if (!containsInBounds(n, bMin, bMax)) continue;
+				if (!isWithinCameraReach(n)) continue;
+				if (!isWithinWandSpreadFromSeed(startImm, n)) continue;
 				BlockState st = world.getBlockState(n);
 				if (!includeAir && st.isAir()) continue;
 				if (!connectedMatches(st, anchor)) continue;
@@ -499,6 +578,7 @@ public final class BeatBlockSelectionManager {
 			for (int dy = -r; dy <= r; dy++) {
 				for (int dz = -r; dz <= r; dz++) {
 					BlockPos p = center.add(dx, dy, dz);
+					if (!isWithinCameraReach(p)) continue;
 					if (!includeAir && world.getBlockState(p).isAir()) continue;
 					out.add(p.toImmutable());
 					if (out.size() > maxBlocks) {
@@ -531,6 +611,7 @@ public final class BeatBlockSelectionManager {
 			for (int y = y0; y <= y1; y++) {
 				for (int z = z0; z <= z1; z++) {
 					BlockPos p = new BlockPos(x, y, z);
+					if (!isWithinCameraReach(p)) continue;
 					if (!includeAir && world.getBlockState(p).isAir()) continue;
 					out.add(p.toImmutable());
 				}
@@ -547,6 +628,7 @@ public final class BeatBlockSelectionManager {
 		}
 		List<BlockPos> out = new ArrayList<>();
 		for (BlockPos p : raw) {
+			if (!isWithinCameraReach(p)) continue;
 			if (!includeAir && world.getBlockState(p).isAir()) continue;
 			out.add(p.toImmutable());
 		}
@@ -566,6 +648,7 @@ public final class BeatBlockSelectionManager {
 				for (int dz = -r; dz <= r; dz++) {
 					if (dx * dx + dy * dy + dz * dz > rr) continue;
 					BlockPos p = center.add(dx, dy, dz);
+					if (!isWithinCameraReach(p)) continue;
 					if (!includeAir && world.getBlockState(p).isAir()) continue;
 					out.add(p.toImmutable());
 					if (out.size() > maxBlocks) {
@@ -591,6 +674,7 @@ public final class BeatBlockSelectionManager {
 		List<BlockPos> out = new ArrayList<>(Math.min(span, 4096));
 		for (int y = minY; y <= maxY; y++) {
 			BlockPos p = new BlockPos(x, y, z);
+			if (!isWithinCameraReach(p)) continue;
 			if (!includeAir && world.getBlockState(p).isAir()) continue;
 			out.add(p.toImmutable());
 		}
@@ -598,18 +682,22 @@ public final class BeatBlockSelectionManager {
 	}
 
 	private List<BlockPos> collectConnected(World world, BlockPos start) {
+		BlockPos startImm = start.toImmutable();
+		if (!isWithinCameraReach(startImm)) {
+			lastMessage = "魔棒：起点超出「相对视角最大距离」，请靠近或在属性面板调大范围。";
+			return null;
+		}
 		BlockState anchor = world.getBlockState(start);
 		ArrayDeque<BlockPos> queue = new ArrayDeque<>();
 		HashSet<BlockPos> visited = new HashSet<>();
 		List<BlockPos> result = new ArrayList<>();
 
-		BlockPos startImm = start.toImmutable();
 		queue.add(startImm);
 		visited.add(startImm);
 
 		while (!queue.isEmpty()) {
 			if (result.size() >= maxBlocks) {
-				lastMessage = String.format("连通选区已达上限 %d，已选 %d 个方块（未完全展开）。", maxBlocks, result.size());
+				lastMessage = String.format("魔棒已达上限 %d，已选 %d 个方块（未完全展开）。", maxBlocks, result.size());
 				break;
 			}
 			BlockPos p = queue.removeFirst();
@@ -618,6 +706,8 @@ public final class BeatBlockSelectionManager {
 			for (Direction d : Direction.values()) {
 				BlockPos n = p.offset(d);
 				if (visited.contains(n)) continue;
+				if (!isWithinCameraReach(n)) continue;
+				if (!isWithinWandSpreadFromSeed(startImm, n)) continue;
 				BlockState st = world.getBlockState(n);
 				if (!includeAir && st.isAir()) continue;
 				if (!connectedMatches(st, anchor)) continue;
@@ -678,6 +768,7 @@ public final class BeatBlockSelectionManager {
 			case PLANE_SLICE -> "新建平面切片：" + count + " 个方块";
 			case SELECTION_WAND -> "新建选区魔棒：" + count + " 个方块";
 			case BRUSH -> "新建笔刷：" + count + " 个方块";
+			case LASSO -> "新建套索：" + count + " 个方块";
 			default -> "新建选区：" + count + " 个方块";
 		};
 	}
@@ -693,6 +784,7 @@ public final class BeatBlockSelectionManager {
 			case PLANE_SLICE -> "加选切片后共 " + n + " 个方块";
 			case SELECTION_WAND -> "加选选区魔棒后共 " + n + " 个方块";
 			case BRUSH -> "加选笔刷后共 " + n + " 个方块";
+			case LASSO -> "加选套索后共 " + n + " 个方块";
 			default -> "加选后共 " + n + " 个方块";
 		};
 	}
@@ -708,6 +800,7 @@ public final class BeatBlockSelectionManager {
 			case PLANE_SLICE -> "减选切片后共 " + n + " 个方块";
 			case SELECTION_WAND -> "减选选区魔棒后共 " + n + " 个方块";
 			case BRUSH -> "减选笔刷后共 " + n + " 个方块";
+			case LASSO -> "减选套索后共 " + n + " 个方块";
 			default -> "减选后共 " + n + " 个方块";
 		};
 	}
@@ -723,6 +816,7 @@ public final class BeatBlockSelectionManager {
 			case PLANE_SLICE -> "与切片求交后共 " + n + " 个方块";
 			case SELECTION_WAND -> "与选区魔棒结果求交后共 " + n + " 个方块";
 			case BRUSH -> "与笔刷求交后共 " + n + " 个方块";
+			case LASSO -> "与套索求交后共 " + n + " 个方块";
 			default -> "求交后共 " + n + " 个方块";
 		};
 	}

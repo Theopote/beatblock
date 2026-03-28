@@ -9,7 +9,7 @@ public enum SelectionMode {
 	BOX,
 	LINE,
 	SPHERE,
-	/** 全图六邻域连通魔棒 */
+	/** 魔棒：六邻域连通（受属性中「相对视角距离」「魔棒扩散半径」限制） */
 	CONNECTED,
 	COLUMN,
 	/**
@@ -21,5 +21,7 @@ public enum SelectionMode {
 	 */
 	SELECTION_WAND,
 	/** 场景区按住左键连续盖章（半径与形状见选择属性） */
-	BRUSH
+	BRUSH,
+	/** 场景区按住左键拖动绘制屏幕套索，松开后按投影选中方块 */
+	LASSO
 }
