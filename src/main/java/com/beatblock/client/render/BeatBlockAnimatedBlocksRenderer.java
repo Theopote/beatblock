@@ -1,7 +1,6 @@
 package com.beatblock.client.render;
 
 import com.beatblock.BeatBlock;
-import com.beatblock.client.BeatBlockClientDriver;
 import com.beatblock.engine.AnimatedBlock;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.RenderLayers;
@@ -19,6 +18,7 @@ import java.util.Map;
 /**
  * 将 {@link com.beatblock.engine.BlockAnimationEngine#getCurrentFrameBlocks()} 中的位移画进世界：
  * ANIMATE 模式不修改真实方块状态，此前缺少这一层导致播放时「看不见」动画。
+ * 未点播放时由 {@link com.beatblock.client.BeatBlockClientDriver} 按时间轴时钟 tick 预览。
  * 当前为线框 + 位移连线（后续可换成整块模型矩阵绘制）。
  */
 public final class BeatBlockAnimatedBlocksRenderer {
@@ -37,10 +37,6 @@ public final class BeatBlockAnimatedBlocksRenderer {
 		}
 		MinecraftClient mc = MinecraftClient.getInstance();
 		if (mc.world == null || mc.gameRenderer == null) {
-			return;
-		}
-		// 无播放驱动时通常无活跃帧；仍允许在暂停瞬间有残留帧时绘制
-		if (!BeatBlockClientDriver.isDriving()) {
 			return;
 		}
 		Map<BlockPos, AnimatedBlock> frame = BeatBlock.blockAnimationEngine.getCurrentFrameBlocks();

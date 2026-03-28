@@ -55,45 +55,56 @@ public final class BeatBlockClientDriver {
 	private static final int MAX_ACTION_REPORT_CACHE_SIZE = 4096;
 
 	public static void onClientTick() {
-		if (!driving) return;
 		MinecraftClient mc = MinecraftClient.getInstance();
-		World world = mc.world;
-		if (world == null) return;
+		World world = mc != null ? mc.world : null;
 
-		long now = System.nanoTime();
-		double delta = lastTickNanos > 0 ? (now - lastTickNanos) / 1e9 : 1.0 / 20.0;
-		lastTickNanos = now;
+		if (driving) {
+			if (world == null) return;
 
-		BeatBlock.musicPlayer.tick(delta);
-		syncStemMixerToMusicPlayer();
-		double currentTime = BeatBlock.musicPlayer.getCurrentTimeSeconds();
+			long now = System.nanoTime();
+			double delta = lastTickNanos > 0 ? (now - lastTickNanos) / 1e9 : 1.0 / 20.0;
+			lastTickNanos = now;
 
-		BeatBlockRuntime runtime = BeatBlockRuntime.getInstance();
-		if (BeatBlock.musicPlayer.isPlaying()) {
-			if (!runtime.isPlaying()) runtime.play();
-		} else if (runtime.isPlaying()) {
-			runtime.pause();
-		}
-		runtime.onServerTick();
+			BeatBlock.musicPlayer.tick(delta);
+			syncStemMixerToMusicPlayer();
+			double currentTime = BeatBlock.musicPlayer.getCurrentTimeSeconds();
 
-		BeatBlock.beatScheduler.tick(currentTime);
-		BeatBlock.animationManager.tick(currentTime);
-		if (BeatBlock.blockAnimationEngine != null) {
-			syncTimelineBlockAnimationEvents(currentTime);
-			syncTimelineAutoAnimationEvents(currentTime);
-			BeatBlock.blockAnimationEngine.tick(currentTime);
-			MinecraftClient mc2 = MinecraftClient.getInstance();
-			World tickWorld = mc2 != null ? mc2.world : null;
-			if (tickWorld != null) {
-				BeatBlock.blockAnimationEngine.getBuildSequencer().tick(currentTime, tickWorld);
+			BeatBlockRuntime runtime = BeatBlockRuntime.getInstance();
+			if (BeatBlock.musicPlayer.isPlaying()) {
+				if (!runtime.isPlaying()) runtime.play();
+			} else if (runtime.isPlaying()) {
+				runtime.pause();
 			}
+			runtime.onServerTick();
+
+			BeatBlock.beatScheduler.tick(currentTime);
+			BeatBlock.animationManager.tick(currentTime);
+			if (BeatBlock.blockAnimationEngine != null) {
+				syncTimelineBlockAnimationEvents(currentTime, false);
+				syncTimelineAutoAnimationEvents(currentTime, false);
+				BeatBlock.blockAnimationEngine.tick(currentTime);
+				MinecraftClient mc2 = MinecraftClient.getInstance();
+				World tickWorld = mc2 != null ? mc2.world : null;
+				if (tickWorld != null) {
+					BeatBlock.blockAnimationEngine.getBuildSequencer().tick(currentTime, tickWorld);
+				}
+			}
+
+			Vec3d base = BeatBlock.stageManager.getCurrentStage()
+				.map(s -> new Vec3d(s.getCenterX(), s.getCenterY(), s.getCenterZ()))
+				.orElse(mc.player != null ? new Vec3d(mc.player.getX(), mc.player.getY(), mc.player.getZ()) : Vec3d.ZERO);
+			BeatBlock.transformUpdater.setBasePosition(base);
+			BeatBlock.transformUpdater.tick(BeatBlock.animationManager.getActiveInstances(), currentTime);
+			return;
 		}
 
-		Vec3d base = BeatBlock.stageManager.getCurrentStage()
-			.map(s -> new Vec3d(s.getCenterX(), s.getCenterY(), s.getCenterZ()))
-			.orElse(mc.player != null ? new Vec3d(mc.player.getX(), mc.player.getY(), mc.player.getZ()) : Vec3d.ZERO);
-		BeatBlock.transformUpdater.setBasePosition(base);
-		BeatBlock.transformUpdater.tick(BeatBlock.animationManager.getActiveInstances(), currentTime);
+		// 未点播放时仍按时间轴时钟推进 ANIMATE 预览（拖动标尺/播放头时 clock 已 seek，与 scrub 同步）
+		if (world != null && BeatBlock.blockAnimationEngine != null && BeatBlock.timeline != null) {
+			double previewTime = previewTimelineTimeSeconds();
+			syncTimelineBlockAnimationEvents(previewTime, true);
+			syncTimelineAutoAnimationEvents(previewTime, true);
+			BeatBlock.blockAnimationEngine.tick(previewTime);
+		}
 	}
 
 	private static void syncStemMixerToMusicPlayer() {
@@ -220,7 +231,15 @@ public final class BeatBlockClientDriver {
 		stopDriving();
 	}
 
-	private static void syncTimelineBlockAnimationEvents(double currentTime) {
+	/** 与时间轴 UI 一致的时间源，便于未播放时拖动标尺仍能预览 ANIMATE。 */
+	private static double previewTimelineTimeSeconds() {
+		if (BeatBlock.timelineEditor != null) {
+			return BeatBlock.timelineEditor.getClock().getCurrentTimeSeconds();
+		}
+		return BeatBlock.musicPlayer != null ? BeatBlock.musicPlayer.getCurrentTimeSeconds() : 0.0;
+	}
+
+	private static void syncTimelineBlockAnimationEvents(double currentTime, boolean previewOnly) {
 		if (BeatBlock.timeline == null || BeatBlock.blockAnimationEngine == null) return;
 		if (currentTime + TIMELINE_EVENT_EPSILON < lastTimelineAnimationTime) {
 			resetTimelineAnimationScheduling();
@@ -231,12 +250,12 @@ public final class BeatBlockClientDriver {
 			}
 			String scheduleKey = scheduleKey(event);
 			if (!scheduledTimelineAnimationIds.add(scheduleKey)) continue;
-			applyTimelineActionEvent(event);
+			applyTimelineActionEvent(event, previewOnly);
 		}
 		lastTimelineAnimationTime = currentTime;
 	}
 
-	private static void syncTimelineAutoAnimationEvents(double currentTime) {
+	private static void syncTimelineAutoAnimationEvents(double currentTime, boolean previewOnly) {
 		if (BeatBlock.timeline == null || BeatBlock.blockAnimationEngine == null) return;
 		if (currentTime + TIMELINE_EVENT_EPSILON < lastAutoAnimationTime) {
 			scheduledAutoAnimationIds.clear();
@@ -248,18 +267,21 @@ public final class BeatBlockClientDriver {
 			}
 			String key = scheduleKey(event);
 			if (!scheduledAutoAnimationIds.add(key)) continue;
-			applyTimelineActionEvent(event);
+			applyTimelineActionEvent(event, previewOnly);
 		}
 		lastAutoAnimationTime = currentTime;
 	}
 
-	private static void applyTimelineActionEvent(TimelineAnimationEvent event) {
+	private static void applyTimelineActionEvent(TimelineAnimationEvent event, boolean previewOnly) {
 		if (event == null || BeatBlock.blockAnimationEngine == null) return;
 		if (!passesEnergyThreshold(event)) {
 			recordActionReport(event, 0, "SKIPPED", "energy-below-threshold");
 			return;
 		}
 		TimelineAnimationActionMode actionMode = event.getActionMode();
+		if (previewOnly && actionMode != TimelineAnimationActionMode.ANIMATE) {
+			return;
+		}
 		if (actionMode == TimelineAnimationActionMode.ANIMATE) {
 			BeatBlock.blockAnimationEngine.scheduleTimelineEvent(event);
 			recordActionReport(event, 0, "ANIMATE", "scheduled");
