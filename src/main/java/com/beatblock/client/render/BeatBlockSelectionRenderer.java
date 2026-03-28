@@ -92,12 +92,12 @@ public final class BeatBlockSelectionRenderer {
 		BlockHitResult hit = raycastForPreview(mc);
 		if (hit == null) return;
 		drawRadiusPreviewAabb(matrices, consumers, mc, hit.getBlockPos(), mgr.getSphereBrushRadius(),
-				BRUSH_PREVIEW_ARGB, 1.85f);
+				1.85f);
 	}
 
 	private static void drawRadiusPreviewAabb(
 			MatrixStack matrices, VertexConsumerProvider consumers, MinecraftClient mc,
-			BlockPos c, int r, int argb, float lineWidth) {
+			BlockPos c, int r, float lineWidth) {
 		int minX = c.getX() - r;
 		int minY = c.getY() - r;
 		int minZ = c.getZ() - r;
@@ -105,7 +105,7 @@ public final class BeatBlockSelectionRenderer {
 		int maxY = c.getY() + r;
 		int maxZ = c.getZ() + r;
 		drawInclusiveBoundingBox(matrices, consumers, mc,
-				new BlockPos(minX, minY, minZ), new BlockPos(maxX, maxY, maxZ), argb, lineWidth);
+				new BlockPos(minX, minY, minZ), new BlockPos(maxX, maxY, maxZ), BeatBlockSelectionRenderer.BRUSH_PREVIEW_ARGB, lineWidth);
 	}
 
 	private static BlockHitResult raycastForPreview(MinecraftClient mc) {

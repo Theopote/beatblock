@@ -51,7 +51,7 @@ public final class BeatBlockLassoInteraction {
 				currentPoly.clear();
 				currentPoly.add(new double[] { lx, ly });
 			} else if (!currentPoly.isEmpty()) {
-				double[] last = currentPoly.get(currentPoly.size() - 1);
+				double[] last = currentPoly.getLast();
 				double dx = lx - last[0];
 				double dy = ly - last[1];
 				if (dx * dx + dy * dy >= MIN_POINT_DIST_SQ) {

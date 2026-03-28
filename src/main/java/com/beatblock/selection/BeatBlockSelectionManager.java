@@ -246,7 +246,7 @@ public final class BeatBlockSelectionManager {
 		}
 
 		switch (mode) {
-			case OFF -> {}
+			case OFF, LASSO -> {}
 			case CLICK -> handleClickTool(world, pos, shiftDown);
 			case BOX -> handleBoxTool(world, pos);
 			case LINE -> handleLineTool(world, pos);
@@ -255,8 +255,7 @@ public final class BeatBlockSelectionManager {
 			case COLUMN -> handleColumnTool(world, pos, shiftDown);
 			case PLANE_SLICE -> handlePlaneSliceTool(world, pos, side, shiftDown);
 			case SELECTION_WAND -> handleSelectionWandTool(world, pos, shiftDown);
-			case LASSO -> {}
-		}
+        }
 	}
 
 	/** 无击中面信息时使用（例如测试）；一般应使用 {@link #handleBlockSelectClick(World, BlockHitResult, boolean)}。 */
@@ -513,7 +512,7 @@ public final class BeatBlockSelectionManager {
 			lastMessage = String.format("平面切片体积 %d 超过上限 %d。", vol, maxBlocks);
 			return null;
 		}
-		List<BlockPos> out = new ArrayList<>((int) Math.min(vol, Integer.MAX_VALUE));
+		List<BlockPos> out = new ArrayList<>((int) vol);
 		for (int x = b.minX(); x <= b.maxX(); x++) {
 			for (int y = b.minY(); y <= b.maxY(); y++) {
 				for (int z = b.minZ(); z <= b.maxZ(); z++) {
