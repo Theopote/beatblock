@@ -41,8 +41,13 @@ public final class BeatBlockSelectionManager {
 	private boolean includeAir;
 	private int maxBlocks = 100_000;
 	private int sphereBrushRadius = 3;
-	private boolean connectedMatchFullState = true;
+	/** false：同类型方块即可连通（魔棒更直观）；true：BlockState 完全一致才算「同色」。 */
+	private boolean connectedMatchFullState;
 	private BrushShape brushShape = BrushShape.SPHERE;
+	/**
+	 * 平面切片：非 null 时用此法向/轴向，忽略射线击中的面；null 表示跟随点击面。
+	 */
+	private Direction planeSliceFaceOverride;
 	private BlockPos brushLastStampBlock;
 	private boolean brushHadStroke;
 	/**
@@ -116,6 +121,23 @@ public final class BeatBlockSelectionManager {
 
 	public void setConnectedMatchFullState(boolean connectedMatchFullState) {
 		this.connectedMatchFullState = connectedMatchFullState;
+	}
+
+	/** 平面切片固定朝向；null 为自动（跟随击中面）。 */
+	public Direction getPlaneSliceFaceOverride() {
+		return planeSliceFaceOverride;
+	}
+
+	public void setPlaneSliceFaceOverride(Direction planeSliceFaceOverride) {
+		this.planeSliceFaceOverride = planeSliceFaceOverride;
+	}
+
+	/** 预览与点击提交时：有覆盖则用覆盖，否则用射线给出的面。 */
+	public Direction resolvePlaneSliceFace(Direction hitFace) {
+		if (hitFace == null) {
+			return planeSliceFaceOverride != null ? planeSliceFaceOverride : Direction.UP;
+		}
+		return planeSliceFaceOverride != null ? planeSliceFaceOverride : hitFace;
 	}
 
 	public BrushShape getBrushShape() {
@@ -221,8 +243,9 @@ public final class BeatBlockSelectionManager {
 		lineFirstCorner = null;
 		includeAir = false;
 		sphereBrushRadius = 3;
-		connectedMatchFullState = true;
+		connectedMatchFullState = false;
 		brushShape = BrushShape.SPHERE;
+		planeSliceFaceOverride = null;
 		maxDistanceFromCamera = 128;
 		maxMagicWandSpreadFromSeed = 64;
 		interactionCameraPos = null;
@@ -233,7 +256,8 @@ public final class BeatBlockSelectionManager {
 	}
 
 	/**
-	 * 左键单击（含击中面）。平面切片依赖 {@link BlockHitResult#getSide()}。
+	 * 左键单击（含击中面）。平面切片默认用 {@link BlockHitResult#getSide()}，可被
+	 * {@link #setPlaneSliceFaceOverride(Direction)} 覆盖。
 	 */
 	public void handleBlockSelectClick(World world, BlockHitResult hit, boolean shiftDown) {
 		if (mode == SelectionMode.OFF || world == null || hit == null) return;
@@ -253,7 +277,7 @@ public final class BeatBlockSelectionManager {
 			case BRUSH -> handleBrushClick(world, pos, shiftDown);
 			case CONNECTED -> handleConnectedTool(world, pos, shiftDown);
 			case COLUMN -> handleColumnTool(world, pos, shiftDown);
-			case PLANE_SLICE -> handlePlaneSliceTool(world, pos, side, shiftDown);
+			case PLANE_SLICE -> handlePlaneSliceTool(world, pos, resolvePlaneSliceFace(side), shiftDown);
 			case SELECTION_WAND -> handleSelectionWandTool(world, pos, shiftDown);
         }
 	}

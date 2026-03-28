@@ -10,6 +10,8 @@ import imgui.flag.ImGuiCol;
 import imgui.flag.ImGuiWindowFlags;
 import imgui.type.ImBoolean;
 import java.util.Locale;
+import java.util.Objects;
+import net.minecraft.util.math.Direction;
 
 /**
  * 选择工具属性：操作模式、空气、上限、统计与清空（对应 ChronoBlocks 属性面板中的工具上下文，精简版）。
@@ -22,7 +24,26 @@ public class SelectionPropertiesPanel {
 	private final int[] maxCameraDistScratch = new int[1];
 	private final int[] maxWandSpreadScratch = new int[1];
 	private final ImBoolean includeAirProxy = new ImBoolean(false);
-	private final ImBoolean connectedFullStateProxy = new ImBoolean(true);
+	private final ImBoolean connectedFullStateProxy = new ImBoolean(false);
+
+	private static final String[] PLANE_FACE_LABELS = {
+			"自动（跟随点击面）",
+			"水平：顶面 (+Y)",
+			"水平：底面 (-Y)",
+			"竖直：东 (+X)",
+			"竖直：西 (-X)",
+			"竖直：南 (+Z)",
+			"竖直：北 (-Z)"
+	};
+	private static final Direction[] PLANE_FACE_DIRS = {
+			null,
+			Direction.UP,
+			Direction.DOWN,
+			Direction.EAST,
+			Direction.WEST,
+			Direction.SOUTH,
+			Direction.NORTH
+	};
 	private final ImBoolean selectionFillProxy = new ImBoolean(false);
 
 	public void render() {
@@ -77,30 +98,54 @@ public class SelectionPropertiesPanel {
 
 		if (mgr.getMode() == SelectionMode.BRUSH) {
 			ImGui.separator();
-			ImGui.textDisabled("笔刷（球体 / 立方）");
+			ImGui.textDisabled("笔刷");
+			String shapePreview = mgr.getBrushShape() == BrushShape.SPHERE ? "球体" : "立方体";
+			ImGui.setNextItemWidth(ImGui.getContentRegionAvail().x);
+			if (ImGui.beginCombo("形状##brushShapeCombo", shapePreview)) {
+				if (ImGui.selectable("球体##brushPickSph", mgr.getBrushShape() == BrushShape.SPHERE)) {
+					mgr.setBrushShape(BrushShape.SPHERE);
+				}
+				if (ImGui.selectable("立方体##brushPickCube", mgr.getBrushShape() == BrushShape.CUBE)) {
+					mgr.setBrushShape(BrushShape.CUBE);
+				}
+				ImGui.endCombo();
+			}
 			sphereRadiusScratch[0] = mgr.getSphereBrushRadius();
-			ImGui.setNextItemWidth(160f);
-			if (ImGui.sliderInt("半径（格）##selBrushR", sphereRadiusScratch, 1, 32)) {
+			ImGui.setNextItemWidth(ImGui.getContentRegionAvail().x);
+			if (ImGui.sliderInt("大小（半径，格）##selBrushR", sphereRadiusScratch, 1, 32)) {
 				mgr.setSphereBrushRadius(sphereRadiusScratch[0]);
 			}
 			if (ImGui.isItemHovered()) {
-				ImGui.setTooltip("球体：欧氏球；立方体：轴对齐立方体边长 2r+1；预览为包络盒。单击盖章或按住涂抹。");
+				ImGui.setTooltip("球体：欧氏距离 ≤ r；立方体：轴对齐边长 2r+1。场景区预览为包络盒；单击盖章或按住涂抹。");
 			}
-			if (ImGui.radioButton("球体##brushSph", mgr.getBrushShape() == BrushShape.SPHERE)) {
-				mgr.setBrushShape(BrushShape.SPHERE);
+		}
+
+		if (mgr.getMode() == SelectionMode.PLANE_SLICE) {
+			ImGui.separator();
+			ImGui.textDisabled("平面切片");
+			int pIdx = planeFaceIndex(mgr.getPlaneSliceFaceOverride());
+			ImGui.setNextItemWidth(ImGui.getContentRegionAvail().x);
+			if (ImGui.beginCombo("切片朝向（法向）##planeFaceCombo", PLANE_FACE_LABELS[pIdx])) {
+				for (int i = 0; i < PLANE_FACE_LABELS.length; i++) {
+					if (ImGui.selectable(PLANE_FACE_LABELS[i] + "##pf" + i, i == pIdx)) {
+						mgr.setPlaneSliceFaceOverride(PLANE_FACE_DIRS[i]);
+					}
+					if (i == pIdx) {
+						ImGui.setItemDefaultFocus();
+					}
+				}
+				ImGui.endCombo();
 			}
-			ImGui.sameLine();
-			if (ImGui.radioButton("立方体##brushCube", mgr.getBrushShape() == BrushShape.CUBE)) {
-				mgr.setBrushShape(BrushShape.CUBE);
-			}
+			ImGui.textWrapped("自动：使用射线击中的面。锁定朝向后，仍用点击方块的坐标定切片位置（例如水平面用点击格的 Y）。");
 		}
 
 		if (mgr.getMode() == SelectionMode.CONNECTED || mgr.getMode() == SelectionMode.SELECTION_WAND) {
 			ImGui.separator();
 			ImGui.textDisabled("魔棒");
+			ImGui.textWrapped("默认按方块类型连通（同一方块 ID 即向六邻域扩展）。若只选中一格，可勾选「完整方块状态」尝试更严匹配。");
 			maxWandSpreadScratch[0] = mgr.getMaxMagicWandSpreadFromSeed();
 			ImGui.setNextItemWidth(200f);
-			if (ImGui.sliderInt("最大扩散半径（格）##selWandSpread", maxWandSpreadScratch, 4, 256)) {
+			if (ImGui.sliderInt("最大扩散半径（格）##selWandSpread", maxWandSpreadScratch, 1, 256)) {
 				mgr.setMaxMagicWandSpreadFromSeed(maxWandSpreadScratch[0]);
 			}
 			if (ImGui.isItemHovered()) {
@@ -163,6 +208,15 @@ public class SelectionPropertiesPanel {
 			case SUBTRACT -> "减选";
 			case INTERSECT -> "交集";
 		};
+	}
+
+	private static int planeFaceIndex(Direction override) {
+		for (int i = 0; i < PLANE_FACE_DIRS.length; i++) {
+			if (Objects.equals(PLANE_FACE_DIRS[i], override)) {
+				return i;
+			}
+		}
+		return 0;
 	}
 
 	private static String currentToolTitle(SelectionMode m) {

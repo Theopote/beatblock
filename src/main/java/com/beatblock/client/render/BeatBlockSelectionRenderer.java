@@ -3,7 +3,9 @@ package com.beatblock.client.render;
 import com.beatblock.client.BeatBlockUIScreen;
 import com.beatblock.client.input.BeatBlockInputSystem;
 import com.beatblock.selection.BeatBlockSelectionManager;
+import com.beatblock.selection.BlockSelectionLine;
 import com.beatblock.selection.SelectionMode;
+import java.util.List;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.RenderLayers;
 import net.minecraft.client.render.VertexConsumer;
@@ -15,10 +17,11 @@ import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.util.shape.VoxelShapes;
+import org.joml.Matrix4f;
 
 /**
  * 在世界中绘制当前选区的总包围盒线框（大选区或未启用逐块高亮时使用）。
- * 框选/线选：两点 AABB 预览；笔刷：半径包络盒；平面切片：薄片 AABB。
+ * 框选：AABB 预览；线选：沿体素路径的折线；笔刷：半径包络盒；平面切片：薄片 AABB。
  */
 public final class BeatBlockSelectionRenderer {
 
@@ -67,7 +70,8 @@ public final class BeatBlockSelectionRenderer {
 		if (mgr.getMode() != SelectionMode.LINE || mgr.getLineFirstCorner() == null) return;
 		BlockHitResult hit = raycastForPreview(mc);
 		if (hit == null) return;
-		drawAabbBetweenCorners(matrices, consumers, mc, mgr.getLineFirstCorner(), hit.getBlockPos(), LINE_PREVIEW_ARGB, 2.0f);
+		List<BlockPos> cells = BlockSelectionLine.between(mgr.getLineFirstCorner(), hit.getBlockPos());
+		drawVoxelCenterPolyline(matrices, consumers, mc, cells, LINE_PREVIEW_ARGB);
 	}
 
 	private static void renderPlaneSlicePreviewIfNeeded(
@@ -77,7 +81,7 @@ public final class BeatBlockSelectionRenderer {
 		if (mc.world == null) return;
 		BlockHitResult hit = raycastForPreview(mc);
 		if (hit == null) return;
-		var b = mgr.computePlaneSliceBounds(mc.world, hit.getBlockPos(), hit.getSide());
+		var b = mgr.computePlaneSliceBounds(mc.world, hit.getBlockPos(), mgr.resolvePlaneSliceFace(hit.getSide()));
 		if (b.isEmpty()) return;
 		drawInclusiveBoundingBox(matrices, consumers, mc,
 				new BlockPos(b.minX(), b.minY(), b.minZ()),
@@ -129,6 +133,35 @@ public final class BeatBlockSelectionRenderer {
 		int maxZ = Math.max(first.getZ(), second.getZ());
 		drawInclusiveBoundingBox(matrices, consumers, mc,
 				new BlockPos(minX, minY, minZ), new BlockPos(maxX, maxY, maxZ), argb, lineWidth);
+	}
+
+	/** 沿体素线段中心折线（与最终线选一致），每段单独取 LINES 缓冲以防与其它层交错。 */
+	private static void drawVoxelCenterPolyline(
+			MatrixStack matrices, VertexConsumerProvider consumers,
+			MinecraftClient mc, List<BlockPos> cells, int argb) {
+		if (cells == null || cells.size() < 2) {
+			return;
+		}
+		Vec3d cam = mc.gameRenderer.getCamera().getCameraPos();
+		matrices.push();
+		Matrix4f mat = matrices.peek().getPositionMatrix();
+		for (int i = 0; i < cells.size() - 1; i++) {
+			Vec3d a = Vec3d.ofCenter(cells.get(i)).subtract(cam);
+			Vec3d b = Vec3d.ofCenter(cells.get(i + 1)).subtract(cam);
+			VertexConsumer buf = consumers.getBuffer(RenderLayers.LINES);
+			emitLineSegment(buf, mat, a.x, a.y, a.z, b.x, b.y, b.z, argb);
+		}
+		matrices.pop();
+	}
+
+	private static void emitLineSegment(VertexConsumer buf, Matrix4f mat,
+			double x0, double y0, double z0, double x1, double y1, double z1, int argb) {
+		float ca = ((argb >>> 24) & 255) / 255f;
+		float cr = ((argb >>> 16) & 255) / 255f;
+		float cg = ((argb >>> 8) & 255) / 255f;
+		float cb = (argb & 255) / 255f;
+		buf.vertex(mat, (float) x0, (float) y0, (float) z0).color(cr, cg, cb, ca).normal(0f, 1f, 0f);
+		buf.vertex(mat, (float) x1, (float) y1, (float) z1).color(cr, cg, cb, ca).normal(0f, 1f, 0f);
 	}
 
 	private static void drawInclusiveBoundingBox(

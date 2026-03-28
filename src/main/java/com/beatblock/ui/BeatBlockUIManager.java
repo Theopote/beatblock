@@ -1,5 +1,6 @@
 package com.beatblock.ui;
 
+import com.beatblock.client.render.BeatBlockLassoOverlay;
 import com.beatblock.ui.layout.BeatBlockDockSpaceLayoutBuilder;
 import com.beatblock.ui.panels.*;
 import imgui.ImGui;
@@ -136,6 +137,8 @@ public class BeatBlockUIManager {
 			selectionPropertiesPanel.render();
 			ImGui.popStyleColor(5);
 		}
+
+		BeatBlockLassoOverlay.render();
 	}
 
 	public void resetLayoutState() {
