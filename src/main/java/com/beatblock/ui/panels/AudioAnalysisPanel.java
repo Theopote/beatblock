@@ -487,11 +487,10 @@ public final class AudioAnalysisPanel {
                 COLOR_PROGRESS_FG.x, COLOR_PROGRESS_FG.y, COLOR_PROGRESS_FG.z, COLOR_PROGRESS_FG.w);
         ImGui.pushStyleColor(ImGuiCol.FrameBg,
                 COLOR_PROGRESS_BG.x, COLOR_PROGRESS_BG.y, COLOR_PROGRESS_BG.z, COLOR_PROGRESS_BG.w);
-        // 使用默认高度(0f)与整行宽度(-1f)，规避自定义高度在不同缩放/样式下的裁剪问题。
-        ImGui.progressBar(progress, -1f, 0f, "");
+        ImGui.progressBar(progress, -1f, 6f, "");
         ImGui.popStyleColor(2);
 
-        // 百分比独立一行，避免 sameLine 与进度条高度耦合导致的可见区域计算误差。
+        ImGui.sameLine(0f, 6f);
         ImGui.textDisabled(String.format("%.0f%%", progress * 100f));
 
         String statusText = asset.getProcessingStatusText();
@@ -954,9 +953,9 @@ public final class AudioAnalysisPanel {
                     COLOR_PROGRESS_FG.x, COLOR_PROGRESS_FG.y, COLOR_PROGRESS_FG.z, COLOR_PROGRESS_FG.w);
             ImGui.pushStyleColor(ImGuiCol.FrameBg,
                     COLOR_PROGRESS_BG.x, COLOR_PROGRESS_BG.y, COLOR_PROGRESS_BG.z, COLOR_PROGRESS_BG.w);
-            ImGui.progressBar(progress, ImGui.getContentRegionAvailX(), 8f,
-                    String.format("%.0f%%", progress * 100f));
+            ImGui.progressBar(progress, -1f, 0f, "");
             ImGui.popStyleColor(2);
+            ImGui.textDisabled(String.format("%.0f%%", progress * 100f));
 
             if (statusText != null && !statusText.isBlank()) {
                 compactGap();
