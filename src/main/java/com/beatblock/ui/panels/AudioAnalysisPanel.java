@@ -660,7 +660,7 @@ public final class AudioAnalysisPanel {
     // ── 底栏 ──────────────────────────────────────────────────────────────
 
     private void renderFooter(List<AudioAsset> assets) {
-        float btnW = 110f;
+        float clearDoneWidth = ImGui.calcTextSize("清除已完成").x + 8f;
 		prunePanelHint();
 
         AudioAsset runningAsset = null;
@@ -675,20 +675,8 @@ public final class AudioAnalysisPanel {
         }
 
         // 全部解析（跳过已完成和正在进行的）
-        if (ImGui.button("全部解析##analyzeAll", btnW, 22f)) {
-            for (AudioAsset a : assets) {
-                if (a.getStatus() == AudioAssetStatus.PENDING
-                        || a.getStatus() == AudioAssetStatus.FAILED) {
-                    AudioAssetManager.getInstance().startAnalysis(a);
-                }
-            }
-        }
-        if (ImGui.isItemHovered()) ImGui.setTooltip("解析所有等待中和失败的文件");
-
-        ImGui.sameLine();
-
         // 清除已完成
-        if (ImGui.button("清除已完成##clearDone", btnW, 22f)) {
+        if (ImGui.button("清除已完成##clearDone", clearDoneWidth, 22f)) {
             assets.stream()
                     .filter(a -> a.getStatus() == AudioAssetStatus.COMPLETED)
                     .map(AudioAsset::getId)
