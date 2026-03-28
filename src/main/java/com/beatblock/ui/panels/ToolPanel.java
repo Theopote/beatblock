@@ -3,6 +3,9 @@ package com.beatblock.ui.panels;
 import com.beatblock.BeatBlock;
 import com.beatblock.automap.engine.SmartAutoMapEngine;
 import com.beatblock.client.BeatBlockClientDriver;
+import com.beatblock.client.BeatBlockUIScreen;
+import com.beatblock.client.BeatBlockWorldPick;
+import com.beatblock.client.input.BeatBlockInputSystem;
 import com.beatblock.engine.StageObject;
 import com.beatblock.engine.StageObjectSystem;
 import com.beatblock.timeline.MarkerType;
@@ -99,12 +102,12 @@ public class ToolPanel {
 			stageObjectNameBuffer.set("selection_object");
 		}
 
-		if (ImGui.button("Set A (准星方块)##stageObjSetA")) {
+		if (ImGui.button("Set A (光标下方方块)##stageObjSetA")) {
 			selectionPosA = readCrosshairBlockPos();
 			stageObjectMessage = selectionPosA != null ? "已设置 A 点。" : "未命中方块，无法设置 A 点。";
 		}
 		ImGui.sameLine();
-		if (ImGui.button("Set B (准星方块)##stageObjSetB")) {
+		if (ImGui.button("Set B (光标下方方块)##stageObjSetB")) {
 			selectionPosB = readCrosshairBlockPos();
 			stageObjectMessage = selectionPosB != null ? "已设置 B 点。" : "未命中方块，无法设置 B 点。";
 		}
@@ -117,6 +120,10 @@ public class ToolPanel {
 
 		ImGui.textDisabled("A: " + formatPos(selectionPosA));
 		ImGui.textDisabled("B: " + formatPos(selectionPosB));
+		BlockPos lastLeft = BeatBlockWorldPick.getLastLeftClickedBlock();
+		if (lastLeft != null) {
+			ImGui.textDisabled("左键最近选中: " + formatPos(lastLeft));
+		}
 		long selectionVolume = estimateSelectionVolume(selectionPosA, selectionPosB);
 		if (selectionVolume > 0) {
 			ImGui.textDisabled(String.format(Locale.ROOT, "选区体积: %d blocks", selectionVolume));
@@ -234,6 +241,11 @@ public class ToolPanel {
 	private BlockPos readCrosshairBlockPos() {
 		MinecraftClient mc = MinecraftClient.getInstance();
 		if (mc == null || mc.world == null) return null;
+		if (mc.currentScreen instanceof BeatBlockUIScreen) {
+			BlockHitResult bhr = BeatBlockInputSystem.raycastFromImGui();
+			if (bhr == null || bhr.getType() != HitResult.Type.BLOCK) return null;
+			return bhr.getBlockPos().toImmutable();
+		}
 		HitResult hit = mc.crosshairTarget;
 		if (!(hit instanceof BlockHitResult bhr)) return null;
 		return bhr.getBlockPos().toImmutable();

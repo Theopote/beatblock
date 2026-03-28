@@ -2,12 +2,14 @@ package com.beatblock;
 
 import com.beatblock.client.BeatBlockClientDriver;
 import com.beatblock.client.BeatBlockUIScreen;
+import com.beatblock.client.render.BeatBlockHoverOutlineRenderer;
 import com.beatblock.ui.EditorScreen;
 import com.beatblock.ui.HUD;
 import com.beatblock.ui.ImportScreen;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
+import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.option.KeyBinding;
@@ -32,6 +34,9 @@ public class BeatBlockClient implements ClientModInitializer {
 		importScreen = new ImportScreen();
 
 		BeatBlock.openUICallback = () -> MinecraftClient.getInstance().setScreen(new BeatBlockUIScreen());
+
+		WorldRenderEvents.END_MAIN.register(context ->
+			BeatBlockHoverOutlineRenderer.renderIfNeeded(context.matrices(), context.consumers()));
 
 		BeatBlockClientDriver.setupBeatEventHandler();
 

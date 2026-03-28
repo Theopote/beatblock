@@ -15,7 +15,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
  * BeatBlock 打开时：鼠标在 UI 上则只操作 ImGui；在场景区按住中键拖拽移动玩家视角。
- * 在 UI 上时阻止锁定光标，保持 ImGui 光标可见。
+ * 打开 BeatBlock 期间始终使用 ImGui 光标，不锁定为原版十字准星（与 ChronoBlocks 在场景区可锁定不同）。
  */
 @Mixin(Mouse.class)
 public abstract class MouseMixin {
@@ -24,11 +24,22 @@ public abstract class MouseMixin {
 	@Unique private double beatblock$lastCursorX;
 	@Unique private double beatblock$lastCursorY;
 	@Unique private boolean beatblock$middleDragging;
+	@Unique private boolean beatblock$cursorSampleInitialized;
 
 	@Inject(method = "onCursorPos", at = @At("TAIL"))
 	private void beatblock$onCursorPos(long window, double x, double y, CallbackInfo ci) {
-		if (!(client.currentScreen instanceof BeatBlockUIScreen)) return;
+		if (!(client.currentScreen instanceof BeatBlockUIScreen)) {
+			beatblock$cursorSampleInitialized = false;
+			return;
+		}
 		if (client.player == null) return;
+
+		if (!beatblock$cursorSampleInitialized) {
+			beatblock$lastCursorX = x;
+			beatblock$lastCursorY = y;
+			beatblock$cursorSampleInitialized = true;
+			return;
+		}
 
 		double dx = x - beatblock$lastCursorX;
 		double dy = y - beatblock$lastCursorY;
@@ -70,8 +81,8 @@ public abstract class MouseMixin {
 	}
 
 	@Inject(method = "lockCursor", at = @At("HEAD"), cancellable = true)
-	private void beatblock$preventLockWhenOverUI(CallbackInfo ci) {
-		if (client.currentScreen instanceof BeatBlockUIScreen && BeatBlockUIScreen.isMouseOverUI()) {
+	private void beatblock$preventLockWhileBeatBlockScreenOpen(CallbackInfo ci) {
+		if (client.currentScreen instanceof BeatBlockUIScreen) {
 			ci.cancel();
 		}
 	}

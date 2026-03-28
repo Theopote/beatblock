@@ -1,6 +1,7 @@
 package com.beatblock.client;
 
 import com.beatblock.client.imgui.ImGuiRenderer;
+import com.beatblock.client.input.BeatBlockInputSystem;
 import com.beatblock.ui.BeatBlockUIManager;
 import imgui.ImGui;
 import net.minecraft.client.MinecraftClient;
@@ -98,6 +99,8 @@ public class BeatBlockUIScreen extends Screen {
 		super.removed();
 		MinecraftClient client = MinecraftClient.getInstance();
 		restoreVanillaBackgroundMusic(client);
+		BeatBlockInputSystem.clearCache();
+		BeatBlockWorldPick.clear();
 		// 仅当关闭后没有其他 Screen 时恢复锁定（回到游戏视角）
 		if (client != null && client.mouse != null && client.currentScreen == null) {
 			client.mouse.lockCursor();
@@ -154,13 +157,13 @@ public class BeatBlockUIScreen extends Screen {
 	private void handleGameMouseClick(Click click) {
 		MinecraftClient client = MinecraftClient.getInstance();
 		if (client == null || client.interactionManager == null || client.player == null || client.world == null) return;
-		HitResult hit = client.crosshairTarget;
+		HitResult hit = BeatBlockInputSystem.pickTargetFromImGui();
 		if (hit == null) return;
-		if (click.button() == 0) { // left
-			if (hit.getType() == HitResult.Type.ENTITY && hit instanceof EntityHitResult entityHit) {
+		if (click.button() == 0) { // left：不破坏方块，仅记录拾取（工具面板等可用）
+			if (hit.getType() == HitResult.Type.BLOCK && hit instanceof BlockHitResult blockHit) {
+				BeatBlockWorldPick.setLastLeftClickedBlock(blockHit.getBlockPos());
+			} else if (hit.getType() == HitResult.Type.ENTITY && hit instanceof EntityHitResult entityHit) {
 				client.interactionManager.attackEntity(client.player, entityHit.getEntity());
-			} else if (hit.getType() == HitResult.Type.BLOCK && hit instanceof BlockHitResult blockHit) {
-				client.interactionManager.attackBlock(blockHit.getBlockPos(), blockHit.getSide());
 			}
 		} else if (click.button() == 1) { // right
 			if (hit.getType() == HitResult.Type.BLOCK && hit instanceof BlockHitResult blockHit) {
