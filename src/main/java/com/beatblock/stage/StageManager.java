@@ -22,7 +22,7 @@ public class StageManager {
 	public void removeZone(StageZone zone) {
 		zones.remove(zone);
 		if (currentStage == zone) {
-			currentStage = zones.isEmpty() ? null : zones.get(0);
+			currentStage = zones.isEmpty() ? null : zones.getFirst();
 		}
 	}
 

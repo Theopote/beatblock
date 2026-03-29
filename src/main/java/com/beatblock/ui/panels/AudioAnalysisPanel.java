@@ -1183,7 +1183,7 @@ public final class AudioAnalysisPanel {
         String normalized = text != null ? text : "-";
         boolean expandable = shouldCollapseValue(normalized);
         boolean expanded = expandable && expandedDetailRows.contains(rowId);
-        String display = expanded ? normalized : collapseText(normalized, COLLAPSED_TEXT_MAX_CHARS);
+        String display = expanded ? normalized : collapseText(normalized);
         ImVec4 resolvedColor = color != null ? color : new ImVec4(1f, 1f, 1f, 1f);
 
         ImGui.pushStyleColor(ImGuiCol.Text, resolvedColor.x, resolvedColor.y, resolvedColor.z, resolvedColor.w);
@@ -1220,7 +1220,7 @@ public final class AudioAnalysisPanel {
         ImGui.textDisabled(key + "：");
         ImGui.sameLine();
         ImGui.setCursorPosX(ImGui.getCursorPosX() + 4f);
-        String rowId = "##detailCompact_" + Integer.toHexString((key + "|" + String.valueOf(value)).hashCode());
+        String rowId = "##detailCompact_" + Integer.toHexString((key + "|" + value).hashCode());
         renderCollapsedInlineValue(value, rowId, color);
     }
 
@@ -1232,15 +1232,15 @@ public final class AudioAnalysisPanel {
                 || text.contains(":");
     }
 
-    private String collapseText(String text, int maxChars) {
-        if (text == null || text.length() <= maxChars) {
+    private String collapseText(String text) {
+        if (text == null || text.length() <= AudioAnalysisPanel.COLLAPSED_TEXT_MAX_CHARS) {
             return text;
         }
-        if (maxChars < 8) {
-            return text.substring(0, Math.max(1, maxChars - 1)) + "…";
+        if (AudioAnalysisPanel.COLLAPSED_TEXT_MAX_CHARS < 8) {
+            return text.substring(0, Math.max(1, AudioAnalysisPanel.COLLAPSED_TEXT_MAX_CHARS - 1)) + "…";
         }
-        int head = maxChars / 2 - 1;
-        int tail = maxChars - head - 1;
+        int head = AudioAnalysisPanel.COLLAPSED_TEXT_MAX_CHARS / 2 - 1;
+        int tail = AudioAnalysisPanel.COLLAPSED_TEXT_MAX_CHARS - head - 1;
         return text.substring(0, head) + "…" + text.substring(text.length() - tail);
     }
 

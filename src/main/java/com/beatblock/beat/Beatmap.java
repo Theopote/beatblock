@@ -2,6 +2,7 @@ package com.beatblock.beat;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 
 /**
@@ -19,7 +20,7 @@ public class Beatmap {
 		this.bpm = Math.max(0.1, bpm);
 		this.durationSeconds = Math.max(0, durationSeconds);
 		this.events = new ArrayList<>(events != null ? events : List.of());
-		this.events.sort((a, b) -> Double.compare(a.getTimestamp(), b.getTimestamp()));
+		this.events.sort(Comparator.comparingDouble(BeatEvent::getTimestamp));
 	}
 
 	public String getName() {

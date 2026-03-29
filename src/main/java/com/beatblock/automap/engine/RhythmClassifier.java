@@ -12,8 +12,6 @@ import java.util.List;
  */
 public final class RhythmClassifier {
 
-	private static final double BAND_MATCH_TIME_TOLERANCE = 0.1;
-
 	/**
 	 * 对每个 beat 找到最近的 FrequencyBands，取主导频段映射为 RhythmType。
 	 */

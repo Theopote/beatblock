@@ -49,7 +49,7 @@ public final class AnimationPlayer {
 		float energy = anim.getEnergy();
 		EffectContext ctx = new EffectContext(target.getCenter(), anim.getExtraParams());
 		for (BlockPos pos : target.getBlocks()) {
-			AnimatedBlock block = currentFrameBlocks.computeIfAbsent(pos.toImmutable(), p -> new AnimatedBlock(p));
+			AnimatedBlock block = currentFrameBlocks.computeIfAbsent(pos.toImmutable(), AnimatedBlock::new);
 			block.resetToOriginal();
 			for (AnimationEffect effect : anim.getDefinition().getEffects()) {
 				effect.apply(block, t, energy, ctx);
