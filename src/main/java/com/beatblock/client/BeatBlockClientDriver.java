@@ -152,9 +152,7 @@ public final class BeatBlockClientDriver {
 		if (BeatBlock.timelineEditor != null) {
 			if (BeatBlock.timelineEditor.getClock().isPlaying()) return true;
 			// 2. 当手动拖动播放头（标尺定位）时，类似播放，锁定视角
-			if (BeatBlock.timelineEditor.getInteractionState().getMode() == com.beatblock.timeline.editor.InteractionMode.SCRUB_TIME) {
-				return true;
-			}
+            return BeatBlock.timelineEditor.getInteractionState().getMode() == com.beatblock.timeline.editor.InteractionMode.SCRUB_TIME;
 		}
 		// 3. 否则（暂停状态且未拖动播放头），允许玩家在 Minecraft 中操作视角
 		return false;

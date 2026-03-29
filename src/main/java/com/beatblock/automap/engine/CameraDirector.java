@@ -40,9 +40,7 @@ public final class CameraDirector {
 					out.add(new CameraEvent(sec.getStartSeconds(), CameraAction.PAN));
 					out.add(new CameraEvent(durationSeconds - 0.5, CameraAction.HOLD));
 				}
-				default -> {
-					out.add(new CameraEvent(sec.getStartSeconds(), CameraAction.HOLD));
-				}
+				default -> out.add(new CameraEvent(sec.getStartSeconds(), CameraAction.HOLD));
 			}
 		}
 		// 按时间排序后去重：同一时间只保留一个
