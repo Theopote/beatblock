@@ -36,7 +36,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.TreeMap;
 
 /**
  * 右侧事件属性面板。
@@ -437,7 +436,15 @@ public class EventPropertiesPanel {
 		if (ImGui.combo("镜头类型##camSegKind", kindIdx, CAM_KIND_LABELS)) {
 			CameraSegmentKind newKind = CAM_KINDS[kindIdx.get()];
 			if (newKind != kind) {
+				// 清理旧类型参数，保留新类型共用的参数
+				List<String> newKeys = paramKeysForKind(newKind);
+				for (String existingKey : new ArrayList<>(ref.event().getParameters().keySet())) {
+					if (!"kind".equals(existingKey) && !newKeys.contains(existingKey)) {
+						ref.event().removeParameter(existingKey);
+					}
+				}
 				ref.event().setParameter("kind", newKind.name());
+				initSegmentDefaults(ref.event(), newKind);
 				kind = newKind;
 				bindBuffers(ref);
 			}
@@ -463,6 +470,7 @@ public class EventPropertiesPanel {
 				renderSegParam("终点 Y", "endY");
 				renderSegParam("终点 Z", "endZ");
 				renderSegParam("基准 Yaw (°)", "baseYawDeg");
+				renderSegParam("基准 Pitch (°)", "basePitchDeg");
 			}
 			case ORBIT -> {
 				ImGui.textDisabled("环绕参数");
@@ -577,13 +585,18 @@ public class EventPropertiesPanel {
 			double t0 = ref.clip().getStartTimeSeconds();
 			ref.clip().setEndTimeSeconds(t0 + Math.max(0.05, dur));
 			CameraPathMetadata.setPathVisible(timeline, ref.clip().getId(), camSegPathVisibleProxy.get());
-			for (Map.Entry<String, ImString> en : camSegParamBuffers.entrySet()) {
-				String raw = valueOf(en.getValue()).trim();
+			// 仅写回当前镜头类型对应的参数，避免残留旧类型参数
+			CameraSegmentKind currentKind = CameraSegmentKind.fromParam(ref.event().getParameters().get("kind"));
+			List<String> validKeys = paramKeysForKind(currentKind);
+			for (String key : validKeys) {
+				ImString buf = camSegParamBuffers.get(key);
+				if (buf == null) continue;
+				String raw = valueOf(buf).trim();
 				if (raw.isEmpty()) continue;
 				try {
-					ref.event().setParameter(en.getKey(), Double.parseDouble(raw));
+					ref.event().setParameter(key, Double.parseDouble(raw));
 				} catch (NumberFormatException ex) {
-					ref.event().setParameter(en.getKey(), raw);
+					ref.event().setParameter(key, raw);
 				}
 			}
 			timeline.setDurationSeconds(Math.max(timeline.getDurationSeconds(), ref.clip().getEndTimeSeconds()));
@@ -611,6 +624,10 @@ public class EventPropertiesPanel {
 			}
 			ImGui.textDisabled(String.format(Locale.ROOT, "片段范围: %.3fs — %.3fs",
 				ref.clip().getStartTimeSeconds(), ref.clip().getEndTimeSeconds()));
+			if (clipKind != null && clipKind != CameraSegmentKind.PATH) {
+				ImGui.spacing();
+				ImGui.textColored(1f, 0.65f, 0.2f, 1f, "⚠ 当前片段类型非路径（PATH），关键帧的位姿参数不会被摄像机使用。");
+			}
 			ImGui.separator();
 		}
 
@@ -830,6 +847,61 @@ public class EventPropertiesPanel {
 	private static double numericParam(Map<String, Object> params, String key, double fallback) {
 		Object value = params != null ? params.get(key) : null;
 		return value instanceof Number ? ((Number) value).doubleValue() : fallback;
+	}
+
+	/** 每种镜头类型对应的有效参数键名列表（不含 kind）。 */
+	private static List<String> paramKeysForKind(CameraSegmentKind kind) {
+		return switch (kind) {
+			case PATH -> List.of();
+			case DOLLY -> List.of("startX", "startY", "startZ", "endX", "endY", "endZ", "baseYawDeg", "basePitchDeg");
+			case ORBIT -> List.of("targetX", "targetY", "targetZ", "radius", "height", "yawStartDeg", "yawEndDeg");
+			case CRANE -> List.of("startX", "startY", "startZ", "endX", "endY", "endZ", "yawDeg", "pitchDeg");
+			case SHAKE -> List.of("anchorX", "anchorY", "anchorZ", "yawDeg", "pitchDeg", "distance", "amplitude", "frequencyHz", "beatSync", "beatsPerPulse");
+		};
+	}
+
+	/** 切换镜头类型时，为新类型尚未设置的参数填入默认值（尽量使用当前玩家视角）。 */
+	private static void initSegmentDefaults(TimelineEvent event, CameraSegmentKind kind) {
+		Map<String, Object> p = event.getParameters();
+		MinecraftClient mc = MinecraftClient.getInstance();
+		double ex = 0, ey = 64, ez = 0;
+		float yaw = 0f, pitch = 0f;
+		if (mc != null && mc.player != null) {
+			net.minecraft.util.math.Vec3d eye = mc.player.getEyePos();
+			ex = eye.x; ey = eye.y; ez = eye.z;
+			yaw = mc.player.getYaw();
+			pitch = mc.player.getPitch();
+		}
+		switch (kind) {
+			case DOLLY -> {
+				putIfAbsent(event, p, "startX", ex); putIfAbsent(event, p, "startY", ey); putIfAbsent(event, p, "startZ", ez);
+				putIfAbsent(event, p, "endX", ex);   putIfAbsent(event, p, "endY", ey);   putIfAbsent(event, p, "endZ", ez);
+				putIfAbsent(event, p, "baseYawDeg", (double) yaw);
+				putIfAbsent(event, p, "basePitchDeg", (double) pitch);
+			}
+			case ORBIT -> {
+				putIfAbsent(event, p, "targetX", ex); putIfAbsent(event, p, "targetY", ey); putIfAbsent(event, p, "targetZ", ez);
+				putIfAbsent(event, p, "radius", 10.0);  putIfAbsent(event, p, "height", 4.0);
+				putIfAbsent(event, p, "yawStartDeg", 0.0); putIfAbsent(event, p, "yawEndDeg", 270.0);
+			}
+			case CRANE -> {
+				putIfAbsent(event, p, "startX", ex); putIfAbsent(event, p, "startY", ey); putIfAbsent(event, p, "startZ", ez);
+				putIfAbsent(event, p, "endX", ex);   putIfAbsent(event, p, "endY", ey + 8.0); putIfAbsent(event, p, "endZ", ez);
+				putIfAbsent(event, p, "yawDeg", (double) yaw); putIfAbsent(event, p, "pitchDeg", (double) pitch);
+			}
+			case SHAKE -> {
+				putIfAbsent(event, p, "anchorX", ex); putIfAbsent(event, p, "anchorY", ey); putIfAbsent(event, p, "anchorZ", ez);
+				putIfAbsent(event, p, "yawDeg", (double) yaw); putIfAbsent(event, p, "pitchDeg", (double) pitch);
+				putIfAbsent(event, p, "distance", 10.0);  putIfAbsent(event, p, "amplitude", 0.35);
+				putIfAbsent(event, p, "frequencyHz", 18.0); putIfAbsent(event, p, "beatSync", 1.0);
+				putIfAbsent(event, p, "beatsPerPulse", 0.5);
+			}
+			case PATH -> {}
+		}
+	}
+
+	private static void putIfAbsent(TimelineEvent event, Map<String, Object> p, String key, double value) {
+		if (!p.containsKey(key)) event.setParameter(key, value);
 	}
 
 	private static String valueOf(ImString text) {
