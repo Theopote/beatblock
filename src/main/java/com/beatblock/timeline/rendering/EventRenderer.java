@@ -1,7 +1,6 @@
 package com.beatblock.timeline.rendering;
 
 import com.beatblock.client.BeatBlockClientDriver;
-import com.beatblock.client.camera.TimelineCameraEvaluator;
 import com.beatblock.timeline.*;
 import com.beatblock.timeline.camera.CameraPathMetadata;
 import com.beatblock.timeline.camera.CameraSegmentKind;
@@ -9,12 +8,10 @@ import com.beatblock.timeline.camera.CameraTrackFactory;
 import com.beatblock.timeline.editor.SelectionState;
 import com.beatblock.timeline.editor.TimelineViewState;
 import imgui.ImGui;
-import net.minecraft.util.math.Vec3d;
 
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Map;
 import java.util.function.ToDoubleFunction;
 
 /**
@@ -36,7 +33,6 @@ public final class EventRenderer {
 	private static final int CAMERA_CRANE_COLOR = 0xCC_77_DD_88;
 	private static final int CAMERA_SHAKE_COLOR = 0xCC_FF_77_77;
 	private static final int CAMERA_EDGE_HANDLE_COLOR = 0xEE_FF_FF_FF;
-	private static final int CAMERA_PATH_LINE_COLOR = 0x99_FF_CC_66;
 	private static final int SELECTED_BORDER_COLOR = 0xFF_FF_FF_00;
 	private static final int STATUS_APPLIED_COLOR = 0xFF_57_C4_A0;
 	private static final int STATUS_SKIPPED_COLOR = 0xFF_44_AA_FF;
@@ -329,57 +325,27 @@ public final class EventRenderer {
 				}
 
 				boolean pathVis = CameraPathMetadata.isPathVisible(timeline, clip.getId());
+				// 运动轨迹在世界中绘制（CameraPathWorldRenderer）；轨道上仅保留关键帧时间标记
 				if (pathVis && kind == CameraSegmentKind.PATH) {
 					List<TimelineEvent> kf = new ArrayList<>();
 					for (TimelineEvent e : clip.getEvents()) {
 						if (e.getType() == EventType.CAMERA_KEYFRAME) kf.add(e);
 					}
 					kf.sort(Comparator.comparingDouble(TimelineEvent::getTimeSeconds));
-					Vec3d pathRef = kf.isEmpty() ? Vec3d.ZERO : keyframePosition(kf.getFirst(), Vec3d.ZERO);
-					for (int i = 0; i < kf.size() - 1; i++) {
-						TimelineEvent ka = kf.get(i);
-						TimelineEvent kb = kf.get(i + 1);
-						double ta = ka.getTimeSeconds();
-						double tb = kb.getTimeSeconds();
-						if (tb < vs || ta > ve) continue;
-						String ease = stringParam(ka.getParameters(), "ease", "SMOOTH");
-						boolean linearSeg = "LINEAR".equalsIgnoreCase(ease);
-						int steps = linearSeg ? 1 : 14;
-						float prevX = Float.NaN;
-						float prevY = Float.NaN;
-						for (int s = 0; s <= steps; s++) {
-							double w = s / (double) steps;
-							double tSec = lerpD(ta, tb, w);
-							double wt = linearSeg ? w : smoothstepD(w);
-							Vec3d pa = keyframePosition(ka, pathRef);
-							Vec3d pb = keyframePosition(kb, pathRef);
-							Vec3d pr = pa.lerp(pb, wt);
-							float x = baseX + view.timeToScreen(tSec);
-							float y = baseY + worldPathScreenDelta(pr, pathRef);
-							if (!Float.isNaN(prevX)) {
-								dl.addLine(prevX, prevY, x, y, CAMERA_PATH_LINE_COLOR, linearSeg ? 1.5f : 1.2f);
-							}
-							prevX = x;
-							prevY = y;
-						}
-					}
 					for (TimelineEvent e : kf) {
 						double t = e.getTimeSeconds();
 						if (t < vs || t > ve) continue;
 						float x = baseX + view.timeToScreen(t);
-						float y = baseY + worldPathScreenDelta(keyframePosition(e, pathRef), pathRef);
 						dl.addTriangleFilled(
-							x, y - 6,
-							x - 5, y + 5,
-							x + 5, y + 5,
+							x, baseY - 6,
+							x - 5, baseY + 5,
+							x + 5, baseY + 5,
 							KEYFRAME_COLOR
 						);
 						if (selection != null && selection.isEventSelected(e.getId())) {
-							dl.addRect(x - 6, y - 7, x + 6, y + 6, SELECTED_BORDER_COLOR, 0f, 0, 1.5f);
+							dl.addRect(x - 6, baseY - 7, x + 6, baseY + 6, SELECTED_BORDER_COLOR, 0f, 0, 1.5f);
 						}
 					}
-				} else if (pathVis && kind != CameraSegmentKind.SHAKE) {
-					drawProceduralCameraPath(dl, timeline, kind, baseX, baseY, cs, ce, view);
 				}
 			}
 		}
@@ -406,88 +372,6 @@ public final class EventRenderer {
 		}
 
 		ImGui.setCursorPosY(rowY + layout.rowHeight);
-	}
-
-	private static void drawProceduralCameraPath(
-		imgui.ImDrawList dl,
-		Timeline timeline,
-		CameraSegmentKind kind,
-		float baseX,
-		float baseY,
-		double cs,
-		double ce,
-		TimelineViewState view
-	) {
-		if (timeline == null || view == null || dl == null) return;
-		int lineColor = switch (kind) {
-			case DOLLY -> 0x99_66_CC_FF;
-			case ORBIT -> 0x99_DD_77_FF;
-			case CRANE -> 0x99_77_DD_88;
-			default -> CAMERA_PATH_LINE_COLOR;
-		};
-		int steps = 26;
-		float prevX = Float.NaN;
-		float prevY = Float.NaN;
-		Vec3d ref = null;
-		for (int s = 0; s <= steps; s++) {
-			double t = cs + (ce - cs) * s / (double) steps;
-			TimelineCameraEvaluator.CameraSample sm = TimelineCameraEvaluator.evaluate(timeline, t, Vec3d.ZERO, 0f, 0f);
-			if (sm == null) break;
-			if (ref == null) ref = sm.position();
-			float x = baseX + view.timeToScreen(t);
-			float y = baseY + worldPathScreenDelta(sm.position(), ref);
-			if (!Float.isNaN(prevX)) {
-				dl.addLine(prevX, prevY, x, y, lineColor, 1.25f);
-			}
-			prevX = x;
-			prevY = y;
-		}
-	}
-
-	private static Vec3d keyframePosition(TimelineEvent e, Vec3d fallback) {
-		if (e == null) return fallback;
-		Map<String, Object> p = e.getParameters();
-		double x = paramDouble(p, "x", fallback.x);
-		double y = paramDouble(p, "y", fallback.y);
-		double z = paramDouble(p, "z", fallback.z);
-		return new Vec3d(x, y, z);
-	}
-
-	private static float worldPathScreenDelta(Vec3d pos, Vec3d ref) {
-		double dy = pos.y - ref.y;
-		double dxz = Math.hypot(pos.x - ref.x, pos.z - ref.z);
-		float v = (float) (dy * 0.11 + dxz * 0.035);
-		return Math.max(-16f, Math.min(16f, v));
-	}
-
-	private static double paramDouble(Map<String, Object> p, String key, double def) {
-		if (p == null) return def;
-		Object o = p.get(key);
-		if (o instanceof Number n) return n.doubleValue();
-		if (o != null) {
-			try {
-				return Double.parseDouble(String.valueOf(o).trim());
-			} catch (Exception ignored) {
-				return def;
-			}
-		}
-		return def;
-	}
-
-	private static String stringParam(Map<String, Object> p, String key, String def) {
-		if (p == null) return def;
-		Object o = p.get(key);
-		if (o == null) return def;
-		String s = String.valueOf(o).trim();
-		return s.isEmpty() ? def : s;
-	}
-
-	private static double smoothstepD(double t) {
-		return t * t * (3.0 - 2.0 * t);
-	}
-
-	private static double lerpD(double a, double b, double t) {
-		return a + (b - a) * t;
 	}
 
 	public void renderGlobalEventRow(float rowY, List<GlobalEvent> events, TimelineLayout layout, TimelineViewState view) {

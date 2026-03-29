@@ -27,7 +27,7 @@ public abstract class CameraMixin {
 
 	@Inject(method = "update(Lnet/minecraft/world/World;Lnet/minecraft/entity/Entity;ZZF)V", at = @At("RETURN"))
 	private void beatblock$applyTimelineCamera(World world, Entity focusedEntity, boolean thirdPerson, boolean inverseView, float tickProgress, CallbackInfo ci) {
-		if (!BeatBlockClientDriver.isDriving()) return;
+		if (!BeatBlockClientDriver.shouldApplyTimelineCameraToView()) return;
 		if (BeatBlock.timeline == null || BeatBlock.musicPlayer == null) return;
 		double t = BeatBlock.musicPlayer.getCurrentTimeSeconds();
 		Camera self = (Camera) (Object) this;

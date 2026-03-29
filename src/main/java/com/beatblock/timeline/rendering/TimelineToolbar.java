@@ -219,6 +219,7 @@ public final class TimelineToolbar {
 			if (BeatBlock.timelineEditor != null) {
 				BeatBlock.timelineEditor.getClock().pause();
 			}
+			BeatBlockClientDriver.stopDriving();
 			seekTo(editor, 0);
 		}
 		transportTooltip = hoveredTooltip(transportTooltip, TOOLTIP_STOP);

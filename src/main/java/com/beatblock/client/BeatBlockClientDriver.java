@@ -142,6 +142,16 @@ public final class BeatBlockClientDriver {
 		return driving;
 	}
 
+	/**
+	 * 是否应用时间线摄像机覆盖玩家视角：仅在「正在播放」时生效（时钟或主音乐播放器其一在播），
+	 * 避免仅存在摄像机片段或曾点过播放后暂停时仍锁死鼠标视角。
+	 */
+	public static boolean shouldApplyTimelineCameraToView() {
+		if (!driving) return false;
+		if (BeatBlock.timelineEditor != null && BeatBlock.timelineEditor.getClock().isPlaying()) return true;
+		return BeatBlock.musicPlayer != null && BeatBlock.musicPlayer.isPlaying();
+	}
+
 	public static void setupBeatEventHandler() {
 		BeatBlock.animationManager.setEventHandler((event, manager) -> {
 			MinecraftClient mc = MinecraftClient.getInstance();

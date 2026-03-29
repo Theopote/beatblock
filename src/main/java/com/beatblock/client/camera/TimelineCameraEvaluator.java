@@ -16,7 +16,7 @@ import java.util.Map;
 
 /**
  * 根据时间线摄像机轨计算当前时刻的世界坐标与 yaw/pitch（度）。
- * 播放驱动 {@link com.beatblock.client.BeatBlockClientDriver#isDriving()} 时由 {@link com.beatblock.mixin.client.CameraMixin} 应用。
+ * 时间线正在播放时由 {@link com.beatblock.mixin.client.CameraMixin} 应用（见 {@link com.beatblock.client.BeatBlockClientDriver#shouldApplyTimelineCameraToView()}）。
  */
 public final class TimelineCameraEvaluator {
 
