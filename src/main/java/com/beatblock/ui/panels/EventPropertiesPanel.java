@@ -458,9 +458,7 @@ public class EventPropertiesPanel {
 		// 按镜头类型分组显示对应参数
 		ImGui.separator();
 		switch (kind) {
-			case PATH -> {
-				ImGui.textDisabled("路径模式：关键帧插值，参数在关键帧事件上编辑。");
-			}
+			case PATH -> ImGui.textDisabled("路径模式：关键帧插值，参数在关键帧事件上编辑。");
 			case DOLLY -> {
 				ImGui.textDisabled("推拉参数");
 				renderSegParam("起点 X", "startX");
@@ -572,12 +570,8 @@ public class EventPropertiesPanel {
 	}
 
 	private void setSegBuf(String key, double value) {
-		ImString buf = camSegParamBuffers.get(key);
-		if (buf == null) {
-			buf = new ImString(INPUT_BUFFER_SIZE);
-			camSegParamBuffers.put(key, buf);
-		}
-		buf.set(String.format(Locale.ROOT, "%.6f", value));
+        ImString buf = camSegParamBuffers.computeIfAbsent(key, k -> new ImString(INPUT_BUFFER_SIZE));
+        buf.set(String.format(Locale.ROOT, "%.6f", value));
 	}
 
 	private void applyCameraSegmentPanel(EventRef ref, Timeline timeline) {
@@ -877,8 +871,8 @@ public class EventPropertiesPanel {
 			case DOLLY -> {
 				putIfAbsent(event, p, "startX", ex); putIfAbsent(event, p, "startY", ey); putIfAbsent(event, p, "startZ", ez);
 				putIfAbsent(event, p, "endX", ex);   putIfAbsent(event, p, "endY", ey);   putIfAbsent(event, p, "endZ", ez);
-				putIfAbsent(event, p, "baseYawDeg", (double) yaw);
-				putIfAbsent(event, p, "basePitchDeg", (double) pitch);
+				putIfAbsent(event, p, "baseYawDeg", yaw);
+				putIfAbsent(event, p, "basePitchDeg", pitch);
 			}
 			case ORBIT -> {
 				putIfAbsent(event, p, "targetX", ex); putIfAbsent(event, p, "targetY", ey); putIfAbsent(event, p, "targetZ", ez);
@@ -888,11 +882,11 @@ public class EventPropertiesPanel {
 			case CRANE -> {
 				putIfAbsent(event, p, "startX", ex); putIfAbsent(event, p, "startY", ey); putIfAbsent(event, p, "startZ", ez);
 				putIfAbsent(event, p, "endX", ex);   putIfAbsent(event, p, "endY", ey + 8.0); putIfAbsent(event, p, "endZ", ez);
-				putIfAbsent(event, p, "yawDeg", (double) yaw); putIfAbsent(event, p, "pitchDeg", (double) pitch);
+				putIfAbsent(event, p, "yawDeg", yaw); putIfAbsent(event, p, "pitchDeg", pitch);
 			}
 			case SHAKE -> {
 				putIfAbsent(event, p, "anchorX", ex); putIfAbsent(event, p, "anchorY", ey); putIfAbsent(event, p, "anchorZ", ez);
-				putIfAbsent(event, p, "yawDeg", (double) yaw); putIfAbsent(event, p, "pitchDeg", (double) pitch);
+				putIfAbsent(event, p, "yawDeg", yaw); putIfAbsent(event, p, "pitchDeg", pitch);
 				putIfAbsent(event, p, "distance", 10.0);  putIfAbsent(event, p, "amplitude", 0.35);
 				putIfAbsent(event, p, "frequencyHz", 18.0); putIfAbsent(event, p, "beatSync", 1.0);
 				putIfAbsent(event, p, "beatsPerPulse", 0.5);
