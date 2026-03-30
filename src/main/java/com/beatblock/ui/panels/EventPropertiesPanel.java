@@ -540,13 +540,14 @@ public class EventPropertiesPanel {
 
 	private void captureCurrentViewToSegment(CameraSegmentKind kind) {
 		MinecraftClient mc = MinecraftClient.getInstance();
-		if (mc == null || mc.player == null) {
-			validationError = "无本地玩家，无法捕获。";
+		if (mc == null || mc.gameRenderer == null || mc.gameRenderer.getCamera() == null) {
+			validationError = "无可用相机，无法捕获。";
 			return;
 		}
-		net.minecraft.util.math.Vec3d eye = mc.player.getEyePos();
-		float yaw = mc.player.getYaw();
-		float pitch = mc.player.getPitch();
+		net.minecraft.client.render.Camera camera = mc.gameRenderer.getCamera();
+		net.minecraft.util.math.Vec3d eye = camera.getCameraPos();
+		float yaw = camera.getYaw();
+		float pitch = camera.getPitch();
 		switch (kind) {
 			case DOLLY -> {
 				setSegBuf("startX", eye.x); setSegBuf("startY", eye.y); setSegBuf("startZ", eye.z);
@@ -653,16 +654,17 @@ public class EventPropertiesPanel {
 		ImGui.spacing();
 		if (ImGui.button("捕获当前视角##camKfCapture", 160f, 0f)) {
 			MinecraftClient mc = MinecraftClient.getInstance();
-			if (mc != null && mc.player != null) {
-				net.minecraft.util.math.Vec3d eye = mc.player.getEyePos();
+			if (mc != null && mc.gameRenderer != null && mc.gameRenderer.getCamera() != null) {
+				net.minecraft.client.render.Camera camera = mc.gameRenderer.getCamera();
+				net.minecraft.util.math.Vec3d eye = camera.getCameraPos();
 				camXBuffer.set(String.format(Locale.ROOT, "%.6f", eye.x));
 				camYBuffer.set(String.format(Locale.ROOT, "%.6f", eye.y));
 				camZBuffer.set(String.format(Locale.ROOT, "%.6f", eye.z));
-				camYawBuffer.set(String.format(Locale.ROOT, "%.3f", mc.player.getYaw()));
-				camPitchBuffer.set(String.format(Locale.ROOT, "%.3f", mc.player.getPitch()));
+				camYawBuffer.set(String.format(Locale.ROOT, "%.3f", camera.getYaw()));
+				camPitchBuffer.set(String.format(Locale.ROOT, "%.3f", camera.getPitch()));
 				validationError = null;
 			} else {
-				validationError = "无本地玩家，无法捕获。";
+				validationError = "无可用相机，无法捕获。";
 			}
 		}
 		ImGui.sameLine();
@@ -681,6 +683,19 @@ public class EventPropertiesPanel {
 				boundRefKey = null;
 			}
 		}
+
+		try {
+			double x = Double.parseDouble(valueOf(camXBuffer).trim());
+			double y = Double.parseDouble(valueOf(camYBuffer).trim());
+			double z = Double.parseDouble(valueOf(camZBuffer).trim());
+			double yaw = Double.parseDouble(valueOf(camYawBuffer).trim());
+			double pitch = Double.parseDouble(valueOf(camPitchBuffer).trim());
+			com.beatblock.client.camera.TimelineCameraController.getInstance().previewKeyframeDirect(
+				new com.beatblock.client.camera.TimelineCameraEvaluator.CameraSample(
+					new net.minecraft.util.math.Vec3d(x, y, z), (float) yaw, (float) pitch
+				)
+			);
+		} catch (NumberFormatException ignored) {}
 	}
 
 	private void applyCameraKeyframe(EventRef ref, Timeline timeline) {

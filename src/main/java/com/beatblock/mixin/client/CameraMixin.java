@@ -25,20 +25,18 @@ public abstract class CameraMixin {
 	@Shadow
 	protected abstract void setRotation(float yaw, float pitch);
 
-	@Inject(method = "update(Lnet/minecraft/world/World;Lnet/minecraft/entity/Entity;ZZF)V", at = @At("RETURN"))
+	@Inject(method = "update(Lnet/minecraft/world/World;Lnet/minecraft/entity/Entity;ZZF)V", at = @At("TAIL"))
 	private void beatblock$applyTimelineCamera(World world, Entity focusedEntity, boolean thirdPerson, boolean inverseView, float tickProgress, CallbackInfo ci) {
-		if (!BeatBlockClientDriver.shouldApplyTimelineCameraToView()) return;
-		if (BeatBlock.timeline == null || BeatBlock.musicPlayer == null) return;
-		double t = BeatBlock.musicPlayer.getCurrentTimeSeconds();
 		Camera self = (Camera) (Object) this;
-		Vec3d anchor = focusedEntity != null ? focusedEntity.getEyePos() : self.getCameraPos();
-		float fy = focusedEntity != null ? focusedEntity.getYaw() : self.getYaw();
-		float fp = focusedEntity != null ? focusedEntity.getPitch() : self.getPitch();
-		TimelineCameraEvaluator.CameraSample sample = TimelineCameraEvaluator.evaluate(BeatBlock.timeline, t, anchor, fy, fp);
-		if (sample == null) return;
-		// setRotation 在 setPos 之后调用，确保 Camera 内部缓存的方向向量
-		// (horizontalPlane / diagonalPlane) 基于最终位置重新计算
-		setPos(sample.position());
-		setRotation(sample.yawDeg(), sample.pitchDeg());
+		com.beatblock.client.camera.CameraRuntime runtime = com.beatblock.client.camera.CameraRuntime.getInstance();
+
+		if (runtime.isPlayerOwner()) {
+			runtime.updateFromGameCamera(self.getCameraPos(), self.getYaw(), self.getPitch());
+		} else if (runtime.isTimelineOwner()) {
+			com.beatblock.client.camera.TimelineCameraEvaluator.CameraSample sample = runtime.getCurrentSample();
+			if (sample == null) return;
+			setPos(sample.position());
+			setRotation(sample.yawDeg(), sample.pitchDeg());
+		}
 	}
 }

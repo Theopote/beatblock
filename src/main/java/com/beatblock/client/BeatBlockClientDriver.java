@@ -57,6 +57,7 @@ public final class BeatBlockClientDriver {
 	public static void onClientTick() {
 		MinecraftClient mc = MinecraftClient.getInstance();
 		World world = mc != null ? mc.world : null;
+		com.beatblock.client.camera.TimelineCameraController.getInstance().tick();
 
 		if (driving) {
 			if (world == null) return;
@@ -105,6 +106,7 @@ public final class BeatBlockClientDriver {
 			syncTimelineAutoAnimationEvents(previewTime, true);
 			BeatBlock.blockAnimationEngine.tick(previewTime);
 		}
+
 	}
 
 	private static void syncStemMixerToMusicPlayer() {
@@ -142,21 +144,7 @@ public final class BeatBlockClientDriver {
 		return driving;
 	}
 
-	/**
-	 * 是否应用时间线摄像机覆盖玩家视角：仅在「正在播放」时生效（时钟或主音乐播放器其一在播），
-	 * 避免仅存在摄像机片段或曾点过播放后暂停时仍锁死鼠标视角。
-	 */
-	public static boolean shouldApplyTimelineCameraToView() {
-		// 1. 当主音乐或时间线在播放时，锁定视角应用摄像机轨
-		if (BeatBlock.musicPlayer != null && BeatBlock.musicPlayer.isPlaying()) return true;
-		if (BeatBlock.timelineEditor != null) {
-			if (BeatBlock.timelineEditor.getClock().isPlaying()) return true;
-			// 2. 当手动拖动播放头（标尺定位）时，类似播放，锁定视角
-            return BeatBlock.timelineEditor.getInteractionState().getMode() == com.beatblock.timeline.editor.InteractionMode.SCRUB_TIME;
-		}
-		// 3. 否则（暂停状态且未拖动播放头），允许玩家在 Minecraft 中操作视角
-		return false;
-	}
+	// Removed obsolete `shouldApplyTimelineCameraToView`
 
 	public static void setupBeatEventHandler() {
 		BeatBlock.animationManager.setEventHandler((event, manager) -> {
@@ -245,10 +233,12 @@ public final class BeatBlockClientDriver {
 		BeatBlock.animationManager.clear();
 		resetTimelineAnimationScheduling();
 		stopDriving();
+
+		com.beatblock.client.camera.TimelineCameraController.getInstance().onTimelineUiClosed();
 	}
 
 	/** 与时间轴 UI 一致的时间源，便于未播放时拖动标尺仍能预览 ANIMATE。 */
-	private static double previewTimelineTimeSeconds() {
+	public static double previewTimelineTimeSeconds() {
 		if (BeatBlock.timelineEditor != null) {
 			return BeatBlock.timelineEditor.getClock().getCurrentTimeSeconds();
 		}
