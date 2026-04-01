@@ -97,8 +97,7 @@ public final class TimelineCameraController {
 			runtime.setOwner(CameraRuntime.Owner.TIMELINE);
 			LOGGER.debug("[CameraController] 接管相机控制");
 		} else if (!wantsTimeline && runtime.isTimelineOwner()) {
-			TimelineCameraEvaluator.CameraSample lastSample = runtime.getCurrentSample();
-			runtime.applyLerpToPlayer(lastSample, 0.1f);
+			runtime.cancelPlayerLerp();
 			runtime.setOwner(CameraRuntime.Owner.PLAYER);
 			LOGGER.debug("[CameraController] 恢复玩家控制");
 		}

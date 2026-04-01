@@ -77,6 +77,10 @@ public final class CameraRuntime {
 		lerpState = new LerpState(start, target, 0f, durationSeconds, true);
 	}
 
+	public void cancelPlayerLerp() {
+		lerpState = LerpState.INACTIVE;
+	}
+
 	public void tickPlayerLerp(float deltaSeconds) {
 		LerpState state = this.lerpState;
 		if (!state.active()) return;
