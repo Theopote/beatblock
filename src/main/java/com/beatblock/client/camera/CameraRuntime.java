@@ -86,7 +86,8 @@ public final class CameraRuntime {
 
 		MinecraftClient mc = MinecraftClient.getInstance();
 		if (mc.player != null) {
-			mc.player.setPos(blended.position().x, blended.position().y, blended.position().z);
+			Vec3d bodyPos = eyeToBodyPosition(mc, blended.position());
+			mc.player.setPos(bodyPos.x, bodyPos.y, bodyPos.z);
 			mc.player.setYaw(blended.yawDeg());
 			mc.player.setPitch(blended.pitchDeg());
 		}
@@ -145,6 +146,14 @@ public final class CameraRuntime {
 			return currentSample;
 		}
 		return new TimelineCameraEvaluator.CameraSample(mc.player.getEyePos(), mc.player.getYaw(), mc.player.getPitch());
+	}
+
+	private Vec3d eyeToBodyPosition(MinecraftClient mc, Vec3d eyePos) {
+		if (mc == null || mc.player == null || eyePos == null) {
+			return eyePos != null ? eyePos : Vec3d.ZERO;
+		}
+		double eyeOffset = mc.player.getEyeY() - mc.player.getY();
+		return eyePos.subtract(0.0, eyeOffset, 0.0);
 	}
 
 	private TimelineCameraEvaluator.CameraSample lerpSamples(TimelineCameraEvaluator.CameraSample a, TimelineCameraEvaluator.CameraSample b, float t) {

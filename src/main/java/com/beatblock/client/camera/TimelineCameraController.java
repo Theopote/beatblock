@@ -4,6 +4,7 @@ import com.beatblock.BeatBlock;
 import com.beatblock.client.BeatBlockClientDriver;
 import com.beatblock.timeline.Timeline;
 import com.beatblock.timeline.editor.InteractionMode;
+import imgui.ImGui;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.util.math.Vec3d;
 import org.slf4j.Logger;
@@ -66,6 +67,9 @@ public final class TimelineCameraController {
 		boolean scrubbing = false;
 		if (BeatBlock.timelineEditor != null && BeatBlock.timelineEditor.getInteractionState() != null) {
 			scrubbing = BeatBlock.timelineEditor.getInteractionState().getMode() == InteractionMode.SCRUB_TIME;
+		}
+		if (scrubbing && !ImGui.isMouseDown(0)) {
+			scrubbing = false;
 		}
 
 		if (keyframePreviewFrames > 0 && !playing && !scrubbing) {

@@ -247,6 +247,59 @@ public final class TimelineInteraction {
 		renderMarkerContextPopup(timeline, clock);
 		renderDeleteConfirmPopup(timeline, selectionState, trackListState);
 
+		if (ImGui.isMouseReleased(0)) {
+			if (interactionState.getMode() == InteractionMode.RESIZE_CLIP) {
+				cameraResizeEventOrigTimes.clear();
+			}
+			if (interactionState.getMode() == InteractionMode.DRAG_CLIP && interactionState.getActiveClipId() != null) {
+				float dx = mx - interactionState.getMouseStartX();
+				float dy = my - interactionState.getMouseStartY();
+				if (dx * dx + dy * dy < DRAG_THRESHOLD_PX * DRAG_THRESHOLD_PX) {
+					selectionState.clearClips();
+					selectionState.selectClip(interactionState.getActiveClipId());
+				}
+				dragLinkedEventOriginalTimes.clear();
+				dragFeatureEventSnapshot.clear();
+				dragCameraClipEventOriginalTimes.clear();
+			}
+			if (interactionState.getMode() == InteractionMode.DRAG_EVENT && interactionState.getActiveEventId() != null) {
+				float dx = mx - interactionState.getMouseStartX();
+				float dy = my - interactionState.getMouseStartY();
+				if (dx * dx + dy * dy < DRAG_THRESHOLD_PX * DRAG_THRESHOLD_PX) {
+					selectionState.clearEvents();
+					selectionState.selectEvent(interactionState.getActiveEventId());
+				}
+			}
+			if (interactionState.getMode() == InteractionMode.BOX_SELECT
+					&& selectionBox != null && selectionBox.isActive()) {
+				float boxMinX = selectionBox.getMinX();
+				float boxMaxX = selectionBox.getMaxX();
+				float boxMinY = selectionBox.getMinY();
+				float boxMaxY = selectionBox.getMaxY();
+				for (InteractiveTrackSlot slot : interactiveTrackSlots(timeline)) {
+					int logicalRow = slot.rowIndex();
+					if (!layout.isRowVisible(logicalRow)) continue;
+					float rowTopY = layout.getRowScreenY(logicalRow);
+					float rowBotY = rowTopY + layout.getRowHeight(logicalRow);
+					if (rowBotY < boxMinY || rowTopY > boxMaxY) continue;
+					Track track = timeline.getTrack(slot.trackId());
+					if (track == null) continue;
+					for (Clip clip : track.getClips()) {
+						for (TimelineEvent e : clip.getEvents()) {
+							float screenX = layout.contentLeft + viewState.timeToScreen(e.getTimeSeconds());
+							if (screenX >= boxMinX && screenX <= boxMaxX) {
+								selectionState.selectEvent(e.getId());
+							}
+						}
+					}
+				}
+			}
+			interactionState.setMode(InteractionMode.NONE);
+			interactionState.clearActive();
+			if (selectionBox != null) selectionBox.setActive(false);
+			return;
+		}
+
 		if (!ImGui.isWindowHovered(ImGuiHoveredFlags.AllowWhenBlockedByActiveItem | ImGuiHoveredFlags.AllowWhenBlockedByPopup)) return;
 		boolean alt = ImGui.getIO().getKeyAlt();
 
@@ -391,60 +444,6 @@ public final class TimelineInteraction {
 				}
 			}
 			ImGui.openPopup(POPUP_EVENT_CONTEXT);
-		}
-
-		if (ImGui.isMouseReleased(0)) {
-			if (interactionState.getMode() == InteractionMode.RESIZE_CLIP) {
-				cameraResizeEventOrigTimes.clear();
-			}
-			if (interactionState.getMode() == InteractionMode.DRAG_CLIP && interactionState.getActiveClipId() != null) {
-				float dx = mx - interactionState.getMouseStartX();
-				float dy = my - interactionState.getMouseStartY();
-				if (dx * dx + dy * dy < DRAG_THRESHOLD_PX * DRAG_THRESHOLD_PX) {
-					// 鼠标未移动超过阈值 → 视为点击，只做选中
-					selectionState.clearClips();
-					selectionState.selectClip(interactionState.getActiveClipId());
-				}
-				dragLinkedEventOriginalTimes.clear();
-				dragFeatureEventSnapshot.clear();
-				dragCameraClipEventOriginalTimes.clear();
-			}
-			if (interactionState.getMode() == InteractionMode.DRAG_EVENT && interactionState.getActiveEventId() != null) {
-				float dx = mx - interactionState.getMouseStartX();
-				float dy = my - interactionState.getMouseStartY();
-				if (dx * dx + dy * dy < DRAG_THRESHOLD_PX * DRAG_THRESHOLD_PX) {
-					selectionState.clearEvents();
-					selectionState.selectEvent(interactionState.getActiveEventId());
-				}
-			}
-			if (interactionState.getMode() == InteractionMode.BOX_SELECT
-					&& selectionBox != null && selectionBox.isActive()) {
-				float boxMinX = selectionBox.getMinX();
-				float boxMaxX = selectionBox.getMaxX();
-				float boxMinY = selectionBox.getMinY();
-				float boxMaxY = selectionBox.getMaxY();
-				for (InteractiveTrackSlot slot : interactiveTrackSlots(timeline)) {
-					int logicalRow = slot.rowIndex();
-					if (!layout.isRowVisible(logicalRow)) continue;
-					float rowTopY = layout.getRowScreenY(logicalRow);
-					float rowBotY = rowTopY + layout.getRowHeight(logicalRow);
-					if (rowBotY < boxMinY || rowTopY > boxMaxY) continue;
-					Track track = timeline.getTrack(slot.trackId());
-					if (track == null) continue;
-					for (Clip clip : track.getClips()) {
-						for (TimelineEvent e : clip.getEvents()) {
-							float screenX = layout.contentLeft + viewState.timeToScreen(e.getTimeSeconds());
-							if (screenX >= boxMinX && screenX <= boxMaxX) {
-								selectionState.selectEvent(e.getId());
-							}
-						}
-					}
-				}
-			}
-			interactionState.setMode(InteractionMode.NONE);
-			interactionState.clearActive();
-			if (selectionBox != null) selectionBox.setActive(false);
-			return;
 		}
 
 		if (ImGui.isMouseDown(0) && interactionState.getMode() != InteractionMode.NONE) {
@@ -819,6 +818,12 @@ public final class TimelineInteraction {
 			return;
 		}
 
+		if (ImGui.isMouseReleased(0) && interactionState.getMode() == InteractionMode.SCRUB_TIME) {
+			interactionState.setMode(InteractionMode.NONE);
+			interactionState.clearActive();
+			return;
+		}
+
 		if (!ImGui.isWindowHovered(ImGuiHoveredFlags.AllowWhenBlockedByActiveItem | ImGuiHoveredFlags.AllowWhenBlockedByPopup)) return;
 		boolean alt = ImGui.getIO().getKeyAlt();
 
@@ -872,14 +877,6 @@ public final class TimelineInteraction {
 		}
 
 		renderMarkerContextPopup(timeline, clock);
-
-		if (ImGui.isMouseReleased(0)) {
-			if (interactionState.getMode() == InteractionMode.SCRUB_TIME) {
-				interactionState.setMode(InteractionMode.NONE);
-				interactionState.clearActive();
-				return;
-			}
-		}
 
 		if (ImGui.isMouseDown(0) && interactionState.getMode() == InteractionMode.SCRUB_TIME) {
 			if (clock != null) {
