@@ -81,6 +81,17 @@ public final class CameraRuntime {
 		lerpState = LerpState.INACTIVE;
 	}
 
+	public void syncPlayerToSample(TimelineCameraEvaluator.CameraSample sample) {
+		if (sample == null) return;
+		MinecraftClient mc = MinecraftClient.getInstance();
+		if (mc == null || mc.player == null) return;
+		Vec3d bodyPos = eyeToBodyPosition(mc, sample.position());
+		mc.player.setPos(bodyPos.x, bodyPos.y, bodyPos.z);
+		mc.player.setYaw(sample.yawDeg());
+		mc.player.setPitch(sample.pitchDeg());
+		this.currentSample = sample;
+	}
+
 	public void tickPlayerLerp(float deltaSeconds) {
 		LerpState state = this.lerpState;
 		if (!state.active()) return;
