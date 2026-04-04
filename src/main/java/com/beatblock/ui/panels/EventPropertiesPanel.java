@@ -25,6 +25,7 @@ import com.beatblock.ui.layout.BeatBlockDockSpaceLayoutBuilder;
 import imgui.ImGui;
 import imgui.flag.ImGuiWindowFlags;
 import imgui.type.ImBoolean;
+import imgui.type.ImFloat;
 import imgui.type.ImInt;
 import imgui.type.ImString;
 import net.minecraft.client.MinecraftClient;
@@ -57,6 +58,7 @@ public class EventPropertiesPanel {
 	private final ImString cameraFarDistanceBuffer = new ImString(INPUT_BUFFER_SIZE);
 	private final ImString cameraNearScaleBuffer = new ImString(INPUT_BUFFER_SIZE);
 	private final ImString cameraFarScaleBuffer = new ImString(INPUT_BUFFER_SIZE);
+	private final ImString cameraEdgePriorityBuffer = new ImString(INPUT_BUFFER_SIZE);
 	private final ImString placeBlockBuffer = new ImString(INPUT_BUFFER_SIZE);
 	private final ImString camSegDurBuffer = new ImString(INPUT_BUFFER_SIZE);
 	private final ImString camXBuffer = new ImString(INPUT_BUFFER_SIZE);
@@ -303,6 +305,11 @@ public class EventPropertiesPanel {
 				cameraFrustumGating = frustumGatingProxy.get();
 				validationError = null;
 			}
+			ImGui.setNextItemWidth(-1f);
+			ImGui.inputText("边界优先级 (0-1)##eventCameraEdgePriority", cameraEdgePriorityBuffer);
+			if (ImGui.isItemHovered()) {
+				ImGui.setTooltip("0 = 无边界优先 | 1 = 优先边界方块");
+			}
 		}
 		ImBoolean inheritSpatialProxy = new ImBoolean(inheritGroupSpatial);
 		if (ImGui.checkbox("继承组排序/延迟##eventInheritGroupSpatial", inheritSpatialProxy)) {
@@ -352,7 +359,8 @@ public class EventPropertiesPanel {
 				STEP_START_MODE_VALUES[Math.max(0, Math.min(stepStartModeIndex.get(), STEP_START_MODE_VALUES.length - 1))],
 				STEP_COMPLETION_VALUES[Math.max(0, Math.min(stepCompletionIndex.get(), STEP_COMPLETION_VALUES.length - 1))],
 				cameraAdaptiveStep,
-				cameraFrustumGating);
+				cameraFrustumGating,
+				numericParam(params, "cameraEdgePriority", 0.0));
 		}
 		if (reset) {
 			bindBuffers(ref);
@@ -380,7 +388,7 @@ public class EventPropertiesPanel {
 	private void applyAnimationChanges(EventRef ref, Timeline timeline, String actionMode, String animationId,
 	                                  String targetObjectId, boolean inheritGroupSpatial, String spatialMode,
 	                                  boolean stepDispatch, String stepStartMode, String stepCompletionMode,
-	                                  boolean cameraAdaptiveStep, boolean cameraFrustumGating) {
+	                                  boolean cameraAdaptiveStep, boolean cameraFrustumGating, double cameraEdgePriority) {
 		try {
 			double newTime = Math.max(0.0, Double.parseDouble(valueOf(timeBuffer).trim()));
 			double newDuration = Math.max(0.01, Double.parseDouble(valueOf(durationBuffer).trim()));
@@ -450,6 +458,7 @@ public class EventPropertiesPanel {
 				ref.event().setParameter("stepCompletionMode", stepCompletionMode);
 				ref.event().setParameter("cameraAdaptiveStep", cameraAdaptiveStep);
 				ref.event().setParameter("cameraFrustumGating", cameraFrustumGating);
+				ref.event().setParameter("cameraEdgePriority", Math.max(0.0, Math.min(1.0, (double) cameraEdgePriority)));
 				if (cameraAdaptiveStep) {
 					ref.event().setParameter("cameraNearDistance", nearDistance);
 					ref.event().setParameter("cameraFarDistance", farDistance);
@@ -467,6 +476,7 @@ public class EventPropertiesPanel {
 				ref.event().removeParameter("stepCompletionMode");
 				ref.event().removeParameter("cameraAdaptiveStep");
 				ref.event().removeParameter("cameraFrustumGating");
+				ref.event().removeParameter("cameraEdgePriority");
 				ref.event().removeParameter("cameraNearDistance");
 				ref.event().removeParameter("cameraFarDistance");
 				ref.event().removeParameter("cameraNearScale");
@@ -524,6 +534,7 @@ public class EventPropertiesPanel {
 		cameraFarDistanceBuffer.set(String.format(Locale.ROOT, "%.3f", numericParam(params, "cameraFarDistance", 48.0)));
 		cameraNearScaleBuffer.set(String.format(Locale.ROOT, "%.3f", numericParam(params, "cameraNearScale", 0.6)));
 		cameraFarScaleBuffer.set(String.format(Locale.ROOT, "%.3f", numericParam(params, "cameraFarScale", 1.5)));
+		cameraEdgePriorityBuffer.set(String.format(Locale.ROOT, "%.2f", numericParam(params, "cameraEdgePriority", 0.0)));
 		String placeBlock = stringParam(params, "placeBlock", stringParam(params, "placeBlockId", "minecraft:diamond_block"));
 		placeBlockBuffer.set(placeBlock);
 		if (event.getType() == EventType.CAMERA_SEGMENT && ref.clip() != null) {

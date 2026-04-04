@@ -42,6 +42,7 @@ public final class EventRenderer {
 	private static final int DISPATCH_STEP_BADGE_COLOR = 0xFF_66_C2_FF;
 	private static final int DISPATCH_BURST_BADGE_COLOR = 0xFF_CC_AA_FF;
 	private static final int FRUSTUM_GATING_BADGE_COLOR = 0xFF_FF_66_66;
+	private static final int EDGE_PRIORITY_BADGE_COLOR = 0xFF_FF_AA_33;
 	private static final float MIN_BAR_HALF_WIDTH = 1.25f;
 
 	private static int withAlpha(int abgr, int alpha) {
@@ -219,6 +220,7 @@ public final class EventRenderer {
 			renderDispatchBadge(baseX + x, y0, baseX + x + w, y1, e);
 			renderGroupSpatialBadge(baseX + x, y0, baseX + x + w, y1, e);
 			renderFrustumGatingBadge(baseX + x, y0, baseX + x + w, y1, e);
+			renderEdgePriorityBadge(baseX + x, y0, baseX + x + w, y1, e);
             BeatBlockClientDriver.TimelineActionExecutionReport report = BeatBlockClientDriver.getTimelineActionExecutionReport(e.getEventId());
             renderRuntimeBadge(baseX + x, y0, baseX + x + w, y1, e, report);
             if (selection != null && selection.isEventSelected(e.getEventId())) {
@@ -293,6 +295,29 @@ public final class EventRenderer {
 		}
 	}
 
+	private void renderEdgePriorityBadge(float x0, float y0, float x1, float y1, TimelineAnimationEvent event) {
+		if (event == null) return;
+		// Only show for STEP mode with edge priority > 0
+		boolean step = "STEP".equalsIgnoreCase(String.valueOf(event.getParameters().getOrDefault("dispatchModel", "BURST")));
+		if (!step) return;
+		double edgePriority = readDouble(event.getParameters().get("cameraEdgePriority"), 0.0);
+		if (edgePriority <= 0.0) return;
+
+		// Position at right edge, below the dispatch badge
+		float bx1 = x1 - 2f;
+		float by0 = y0 + 14f; // Below the dispatch badge
+		float bx0 = Math.max(x0 + 2f, bx1 - 10f);
+		float by1 = Math.min(y1 - 2f, by0 + 10f);
+		if (bx1 <= bx0 || by1 <= by0) return;
+
+		ImGui.getWindowDrawList().addRectFilled(bx0, by0, bx1, by1, withAlpha(EDGE_PRIORITY_BADGE_COLOR, 0xD8), 2f);
+		ImGui.getWindowDrawList().addText(bx0 + 2f, by0 - 1f, 0xFF_11_11_11, "E");
+
+		if (ImGui.isMouseHoveringRect(bx0, by0, bx1, by1)) {
+			ImGui.setTooltip(String.format("Edge Priority: %.0f%%\nPrioritizes silhouette blocks early in progression.", edgePriority * 100.0));
+		}
+	}
+
 	private static boolean readBoolean(Object raw, boolean fallback) {
 		if (raw instanceof Boolean b) return b;
 		if (raw instanceof Number n) return n.intValue() != 0;
@@ -301,6 +326,16 @@ public final class EventRenderer {
 		if ("true".equalsIgnoreCase(s) || "1".equals(s) || "yes".equalsIgnoreCase(s)) return true;
 		if ("false".equalsIgnoreCase(s) || "0".equals(s) || "no".equalsIgnoreCase(s)) return false;
 		return fallback;
+	}
+
+	private static double readDouble(Object raw, double fallback) {
+		if (raw instanceof Number n) return n.doubleValue();
+		if (raw == null) return fallback;
+		try {
+			return Double.parseDouble(String.valueOf(raw).trim());
+		} catch (Exception ex) {
+			return fallback;
+		}
 	}
 
 	private void renderRuntimeBadge(float x0, float y0, float x1, float y1,

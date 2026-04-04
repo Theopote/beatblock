@@ -213,6 +213,13 @@ public final class BlockAnimationEngine {
 		Map<String, Object> params = event.getParameters();
 		SpatialDispatchMode spatialMode = resolveSpatialMode(params, target);
 		List<BlockPos> ordered = sortBlocksForSpatialMode(target, spatialMode, event);
+		
+		// Apply edge prioritization if enabled
+		double edgePriority = readDouble(params.get("cameraEdgePriority"), 0.0);
+		if (edgePriority > 0.0 && !ordered.isEmpty()) {
+			ordered = applyEdgePrioritization(ordered, target.getBlocks(), edgePriority, runtimeCameraPosition, target.getCenter());
+		}
+		
 		int blocksPerBeat = (int) Math.max(1, Math.round(readDouble(params.get("blocksPerBeat"), 1.0)));
 		double duration = Math.max(0.01, event.getDurationSeconds());
 		StepStartMode startMode = StepStartMode.fromValue(params.get("stepStartMode"));
@@ -358,6 +365,81 @@ public final class BlockAnimationEngine {
 		double duration = Math.max(0.05, durationSeconds);
 		double byDuration = duration / Math.max(2.0, Math.min(28.0, blockCount * 0.6));
 		return Math.max(0.01, Math.min(0.06, byDuration));
+	}
+
+	private List<BlockPos> applyEdgePrioritization(List<BlockPos> orderedBlocks, List<BlockPos> allBlocks, double edgeStrength, Vec3d cameraPos, Vec3d groupCenter) {
+		if (orderedBlocks.isEmpty() || edgeStrength <= 0.0) return orderedBlocks;
+		
+		// Create a set for O(1) lookup
+		java.util.Set<BlockPos> blockSet = new java.util.HashSet<>(allBlocks);
+		
+		// Detect edge blocks and compute camera visibility weight
+		class EdgeBlockScore implements Comparable<EdgeBlockScore> {
+			BlockPos pos;
+			int exposedFaces;
+			double cameraVisibility;
+			
+			EdgeBlockScore(BlockPos pos, int exposed, double visibility) {
+				this.pos = pos;
+				this.exposedFaces = exposed;
+				this.cameraVisibility = visibility;
+			}
+			
+			@Override
+			public int compareTo(EdgeBlockScore other) {
+				// Higher exposed faces = higher priority
+				if (this.exposedFaces != other.exposedFaces) {
+					return Integer.compare(other.exposedFaces, this.exposedFaces);
+				}
+				// Higher camera visibility = higher priority (among same face count)
+				return Double.compare(other.cameraVisibility, this.cameraVisibility);
+			}
+		}
+		
+		java.util.List<EdgeBlockScore> scores = new java.util.ArrayList<>();
+		Vec3d cameraDir = groupCenter.subtract(cameraPos).normalize();
+		
+		for (BlockPos block : orderedBlocks) {
+			// Count exposed faces (neighbors that don't exist in blockSet)
+			int exposedFaces = 0;
+			for (net.minecraft.util.math.Direction dir : net.minecraft.util.math.Direction.values()) {
+				BlockPos neighbor = block.offset(dir);
+				if (!blockSet.contains(neighbor)) {
+					exposedFaces++;
+				}
+			}
+			
+			// Calculate camera visibility: dot product of (block->camera) with camera direction
+			Vec3d blockPos = new Vec3d(block.getX() + 0.5, block.getY() + 0.5, block.getZ() + 0.5);
+			Vec3d blockToCamera = cameraPos.subtract(blockPos).normalize();
+			double visibility = Math.max(0.0, blockToCamera.dotProduct(cameraDir));
+			
+			scores.add(new EdgeBlockScore(block, exposedFaces, visibility));
+		}
+		
+		// Sort by edge priority
+		java.util.Collections.sort(scores);
+		
+		// Create edge-prioritized list
+		java.util.List<BlockPos> edgePrioritized = new java.util.ArrayList<>();
+		for (EdgeBlockScore score : scores) {
+			edgePrioritized.add(score.pos);
+		}
+		
+		// Blend: take first (strength * size) from edge-prioritized, rest from original
+		double t = Math.max(0.0, Math.min(1.0, edgeStrength));
+		int blendPoint = (int) Math.round(edgePrioritized.size() * t);
+		java.util.List<BlockPos> result = new java.util.ArrayList<>(edgePrioritized.subList(0, blendPoint));
+		
+		// Add remaining blocks from original in their original order
+		java.util.Set<BlockPos> added = new java.util.HashSet<>(result);
+		for (BlockPos block : orderedBlocks) {
+			if (!added.contains(block)) {
+				result.add(block);
+			}
+		}
+		
+		return result;
 	}
 
 	private List<BlockPos> sortBlocksForSpatialMode(StageObject target, SpatialDispatchMode mode, TimelineAnimationEvent event) {
