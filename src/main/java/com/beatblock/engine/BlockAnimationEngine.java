@@ -82,8 +82,8 @@ public final class BlockAnimationEngine {
 		if (def == null || target == null) return;
 
 		Map<String, Object> params = event.getParameters();
-		SpatialDispatchMode spatialMode = SpatialDispatchMode.fromValue(params.get("spatialMode"));
-		double stepDelay = resolveSpatialStepDelay(params, spatialMode, event.getDurationSeconds(), target.getBlocks().size());
+		SpatialDispatchMode spatialMode = resolveSpatialMode(params, target);
+		double stepDelay = resolveSpatialStepDelay(params, target, spatialMode, event.getDurationSeconds(), target.getBlocks().size());
 		if (spatialMode == SpatialDispatchMode.ALL || stepDelay <= 0.0 || target.getBlocks().size() <= 1) {
 			double endTime = event.getTimeSeconds() + Math.max(0.01, event.getDurationSeconds());
 			animationPlayer.addInstance(new EngineAnimationInstance(
@@ -110,11 +110,22 @@ public final class BlockAnimationEngine {
 		}
 	}
 
-	private static double resolveSpatialStepDelay(Map<String, Object> params, SpatialDispatchMode mode, double durationSeconds, int blockCount) {
+	private static SpatialDispatchMode resolveSpatialMode(Map<String, Object> params, StageObject target) {
+		SpatialDispatchMode mode = SpatialDispatchMode.fromValue(params != null ? params.get("spatialMode") : null);
+		if (mode != SpatialDispatchMode.ALL) return mode;
+		if (target == null || target.getGroupSpec() == null) return SpatialDispatchMode.ALL;
+		return SpatialDispatchMode.fromValue(target.getGroupSpec().getSortingStrategy());
+	}
+
+	private static double resolveSpatialStepDelay(Map<String, Object> params, StageObject target, SpatialDispatchMode mode,
+	                                             double durationSeconds, int blockCount) {
 		if (mode == null || mode == SpatialDispatchMode.ALL || blockCount <= 1) return 0.0;
 		Object raw = params != null ? params.get("sequentialDelaySeconds") : null;
 		double explicit = readDouble(raw, -1.0);
 		if (explicit >= 0.0) return explicit;
+		if (target != null && target.getGroupSpec() != null && target.getGroupSpec().getStaggerDelaySeconds() > 0.0) {
+			return target.getGroupSpec().getStaggerDelaySeconds();
+		}
 
 		double duration = Math.max(0.05, durationSeconds);
 		double byDuration = duration / Math.max(2.0, Math.min(28.0, blockCount * 0.6));
