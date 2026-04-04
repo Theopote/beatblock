@@ -15,6 +15,7 @@ import com.beatblock.timeline.TimelineAnimationActionMode;
 import com.beatblock.timeline.TimelineEditor;
 import com.beatblock.timeline.TimelineEvent;
 import com.beatblock.timeline.Track;
+import com.beatblock.timeline.binding.SpatialDispatchMode;
 import com.beatblock.timeline.editor.SelectionState;
 import com.beatblock.timeline.rendering.TimelineTrackMeta;
 import com.beatblock.timeline.rendering.TrackDefinition;
@@ -50,6 +51,7 @@ public class EventPropertiesPanel {
 	private final ImString durationBuffer = new ImString(INPUT_BUFFER_SIZE);
 	private final ImString energyBuffer = new ImString(INPUT_BUFFER_SIZE);
 	private final ImString energyThresholdBuffer = new ImString(INPUT_BUFFER_SIZE);
+	private final ImString spatialDelayBuffer = new ImString(INPUT_BUFFER_SIZE);
 	private final ImString placeBlockBuffer = new ImString(INPUT_BUFFER_SIZE);
 	private final ImString camSegDurBuffer = new ImString(INPUT_BUFFER_SIZE);
 	private final ImString camXBuffer = new ImString(INPUT_BUFFER_SIZE);
@@ -64,6 +66,20 @@ public class EventPropertiesPanel {
 	private final ImBoolean camClipPathVisibleProxy = new ImBoolean(true);
 	private final ImBoolean camSegPathVisibleProxy = new ImBoolean(true);
 	private String validationError;
+	private static final String[] SPATIAL_MODE_LABELS = {
+		"同时 (ALL)",
+		"顺序 (SEQUENTIAL)",
+		"径向 (RADIAL)",
+		"随机 (RANDOM)",
+		"螺旋 (SPIRAL)"
+	};
+	private static final String[] SPATIAL_MODE_VALUES = {
+		"ALL",
+		"SEQUENTIAL",
+		"RADIAL",
+		"RANDOM",
+		"SPIRAL"
+	};
 
 	/** event 可为 null，表示仅选中摄像机片段（无具体事件焦点）。 */
 	private record EventRef(Track track, Clip clip, TimelineEvent event) {}
@@ -206,9 +222,12 @@ public class EventPropertiesPanel {
 		String currentAnimationId = stringParam(params, "animationType");
 		String currentTargetId = stringParam(params, "targetObject");
 		String currentActionMode = stringParam(params, "actionMode", stringParam(params, "mode", TimelineAnimationActionMode.ANIMATE.name()));
+		boolean inheritGroupSpatial = booleanParam(params, "inheritGroupSpatial", true);
 		ImInt actionIndex = new ImInt(indexOfOption(actionOptions, currentActionMode));
 		ImInt animationIndex = new ImInt(indexOfOption(animationOptions, currentAnimationId));
 		ImInt targetIndex = new ImInt(indexOfOption(targetOptions, currentTargetId));
+		ImInt spatialModeIndex = new ImInt(indexOfValue(SPATIAL_MODE_VALUES, stringParam(params, "spatialMode", "ALL")));
+		if (spatialModeIndex.get() < 0 || spatialModeIndex.get() >= SPATIAL_MODE_VALUES.length) spatialModeIndex.set(0);
 		String[] actionLabels = optionLabels(actionOptions);
 		String[] animationLabels = optionLabels(animationOptions);
 		String[] targetLabels = optionLabels(targetOptions);
@@ -223,6 +242,18 @@ public class EventPropertiesPanel {
 		}
 		if (ImGui.combo("目标对象##eventTarget", targetIndex, targetLabels)) {
 			validationError = null;
+		}
+		ImBoolean inheritSpatialProxy = new ImBoolean(inheritGroupSpatial);
+		if (ImGui.checkbox("继承组排序/延迟##eventInheritGroupSpatial", inheritSpatialProxy)) {
+			inheritGroupSpatial = inheritSpatialProxy.get();
+			validationError = null;
+		}
+		if (!inheritGroupSpatial) {
+			if (ImGui.combo("空间调度##eventSpatialMode", spatialModeIndex, SPATIAL_MODE_LABELS)) {
+				validationError = null;
+			}
+			ImGui.setNextItemWidth(-1f);
+			ImGui.inputText("步进延迟 (s)##eventSpatialDelay", spatialDelayBuffer);
 		}
 		TimelineAnimationActionMode selectedActionMode = TimelineAnimationActionMode.fromValue(actionOptions.get(actionIndex.get()).id());
 		if (selectedActionMode == TimelineAnimationActionMode.PLACE) {
@@ -253,7 +284,9 @@ public class EventPropertiesPanel {
 			applyAnimationChanges(ref, timeline,
 				actionOptions.get(actionIndex.get()).id(),
 				animationOptions.get(animationIndex.get()).id(),
-				targetOptions.get(targetIndex.get()).id());
+				targetOptions.get(targetIndex.get()).id(),
+				inheritGroupSpatial,
+				SPATIAL_MODE_VALUES[Math.max(0, Math.min(spatialModeIndex.get(), SPATIAL_MODE_VALUES.length - 1))]);
 		}
 		if (reset) {
 			bindBuffers(ref);
@@ -278,12 +311,18 @@ public class EventPropertiesPanel {
 		}
 	}
 
-	private void applyAnimationChanges(EventRef ref, Timeline timeline, String actionMode, String animationId, String targetObjectId) {
+	private void applyAnimationChanges(EventRef ref, Timeline timeline, String actionMode, String animationId,
+	                                  String targetObjectId, boolean inheritGroupSpatial, String spatialMode) {
 		try {
 			double newTime = Math.max(0.0, Double.parseDouble(valueOf(timeBuffer).trim()));
 			double newDuration = Math.max(0.01, Double.parseDouble(valueOf(durationBuffer).trim()));
 			float newEnergy = (float) Math.max(0.0, Math.min(1.0, Double.parseDouble(valueOf(energyBuffer).trim())));
 			float newEnergyThreshold = (float) Math.max(0.0, Math.min(1.0, Double.parseDouble(valueOf(energyThresholdBuffer).trim())));
+			double spatialDelay = 0.0;
+			if (!inheritGroupSpatial) {
+				String rawDelay = valueOf(spatialDelayBuffer).trim();
+				if (!rawDelay.isEmpty()) spatialDelay = Math.max(0.0, Double.parseDouble(rawDelay));
+			}
 			TimelineAnimationActionMode mode = TimelineAnimationActionMode.fromValue(actionMode);
 			if (targetObjectId == null || targetObjectId.isBlank()) {
 				validationError = "请先选择目标对象。";
@@ -315,6 +354,15 @@ public class EventPropertiesPanel {
 			ref.event().setParameter("energyThreshold", newEnergyThreshold);
 			ref.event().setParameter("animationType", animationId);
 			ref.event().setParameter("targetObject", targetObjectId);
+			ref.event().setParameter("inheritGroupSpatial", inheritGroupSpatial);
+			if (inheritGroupSpatial) {
+				ref.event().removeParameter("spatialMode");
+				ref.event().removeParameter("sequentialDelaySeconds");
+			} else {
+				SpatialDispatchMode modeValue = SpatialDispatchMode.fromValue(spatialMode);
+				ref.event().setParameter("spatialMode", modeValue.name());
+				ref.event().setParameter("sequentialDelaySeconds", spatialDelay);
+			}
 			if (mode == TimelineAnimationActionMode.PLACE) {
 				ref.event().setParameter("placeBlock", placeBlockId);
 			} else {
@@ -352,6 +400,7 @@ public class EventPropertiesPanel {
 		durationBuffer.set(String.format(Locale.ROOT, "%.6f", numericParam(params, "durationSeconds", 0.25)));
 		energyBuffer.set(String.format(Locale.ROOT, "%.3f", numericParam(params, "energy", 1.0)));
 		energyThresholdBuffer.set(String.format(Locale.ROOT, "%.3f", numericParam(params, "energyThreshold", 0.15)));
+		spatialDelayBuffer.set(String.format(Locale.ROOT, "%.3f", numericParam(params, "sequentialDelaySeconds", 0.0)));
 		String placeBlock = stringParam(params, "placeBlock", stringParam(params, "placeBlockId", "minecraft:diamond_block"));
 		placeBlockBuffer.set(placeBlock);
 		if (event.getType() == EventType.CAMERA_SEGMENT && ref.clip() != null) {
@@ -860,6 +909,26 @@ public class EventPropertiesPanel {
 	private static double numericParam(Map<String, Object> params, String key, double fallback) {
 		Object value = params != null ? params.get(key) : null;
 		return value instanceof Number ? ((Number) value).doubleValue() : fallback;
+	}
+
+	private static boolean booleanParam(Map<String, Object> params, String key, boolean fallback) {
+		Object value = params != null ? params.get(key) : null;
+		if (value instanceof Boolean b) return b;
+		if (value instanceof Number n) return n.intValue() != 0;
+		if (value == null) return fallback;
+		String s = String.valueOf(value).trim();
+		if ("true".equalsIgnoreCase(s) || "1".equals(s) || "yes".equalsIgnoreCase(s)) return true;
+		if ("false".equalsIgnoreCase(s) || "0".equals(s) || "no".equalsIgnoreCase(s)) return false;
+		return fallback;
+	}
+
+	private static int indexOfValue(String[] values, String target) {
+		if (values == null || values.length == 0) return 0;
+		if (target == null) return 0;
+		for (int i = 0; i < values.length; i++) {
+			if (target.equalsIgnoreCase(values[i])) return i;
+		}
+		return 0;
 	}
 
 	/** 每种镜头类型对应的有效参数键名列表（不含 kind）。 */

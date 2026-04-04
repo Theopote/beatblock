@@ -9,6 +9,7 @@ import com.beatblock.client.input.BeatBlockInputSystem;
 import com.beatblock.selection.BeatBlockSelectionManager;
 import com.beatblock.selection.SelectionMode;
 import com.beatblock.engine.StageObject;
+import com.beatblock.engine.GroupSortingStrategy;
 import com.beatblock.engine.StageObjectSystem;
 import com.beatblock.timeline.MarkerType;
 import com.beatblock.timeline.Timeline;
@@ -50,11 +51,27 @@ public class ToolPanel {
 	private final ImInt markerTypeIndex = new ImInt(0);
 	private final ImString stageObjectNameBuffer = new ImString(64);
 	private final ImBoolean stageObjectIncludeAir = new ImBoolean(false);
+	private final ImInt stageObjectSortingIndex = new ImInt(0);
+	private final ImString stageObjectStaggerBuffer = new ImString(16);
 	private BlockPos selectionPosA;
 	private BlockPos selectionPosB;
 	private String stageObjectMessage;
 	private long stageObjectMessageTimeMs;
 	private static final int MAX_STAGE_OBJECT_BLOCKS = 32768;
+	private static final GroupSortingStrategy[] STAGE_GROUP_SORTING_VALUES = {
+		GroupSortingStrategy.SEQUENTIAL,
+		GroupSortingStrategy.RADIAL,
+		GroupSortingStrategy.SPIRAL,
+		GroupSortingStrategy.RANDOM,
+		GroupSortingStrategy.ALL
+	};
+	private static final String[] STAGE_GROUP_SORTING_LABELS = {
+		"顺序 (SEQUENTIAL)",
+		"径向 (RADIAL)",
+		"螺旋 (SPIRAL)",
+		"随机 (RANDOM)",
+		"同时 (ALL)"
+	};
 	private static final String[] MARKER_TYPE_LABELS = MarkerType.displayNames();
 
 	private static final SelectionMode[] SELECTION_COMBO_ORDER = {
@@ -79,6 +96,7 @@ public class ToolPanel {
 	public ToolPanel(Runnable onSelectionToolChosen) {
 		this.onSelectionToolChosen = onSelectionToolChosen;
 		stageObjectNameBuffer.set("selection_object");
+		stageObjectStaggerBuffer.set("0.00");
 	}
 
 	/** 由菜单栏「演出 → Smart Auto Map」调用，打开设置弹窗 */
@@ -205,6 +223,16 @@ public class ToolPanel {
 			ImGui.setTooltip("与上方选区工具联动：取 BeatBlock 选择管理器中已选方块的最小/最大角作为创建包围盒（与框选完成后的结果一致，无需再点「设置 A/B」）。");
 		}
 
+		boolean canCreateFromSelection = selCount > 0;
+		if (!canCreateFromSelection) ImGui.beginDisabled();
+		if (ImGui.button("从当前方块选区直接创建（精确快照）##stageCreateFromSelection", -1f, 0f)) {
+			createStageObjectFromCurrentSelectionSnapshot();
+		}
+		if (!canCreateFromSelection) ImGui.endDisabled();
+		if (ImGui.isItemHovered()) {
+			ImGui.setTooltip("按当前选中的方块集合直接建组（不扩成包围盒），并记录为 selection_snapshot 来源。");
+		}
+
 		ImGui.textDisabled("创建包围盒角点");
 		ImGui.textDisabled("  A: " + formatPos(selectionPosA));
 		ImGui.textDisabled("  B: " + formatPos(selectionPosB));
@@ -249,6 +277,11 @@ public class ToolPanel {
 
 		ImGui.setNextItemWidth(-1f);
 		ImGui.inputText("对象名称##stageObjName", stageObjectNameBuffer);
+
+		ImGui.setNextItemWidth(-1f);
+		ImGui.combo("组排序策略##stageGroupSorting", stageObjectSortingIndex, STAGE_GROUP_SORTING_LABELS);
+		ImGui.setNextItemWidth(-1f);
+		ImGui.inputText("组默认步进延迟(秒)##stageGroupStagger", stageObjectStaggerBuffer);
 
 		boolean canCreate = selectionPosA != null && selectionPosB != null;
 		if (!canCreate) ImGui.beginDisabled();
@@ -332,16 +365,65 @@ public class ToolPanel {
 		if (name.isEmpty()) name = "selection_object";
 		String id = buildUniqueStageObjectId(name);
 
-		StageObject obj = StageObjectSystem.fromSelectionCuboid(
+		GroupSortingStrategy sortingStrategy = currentStageObjectSortingStrategy();
+		double staggerSeconds = parseStageObjectStaggerSeconds();
+		StageObject obj = StageObjectSystem.fromBlocks(
 			id,
 			name,
 			blocks,
-			selectionPosA,
-			selectionPosB,
-			stageObjectIncludeAir.get()
+			com.beatblock.engine.GroupSpec.fromSelectionCuboid(
+				selectionPosA,
+				selectionPosB,
+				stageObjectIncludeAir.get(),
+				sortingStrategy,
+				staggerSeconds
+			)
 		);
 		BeatBlock.blockAnimationEngine.getStageObjectSystem().register(obj);
 		setStageObjectMessage(String.format(Locale.ROOT, "已创建 StageObject: %s (%d blocks)", id, blocks.size()));
+	}
+
+	private void createStageObjectFromCurrentSelectionSnapshot() {
+		if (BeatBlock.blockAnimationEngine == null) {
+			setStageObjectMessage("动画引擎未初始化，无法创建对象。");
+			return;
+		}
+		var selMgr = BeatBlockSelectionManager.get();
+		List<BlockPos> blocks = new ArrayList<>(selMgr.getSelectedBlocks());
+		if (blocks.isEmpty()) {
+			setStageObjectMessage("当前没有方块选区。请先使用选择工具。");
+			return;
+		}
+		if (blocks.size() > MAX_STAGE_OBJECT_BLOCKS) {
+			setStageObjectMessage(String.format(Locale.ROOT,
+				"选区过大（%d blocks），上限为 %d。", blocks.size(), MAX_STAGE_OBJECT_BLOCKS));
+			return;
+		}
+
+		String name = stageObjectNameBuffer.get() != null ? stageObjectNameBuffer.get().trim() : "";
+		if (name.isEmpty()) name = "selection_object";
+		String id = buildUniqueStageObjectId(name);
+
+		GroupSortingStrategy sortingStrategy = currentStageObjectSortingStrategy();
+		double staggerSeconds = parseStageObjectStaggerSeconds();
+		StageObject obj = StageObjectSystem.fromSelectionSnapshot(id, name, blocks, sortingStrategy, staggerSeconds);
+		BeatBlock.blockAnimationEngine.getStageObjectSystem().register(obj);
+		setStageObjectMessage(String.format(Locale.ROOT, "已创建快照 StageObject: %s (%d blocks)", id, blocks.size()));
+	}
+
+	private GroupSortingStrategy currentStageObjectSortingStrategy() {
+		int idx = Math.max(0, Math.min(stageObjectSortingIndex.get(), STAGE_GROUP_SORTING_VALUES.length - 1));
+		return STAGE_GROUP_SORTING_VALUES[idx];
+	}
+
+	private double parseStageObjectStaggerSeconds() {
+		String raw = stageObjectStaggerBuffer.get() != null ? stageObjectStaggerBuffer.get().trim() : "";
+		if (raw.isEmpty()) return 0.0;
+		try {
+			return Math.max(0.0, Double.parseDouble(raw));
+		} catch (Exception ex) {
+			return 0.0;
+		}
 	}
 
 	private List<BlockPos> collectSelectionBlocks(BlockPos a, BlockPos b, boolean includeAir) {

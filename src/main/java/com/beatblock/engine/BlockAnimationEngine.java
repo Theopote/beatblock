@@ -111,18 +111,28 @@ public final class BlockAnimationEngine {
 	}
 
 	private static SpatialDispatchMode resolveSpatialMode(Map<String, Object> params, StageObject target) {
-		SpatialDispatchMode mode = SpatialDispatchMode.fromValue(params != null ? params.get("spatialMode") : null);
-		if (mode != SpatialDispatchMode.ALL) return mode;
+		if (params != null && params.containsKey("spatialMode")) {
+			return SpatialDispatchMode.fromValue(params.get("spatialMode"));
+		}
+		if (!readBoolean(params != null ? params.get("inheritGroupSpatial") : null, true)) {
+			return SpatialDispatchMode.ALL;
+		}
 		if (target == null || target.getGroupSpec() == null) return SpatialDispatchMode.ALL;
-		return SpatialDispatchMode.fromValue(target.getGroupSpec().getSortingStrategy());
+		return target.getGroupSpec().getSortingStrategy().toSpatialDispatchMode();
 	}
 
 	private static double resolveSpatialStepDelay(Map<String, Object> params, StageObject target, SpatialDispatchMode mode,
 	                                             double durationSeconds, int blockCount) {
 		if (mode == null || mode == SpatialDispatchMode.ALL || blockCount <= 1) return 0.0;
-		Object raw = params != null ? params.get("sequentialDelaySeconds") : null;
-		double explicit = readDouble(raw, -1.0);
-		if (explicit >= 0.0) return explicit;
+		if (params != null && params.containsKey("sequentialDelaySeconds")) {
+			double explicit = readDouble(params.get("sequentialDelaySeconds"), -1.0);
+			if (explicit >= 0.0) return explicit;
+		}
+		if (!readBoolean(params != null ? params.get("inheritGroupSpatial") : null, true)) {
+			double duration = Math.max(0.05, durationSeconds);
+			double byDuration = duration / Math.max(2.0, Math.min(28.0, blockCount * 0.6));
+			return Math.max(0.01, Math.min(0.06, byDuration));
+		}
 		if (target != null && target.getGroupSpec() != null && target.getGroupSpec().getStaggerDelaySeconds() > 0.0) {
 			return target.getGroupSpec().getStaggerDelaySeconds();
 		}
@@ -197,6 +207,16 @@ public final class BlockAnimationEngine {
 		} catch (Exception ex) {
 			return fallback;
 		}
+	}
+
+	private static boolean readBoolean(Object raw, boolean fallback) {
+		if (raw instanceof Boolean b) return b;
+		if (raw instanceof Number n) return n.intValue() != 0;
+		if (raw == null) return fallback;
+		String s = String.valueOf(raw).trim();
+		if ("true".equalsIgnoreCase(s) || "1".equals(s) || "yes".equalsIgnoreCase(s)) return true;
+		if ("false".equalsIgnoreCase(s) || "0".equals(s) || "no".equalsIgnoreCase(s)) return false;
+		return fallback;
 	}
 
 	public List<BlockControlExecutor.BlockMutation> planControlMutations(TimelineAnimationEvent event, World world) {

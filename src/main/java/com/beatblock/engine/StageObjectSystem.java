@@ -48,4 +48,16 @@ public final class StageObjectSystem {
 	                                              BlockPos posA, BlockPos posB, boolean includeAir) {
 		return new StageObject(id, name, blocks, null, GroupSpec.fromSelectionCuboid(posA, posB, includeAir));
 	}
+
+	public static StageObject fromSelectionSnapshot(String id, String name, List<BlockPos> blocks,
+	                                                GroupSortingStrategy sortingStrategy,
+	                                                double staggerDelaySeconds) {
+		return new StageObject(
+			id,
+			name,
+			blocks,
+			null,
+			GroupSpec.fromSelectionSnapshot(blocks, sortingStrategy, staggerDelaySeconds)
+		);
+	}
 }
