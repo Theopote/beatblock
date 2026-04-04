@@ -25,7 +25,6 @@ import com.beatblock.ui.layout.BeatBlockDockSpaceLayoutBuilder;
 import imgui.ImGui;
 import imgui.flag.ImGuiWindowFlags;
 import imgui.type.ImBoolean;
-import imgui.type.ImFloat;
 import imgui.type.ImInt;
 import imgui.type.ImString;
 import net.minecraft.client.MinecraftClient;
@@ -510,7 +509,7 @@ public class EventPropertiesPanel {
 				ref.event().setParameter("stepCompletionMode", stepCompletionMode);
 				ref.event().setParameter("cameraAdaptiveStep", cameraAdaptiveStep);
 				ref.event().setParameter("cameraFrustumGating", cameraFrustumGating);
-				ref.event().setParameter("cameraEdgePriority", Math.max(0.0, Math.min(1.0, (double) cameraEdgePriority)));
+				ref.event().setParameter("cameraEdgePriority", Math.max(0.0, Math.min(1.0, cameraEdgePriority)));
 				ref.event().setParameter("usePhaseAnimation", usePhaseAnimation);
 				if (usePhaseAnimation) {
 					ref.event().setParameter("entryDurationPercent", entryPercent);
