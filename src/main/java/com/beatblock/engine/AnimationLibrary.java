@@ -9,7 +9,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 动画模板库：内置 BlockJump、BlockRise、BlockDrop、BlockExplosion、WaveMotion、SpiralLift、Pulse、Orbit 等。
+ * 动画模板库：内置 BlockJump、BlockRise、BlockDrop、BlockExplosion、WaveMotion、SpiralLift、Pulse、Orbit、Meteor 等。
  */
 public final class AnimationLibrary {
 
@@ -28,6 +28,7 @@ public final class AnimationLibrary {
 		register(new AnimationDefinition("SpiralLift", "螺旋升空", 1.5f, List.of(new SpiralEffect(Vec3d.ZERO, 2f))));
 		register(new AnimationDefinition("Pulse", "脉冲", 0.4f, List.of(new PulseEffect(1.3f))));
 		register(new AnimationDefinition("Orbit", "环绕", 2f, List.of(new OrbitEffect(Vec3d.ZERO, 3f))));
+		register(new AnimationDefinition("Meteor", "流星坠落", 1.0f, List.of(new MeteorEffect(12f, 2.5f))));
 	}
 
 	public void register(AnimationDefinition definition) {

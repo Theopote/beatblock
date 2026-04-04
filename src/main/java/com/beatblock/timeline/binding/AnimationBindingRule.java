@@ -128,7 +128,8 @@ public final class AnimationBindingRule {
 		String u = v.toUpperCase(Locale.ROOT);
 		return switch (u) {
 			case "EJECT" -> "BlockJump";
-			case "FALL", "METEOR" -> "BlockDrop";
+			case "FALL" -> "BlockDrop";
+			case "METEOR" -> "Meteor";
 			case "PULSE" -> "Pulse";
 			case "SLIDE" -> "Orbit";
 			case "SPIRAL" -> "SpiralLift";
