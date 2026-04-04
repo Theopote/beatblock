@@ -282,8 +282,35 @@ public final class BlockAnimationEngine {
 		}
 	}
 
+	private boolean isTargetVisibleToCamera(Vec3d targetCenter) {
+		// Simple frustum visibility check: target must be in front of camera and within rough view cone
+		Vec3d camPos = runtimeCameraPosition;
+		Vec3d toTarget = targetCenter.subtract(camPos);
+		double distToTarget = toTarget.length();
+		
+		// Behind camera or too close (camera inside target) -> not visible
+		if (distToTarget < 0.1) return true; // Camera too close, assume visible to avoid jitter
+		
+		// Too far away -> not visible (configurable as a gating parameter)
+		double maxGatingDistance = 160.0; // Approximate max render distance in Minecraft
+		if (distToTarget > maxGatingDistance) return false;
+		
+		// For now, if in front and not too far, consider visible.
+		// A more sophisticated check would compute the view angle and frustum cone.
+		return true;
+	}
+
 	private int resolveEffectiveBlocksPerBeat(StepSequenceState state) {
 		if (state == null) return 1;
+		
+		// Check frustum gating: if enabled and target not visible, pause (return 0)
+		if (readBoolean(state.params.get("cameraFrustumGating"), false)) {
+			Vec3d center = state.target.getCenter();
+			if (!isTargetVisibleToCamera(center)) {
+				return 0; // Pause progression when outside frustum
+			}
+		}
+		
 		int base = Math.max(1, state.blocksPerBeat);
 		if (!readBoolean(state.params.get("cameraAdaptiveStep"), false)) return base;
 

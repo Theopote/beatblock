@@ -246,6 +246,7 @@ public class EventPropertiesPanel {
 		boolean inheritGroupSpatial = booleanParam(params, "inheritGroupSpatial", true);
 		boolean stepDispatch = "STEP".equalsIgnoreCase(stringParam(params, "dispatchModel", "BURST"));
 		boolean cameraAdaptiveStep = booleanParam(params, "cameraAdaptiveStep", false);
+		boolean cameraFrustumGating = booleanParam(params, "cameraFrustumGating", false);
 		ImInt stepStartModeIndex = new ImInt(indexOfValue(STEP_START_MODE_VALUES, stringParam(params, "stepStartMode", "NEXT_BEAT")));
 		ImInt stepCompletionIndex = new ImInt(indexOfValue(STEP_COMPLETION_VALUES, stringParam(params, "stepCompletionMode", "KEEP")));
 		ImInt actionIndex = new ImInt(indexOfOption(actionOptions, currentActionMode));
@@ -297,6 +298,11 @@ public class EventPropertiesPanel {
 				ImGui.setNextItemWidth(-1f);
 				ImGui.inputText("远景倍率##eventCameraFarScale", cameraFarScaleBuffer);
 			}
+			ImBoolean frustumGatingProxy = new ImBoolean(cameraFrustumGating);
+			if (ImGui.checkbox("镜头视椎体门控 (暂停出屏)##eventCameraFrustumGating", frustumGatingProxy)) {
+				cameraFrustumGating = frustumGatingProxy.get();
+				validationError = null;
+			}
 		}
 		ImBoolean inheritSpatialProxy = new ImBoolean(inheritGroupSpatial);
 		if (ImGui.checkbox("继承组排序/延迟##eventInheritGroupSpatial", inheritSpatialProxy)) {
@@ -345,7 +351,8 @@ public class EventPropertiesPanel {
 				stepDispatch,
 				STEP_START_MODE_VALUES[Math.max(0, Math.min(stepStartModeIndex.get(), STEP_START_MODE_VALUES.length - 1))],
 				STEP_COMPLETION_VALUES[Math.max(0, Math.min(stepCompletionIndex.get(), STEP_COMPLETION_VALUES.length - 1))],
-				cameraAdaptiveStep);
+				cameraAdaptiveStep,
+				cameraFrustumGating);
 		}
 		if (reset) {
 			bindBuffers(ref);
@@ -373,7 +380,7 @@ public class EventPropertiesPanel {
 	private void applyAnimationChanges(EventRef ref, Timeline timeline, String actionMode, String animationId,
 	                                  String targetObjectId, boolean inheritGroupSpatial, String spatialMode,
 	                                  boolean stepDispatch, String stepStartMode, String stepCompletionMode,
-	                                  boolean cameraAdaptiveStep) {
+	                                  boolean cameraAdaptiveStep, boolean cameraFrustumGating) {
 		try {
 			double newTime = Math.max(0.0, Double.parseDouble(valueOf(timeBuffer).trim()));
 			double newDuration = Math.max(0.01, Double.parseDouble(valueOf(durationBuffer).trim()));
@@ -442,6 +449,7 @@ public class EventPropertiesPanel {
 				ref.event().setParameter("stepStartMode", stepStartMode);
 				ref.event().setParameter("stepCompletionMode", stepCompletionMode);
 				ref.event().setParameter("cameraAdaptiveStep", cameraAdaptiveStep);
+				ref.event().setParameter("cameraFrustumGating", cameraFrustumGating);
 				if (cameraAdaptiveStep) {
 					ref.event().setParameter("cameraNearDistance", nearDistance);
 					ref.event().setParameter("cameraFarDistance", farDistance);
@@ -458,6 +466,7 @@ public class EventPropertiesPanel {
 				ref.event().removeParameter("stepStartMode");
 				ref.event().removeParameter("stepCompletionMode");
 				ref.event().removeParameter("cameraAdaptiveStep");
+				ref.event().removeParameter("cameraFrustumGating");
 				ref.event().removeParameter("cameraNearDistance");
 				ref.event().removeParameter("cameraFarDistance");
 				ref.event().removeParameter("cameraNearScale");

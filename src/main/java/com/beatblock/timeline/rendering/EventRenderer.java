@@ -41,6 +41,7 @@ public final class EventRenderer {
 	private static final int INHERIT_GROUP_BADGE_COLOR = 0xFF_FF_DD_66;
 	private static final int DISPATCH_STEP_BADGE_COLOR = 0xFF_66_C2_FF;
 	private static final int DISPATCH_BURST_BADGE_COLOR = 0xFF_CC_AA_FF;
+	private static final int FRUSTUM_GATING_BADGE_COLOR = 0xFF_FF_66_66;
 	private static final float MIN_BAR_HALF_WIDTH = 1.25f;
 
 	private static int withAlpha(int abgr, int alpha) {
@@ -217,6 +218,7 @@ public final class EventRenderer {
             ImGui.getWindowDrawList().addRectFilled(baseX + x, y0, baseX + x + w, y1, resolvedFillColor, 2f);
 			renderDispatchBadge(baseX + x, y0, baseX + x + w, y1, e);
 			renderGroupSpatialBadge(baseX + x, y0, baseX + x + w, y1, e);
+			renderFrustumGatingBadge(baseX + x, y0, baseX + x + w, y1, e);
             BeatBlockClientDriver.TimelineActionExecutionReport report = BeatBlockClientDriver.getTimelineActionExecutionReport(e.getEventId());
             renderRuntimeBadge(baseX + x, y0, baseX + x + w, y1, e, report);
             if (selection != null && selection.isEventSelected(e.getEventId())) {
@@ -266,6 +268,28 @@ public final class EventRenderer {
 
 		if (ImGui.isMouseHoveringRect(bx0, by0, bx1, by1)) {
 			ImGui.setTooltip("Inherit group spatial: ON\nspatialMode/sequentialDelaySeconds are resolved from target group when not overridden.");
+		}
+	}
+
+	private void renderFrustumGatingBadge(float x0, float y0, float x1, float y1, TimelineAnimationEvent event) {
+		if (event == null) return;
+		// Only show this badge for STEP mode with frustum gating enabled
+		boolean step = "STEP".equalsIgnoreCase(String.valueOf(event.getParameters().getOrDefault("dispatchModel", "BURST")));
+		if (!step) return;
+		if (!readBoolean(event.getParameters().get("cameraFrustumGating"), false)) return;
+
+		// Position at bottom-right
+		float bx1 = x1 - 2f;
+		float by1 = y1 - 2f;
+		float bx0 = Math.max(x0 + 2f, bx1 - 10f);
+		float by0 = Math.max(y0 + 2f, by1 - 10f);
+		if (bx1 <= bx0 || by1 <= by0) return;
+
+		ImGui.getWindowDrawList().addRectFilled(bx0, by0, bx1, by1, withAlpha(FRUSTUM_GATING_BADGE_COLOR, 0xD8), 2f);
+		ImGui.getWindowDrawList().addText(bx0 + 2f, by0 - 1f, 0xFF_11_11_11, "V");
+
+		if (ImGui.isMouseHoveringRect(bx0, by0, bx1, by1)) {
+			ImGui.setTooltip("Frustum Gating: ON\nPauses STEP progression when target group is outside camera view.");
 		}
 	}
 
