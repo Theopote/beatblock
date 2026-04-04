@@ -39,6 +39,8 @@ public final class EventRenderer {
 	private static final int STATUS_ANIMATE_COLOR = 0xFF_FF_CC_66;
 	private static final int STATUS_UNKNOWN_COLOR = 0xFF_99_99_99;
 	private static final int INHERIT_GROUP_BADGE_COLOR = 0xFF_FF_DD_66;
+	private static final int DISPATCH_STEP_BADGE_COLOR = 0xFF_66_C2_FF;
+	private static final int DISPATCH_BURST_BADGE_COLOR = 0xFF_CC_AA_FF;
 	private static final float MIN_BAR_HALF_WIDTH = 1.25f;
 
 	private static int withAlpha(int abgr, int alpha) {
@@ -213,6 +215,7 @@ public final class EventRenderer {
                 case ANIMATE -> fillColor;
             };
             ImGui.getWindowDrawList().addRectFilled(baseX + x, y0, baseX + x + w, y1, resolvedFillColor, 2f);
+			renderDispatchBadge(baseX + x, y0, baseX + x + w, y1, e);
 			renderGroupSpatialBadge(baseX + x, y0, baseX + x + w, y1, e);
             BeatBlockClientDriver.TimelineActionExecutionReport report = BeatBlockClientDriver.getTimelineActionExecutionReport(e.getEventId());
             renderRuntimeBadge(baseX + x, y0, baseX + x + w, y1, e, report);
@@ -221,6 +224,31 @@ public final class EventRenderer {
             }
         }
 		ImGui.setCursorPosY(rowY + layout.rowHeight);
+	}
+
+	private void renderDispatchBadge(float x0, float y0, float x1, float y1, TimelineAnimationEvent event) {
+		if (event == null) return;
+		String model = String.valueOf(event.getParameters().getOrDefault("dispatchModel", "BURST"));
+		boolean step = "STEP".equalsIgnoreCase(model);
+		int color = step ? DISPATCH_STEP_BADGE_COLOR : DISPATCH_BURST_BADGE_COLOR;
+		String label = step ? "S" : "B";
+
+		float bx1 = x1 - 2f;
+		float by0 = y0 + 2f;
+		float bx0 = Math.max(x0 + 2f, bx1 - 10f);
+		float by1 = Math.min(y1 - 2f, by0 + 10f);
+		if (bx1 <= bx0 || by1 <= by0) return;
+
+		ImGui.getWindowDrawList().addRectFilled(bx0, by0, bx1, by1, withAlpha(color, 0xD8), 2f);
+		ImGui.getWindowDrawList().addText(bx0 + 2f, by0 - 1f, 0xFF_11_11_11, label);
+
+		if (ImGui.isMouseHoveringRect(bx0, by0, bx1, by1)) {
+			if (step) {
+				ImGui.setTooltip("Dispatch: STEP\nAdvances sequence on each beat event.");
+			} else {
+				ImGui.setTooltip("Dispatch: BURST\nTriggers the group animation immediately at event time.");
+			}
+		}
 	}
 
 	private void renderGroupSpatialBadge(float x0, float y0, float x1, float y1, TimelineAnimationEvent event) {

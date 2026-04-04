@@ -43,6 +43,32 @@ public final class BlockAnimationEngine {
 		}
 	}
 
+	private enum StepStartMode {
+		IMMEDIATE,
+		NEXT_BEAT;
+
+		static StepStartMode fromValue(Object value) {
+			if (value == null) return NEXT_BEAT;
+			String s = String.valueOf(value).trim();
+			if (s.isEmpty()) return NEXT_BEAT;
+			if ("IMMEDIATE".equalsIgnoreCase(s)) return IMMEDIATE;
+			return NEXT_BEAT;
+		}
+	}
+
+	private enum StepCompletionMode {
+		KEEP,
+		LOOP;
+
+		static StepCompletionMode fromValue(Object value) {
+			if (value == null) return KEEP;
+			String s = String.valueOf(value).trim();
+			if (s.isEmpty()) return KEEP;
+			if ("LOOP".equalsIgnoreCase(s)) return LOOP;
+			return KEEP;
+		}
+	}
+
 	private static final class StepSequenceState {
 		private final AnimationDefinition definition;
 		private final StageObject target;
@@ -52,11 +78,15 @@ public final class BlockAnimationEngine {
 		private final float energy;
 		private final int blocksPerBeat;
 		private final double startGateTime;
+		private final StepCompletionMode completionMode;
+		private final StepStartMode startMode;
 		private int nextIndex;
+		private int cycles;
 
 		private StepSequenceState(AnimationDefinition definition, StageObject target, Map<String, Object> params,
 		                         List<BlockPos> orderedBlocks, double durationSeconds, float energy,
-		                         int blocksPerBeat, double startGateTime) {
+		                         int blocksPerBeat, double startGateTime,
+		                         StepStartMode startMode, StepCompletionMode completionMode) {
 			this.definition = definition;
 			this.target = target;
 			this.params = params;
@@ -65,7 +95,10 @@ public final class BlockAnimationEngine {
 			this.energy = energy;
 			this.blocksPerBeat = Math.max(1, blocksPerBeat);
 			this.startGateTime = startGateTime;
+			this.startMode = startMode;
+			this.completionMode = completionMode;
 			this.nextIndex = 0;
+			this.cycles = 0;
 		}
 
 		private boolean finished() {
@@ -176,7 +209,9 @@ public final class BlockAnimationEngine {
 		List<BlockPos> ordered = sortBlocksForSpatialMode(target, spatialMode, event);
 		int blocksPerBeat = (int) Math.max(1, Math.round(readDouble(params.get("blocksPerBeat"), 1.0)));
 		double duration = Math.max(0.01, event.getDurationSeconds());
-		stepSequences.add(new StepSequenceState(
+		StepStartMode startMode = StepStartMode.fromValue(params.get("stepStartMode"));
+		StepCompletionMode completionMode = StepCompletionMode.fromValue(params.get("stepCompletionMode"));
+		StepSequenceState state = new StepSequenceState(
 			def,
 			target,
 			params,
@@ -184,8 +219,17 @@ public final class BlockAnimationEngine {
 			duration,
 			event.getEnergy(),
 			blocksPerBeat,
-			event.getTimeSeconds()
-		));
+			event.getTimeSeconds(),
+			startMode,
+			completionMode
+		);
+		if (startMode == StepStartMode.IMMEDIATE) {
+			advanceStepSequence(state, event.getTimeSeconds());
+			if (state.finished() && completionMode == StepCompletionMode.KEEP) {
+				return;
+			}
+		}
+		stepSequences.add(state);
 	}
 
 	public void onBeatEvent(BeatEvent beatEvent) {
@@ -224,6 +268,10 @@ public final class BlockAnimationEngine {
 				state.params
 			));
 			state.nextIndex++;
+		}
+		if (state.finished() && state.completionMode == StepCompletionMode.LOOP) {
+			state.nextIndex = 0;
+			state.cycles++;
 		}
 	}
 

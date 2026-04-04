@@ -81,6 +81,22 @@ public class EventPropertiesPanel {
 		"RANDOM",
 		"SPIRAL"
 	};
+	private static final String[] STEP_START_MODE_LABELS = {
+		"下一个节拍 (NEXT_BEAT)",
+		"立即开始 (IMMEDIATE)"
+	};
+	private static final String[] STEP_START_MODE_VALUES = {
+		"NEXT_BEAT",
+		"IMMEDIATE"
+	};
+	private static final String[] STEP_COMPLETION_LABELS = {
+		"保持结束态 (KEEP)",
+		"循环序列 (LOOP)"
+	};
+	private static final String[] STEP_COMPLETION_VALUES = {
+		"KEEP",
+		"LOOP"
+	};
 
 	/** event 可为 null，表示仅选中摄像机片段（无具体事件焦点）。 */
 	private record EventRef(Track track, Clip clip, TimelineEvent event) {}
@@ -225,6 +241,8 @@ public class EventPropertiesPanel {
 		String currentActionMode = stringParam(params, "actionMode", stringParam(params, "mode", TimelineAnimationActionMode.ANIMATE.name()));
 		boolean inheritGroupSpatial = booleanParam(params, "inheritGroupSpatial", true);
 		boolean stepDispatch = "STEP".equalsIgnoreCase(stringParam(params, "dispatchModel", "BURST"));
+		ImInt stepStartModeIndex = new ImInt(indexOfValue(STEP_START_MODE_VALUES, stringParam(params, "stepStartMode", "NEXT_BEAT")));
+		ImInt stepCompletionIndex = new ImInt(indexOfValue(STEP_COMPLETION_VALUES, stringParam(params, "stepCompletionMode", "KEEP")));
 		ImInt actionIndex = new ImInt(indexOfOption(actionOptions, currentActionMode));
 		ImInt animationIndex = new ImInt(indexOfOption(animationOptions, currentAnimationId));
 		ImInt targetIndex = new ImInt(indexOfOption(targetOptions, currentTargetId));
@@ -253,6 +271,12 @@ public class EventPropertiesPanel {
 		if (stepDispatch) {
 			ImGui.setNextItemWidth(-1f);
 			ImGui.inputText("每拍方块数##eventBlocksPerBeat", blocksPerBeatBuffer);
+			if (ImGui.combo("起始对齐##eventStepStartMode", stepStartModeIndex, STEP_START_MODE_LABELS)) {
+				validationError = null;
+			}
+			if (ImGui.combo("完成后行为##eventStepCompletionMode", stepCompletionIndex, STEP_COMPLETION_LABELS)) {
+				validationError = null;
+			}
 		}
 		ImBoolean inheritSpatialProxy = new ImBoolean(inheritGroupSpatial);
 		if (ImGui.checkbox("继承组排序/延迟##eventInheritGroupSpatial", inheritSpatialProxy)) {
@@ -298,7 +322,9 @@ public class EventPropertiesPanel {
 				targetOptions.get(targetIndex.get()).id(),
 				inheritGroupSpatial,
 				SPATIAL_MODE_VALUES[Math.max(0, Math.min(spatialModeIndex.get(), SPATIAL_MODE_VALUES.length - 1))],
-				stepDispatch);
+				stepDispatch,
+				STEP_START_MODE_VALUES[Math.max(0, Math.min(stepStartModeIndex.get(), STEP_START_MODE_VALUES.length - 1))],
+				STEP_COMPLETION_VALUES[Math.max(0, Math.min(stepCompletionIndex.get(), STEP_COMPLETION_VALUES.length - 1))]);
 		}
 		if (reset) {
 			bindBuffers(ref);
@@ -325,7 +351,7 @@ public class EventPropertiesPanel {
 
 	private void applyAnimationChanges(EventRef ref, Timeline timeline, String actionMode, String animationId,
 	                                  String targetObjectId, boolean inheritGroupSpatial, String spatialMode,
-	                                  boolean stepDispatch) {
+	                                  boolean stepDispatch, String stepStartMode, String stepCompletionMode) {
 		try {
 			double newTime = Math.max(0.0, Double.parseDouble(valueOf(timeBuffer).trim()));
 			double newDuration = Math.max(0.01, Double.parseDouble(valueOf(durationBuffer).trim()));
@@ -377,8 +403,12 @@ public class EventPropertiesPanel {
 			ref.event().setParameter("dispatchModel", stepDispatch ? "STEP" : "BURST");
 			if (stepDispatch) {
 				ref.event().setParameter("blocksPerBeat", blocksPerBeat);
+				ref.event().setParameter("stepStartMode", stepStartMode);
+				ref.event().setParameter("stepCompletionMode", stepCompletionMode);
 			} else {
 				ref.event().removeParameter("blocksPerBeat");
+				ref.event().removeParameter("stepStartMode");
+				ref.event().removeParameter("stepCompletionMode");
 			}
 			ref.event().setParameter("inheritGroupSpatial", inheritGroupSpatial);
 			if (inheritGroupSpatial) {
