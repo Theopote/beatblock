@@ -1,0 +1,5 @@
+# Optional — Demucs stem separation (--demucs mode)
+# Install base deps first: pip install -r requirements.txt
+# Heavyweight (~2GB+ with PyTorch). Python 3.10–3.12 recommended.
+demucs
+torch

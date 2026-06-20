@@ -8,10 +8,10 @@
 		"BeatBlock Team"
 	],
 	"contact": {
-		"homepage": "https://github.com/beatblock",
-		"sources": "https://github.com/beatblock/beatblock"
+		"homepage": "https://github.com/Theopote/beatblock",
+		"sources": "https://github.com/Theopote/beatblock"
 	},
-	"license": "MIT",
+	"license": "CC0-1.0",
 	"icon": "assets/beatblock/icon.png",
 	"environment": "*",
 	"entrypoints": {

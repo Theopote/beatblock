@@ -25,7 +25,8 @@ public final class AnalyzerInstaller {
 
 	private static final String[] FILES = {
 		"analyze.py",
-		"requirements.txt"
+		"requirements.txt",
+		"requirements-demucs.txt"
 	};
 
 	private static final String REL_TARGET_DIR = "beatblock/analyzer";

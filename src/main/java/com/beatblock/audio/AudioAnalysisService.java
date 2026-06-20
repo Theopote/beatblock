@@ -1049,14 +1049,20 @@ public final class AudioAnalysisService {
 
 				if (demucsCheckCode != 0) {
 					onProgress.accept("DEMUCS_DEP_INSTALL", 0);
-					Process demucsInstall = new ProcessBuilder(
-						pythonExe,
-						"-m",
-						"pip",
-						"install",
-						"demucs",
-						"torch"
-					).redirectErrorStream(true).start();
+					Path demucsRequirementsPath = requirementsPath.getParent().resolve("requirements-demucs.txt");
+					List<String> demucsInstallCmd = new ArrayList<>();
+					demucsInstallCmd.add(pythonExe);
+					demucsInstallCmd.add("-m");
+					demucsInstallCmd.add("pip");
+					demucsInstallCmd.add("install");
+					if (Files.isRegularFile(demucsRequirementsPath)) {
+						demucsInstallCmd.add("-r");
+						demucsInstallCmd.add(demucsRequirementsPath.toAbsolutePath().toString());
+					} else {
+						demucsInstallCmd.add("demucs");
+						demucsInstallCmd.add("torch");
+					}
+					Process demucsInstall = new ProcessBuilder(demucsInstallCmd).redirectErrorStream(true).start();
 					control.attachProcess(demucsInstall);
 					String demucsInstallOut = readProcessOutput(demucsInstall);
 					int demucsInstallCode = waitProcess(demucsInstall);
@@ -1071,8 +1077,11 @@ public final class AudioAnalysisService {
 						String hint = explainPythonError(detail);
 						String resolvedExe = getPythonProbeInfo(pythonExe).executablePath;
 						String cmdExe = resolvedExe != null && !resolvedExe.isBlank() ? resolvedExe : pythonExe;
+						String demucsInstallHint = Files.isRegularFile(demucsRequirementsPath)
+							? "\"" + cmdExe + "\" -m pip install -r \"" + demucsRequirementsPath.toAbsolutePath() + "\""
+							: "\"" + cmdExe + "\" -m pip install demucs torch";
 						return "Demucs 依赖安装失败，请手动执行：\n"
-							+ "\"" + cmdExe + "\" -m pip install demucs torch\n"
+							+ demucsInstallHint + "\n"
 							+ (hint.isEmpty() ? "" : ("\n" + hint + "\n"))
 							+ detail;
 					}
@@ -1156,7 +1165,7 @@ public final class AudioAnalysisService {
 
 		if ((s.contains("no module named demucs") || s.contains("no module named torch")
 			|| s.contains("modulenotfounderror: demucs") || s.contains("modulenotfounderror: torch"))) {
-			return "检测到 Demucs 依赖缺失。请安装 demucs 与 torch，建议使用 Python 3.10~3.12。";
+			return "检测到 Demucs 依赖缺失。请执行 pip install -r requirements-demucs.txt（或 pip install demucs torch），建议使用 Python 3.10~3.12。";
 		}
 
 		if (s.contains("no module named") || s.contains("modulenotfounderror")) {
