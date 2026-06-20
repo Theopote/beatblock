@@ -51,8 +51,6 @@ public class BeatBlockClient implements ClientModInitializer {
 			CameraPathWorldRenderer.renderIfNeeded(matrices, consumers);
 		});
 
-		BeatBlockClientDriver.setupBeatEventHandler();
-
 		ClientTickEvents.END_CLIENT_TICK.register(client -> {
 			BeatBlockClientDriver.onClientTick();
 			BeatBlockSelectionBrushTick.onEndClientTick(client);
@@ -85,6 +83,6 @@ public class BeatBlockClient implements ClientModInitializer {
 			LOGGER.info("BeatBlock client stopping: background resource cleanup complete");
 		});
 
-		LOGGER.info("BeatBlock 客户端已初始化 — 按 B 键切换节拍播放");
+		LOGGER.info("BeatBlock 客户端已初始化 — 按 B 键切换时间轴播放");
 	}
 }

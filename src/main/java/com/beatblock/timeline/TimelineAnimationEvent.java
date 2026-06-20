@@ -4,7 +4,11 @@ import java.util.Collections;
 import java.util.Map;
 
 /**
- * 时间线上的动画事件：由时间驱动，不直接绑定摄像机。
+ * 第 2 层 — 舞台事件（概念上的 StageEvent）。
+ * <p>
+ * 描述「在时间点对哪个舞台对象执行何种动作」。由创作者编辑或自动映射生成初稿；
+ * 第 3 层 {@link com.beatblock.engine.BlockAnimationEngine} 在播放时消费，不区分来源。
+ * <p>
  * 可带 energy 用于高度/速度/粒子数等映射。
  */
 public final class TimelineAnimationEvent {

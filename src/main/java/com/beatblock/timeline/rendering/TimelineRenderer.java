@@ -2,7 +2,6 @@ package com.beatblock.timeline.rendering;
 
 import com.beatblock.BeatBlock;
 import com.beatblock.audio.analysis.AudioFeatureTimeline;
-import com.beatblock.audio.BeatBlockRuntime;
 import com.beatblock.audio.assets.AudioAsset;
 import com.beatblock.audio.assets.AudioAssetManager;
 import com.beatblock.audio.assets.AudioAssetStatus;
@@ -792,8 +791,6 @@ public final class TimelineRenderer {
 			restoreFeatureEvents(timeline, savedFeatureEvents);
 			timeline.setDurationSeconds(prevDuration);
 			requestDenseFeatureEnrichment(timeline, asset);
-			BeatBlockRuntime.getInstance().loadBeatmap(asset.getBeatmap());
-			// 若是 Demucs 模式，加载茎音频到 StemMixer
 			bindStemAudioIfDemucs(asset.getBeatmap());
 		} else if (asset.getFeatureTimeline() != null) {
 			timeline.setMetadata("awaitingAnalyzedBeatmap", droppedAudioKey);
@@ -1543,7 +1540,6 @@ public final class TimelineRenderer {
 		restoreFeatureEvents(timeline, savedFeatureEvents);
 		timeline.setDurationSeconds(prevDuration);
 		requestDenseFeatureEnrichment(timeline, matched);
-		BeatBlockRuntime.getInstance().loadBeatmap(matched.getBeatmap());
 		bindStemAudioIfDemucs(matched.getBeatmap());
 		timeline.setMetadata("awaitingAnalyzedBeatmap", null);
 		lastAutoAppliedBeatmapSignature = signature;

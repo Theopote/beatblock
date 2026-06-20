@@ -1,8 +1,7 @@
 package com.beatblock.timeline;
 
 /**
- * 特征轨道中的单个事件（时间点 + 能量），与频段无关。
- * 时间单位：秒。
+ * 第 1 层 — 音频参考轨上的能量点（可手改，不进入播放器派发）。
  */
 public final class FeatureEvent {
 

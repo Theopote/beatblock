@@ -1,6 +1,5 @@
 package com.beatblock.engine;
 
-import com.beatblock.beat.BeatEvent;
 import com.beatblock.timeline.TimelineAnimationActionMode;
 import com.beatblock.timeline.TimelineAnimationEvent;
 import com.beatblock.timeline.binding.SpatialDispatchMode;
@@ -17,8 +16,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Block Animation Engine 门面：整合 StageObjectSystem、AnimationLibrary、AnimationPlayer。
- * Timeline / 音频驱动 将事件转为 EngineAnimationInstance 交给 Player，每帧 tick 后渲染层从 getCurrentFrameBlocks 取状态。
+ * 第 3 层 — 舞台播放器门面：整合 StageObjectSystem、AnimationLibrary、AnimationPlayer。
+ * <p>
+ * 只接受 {@link com.beatblock.timeline.TimelineAnimationEvent}，不感知音频分析。
+ * 由 {@link com.beatblock.client.BeatBlockClientDriver} 按时间轴时钟派发。
  */
 public final class BlockAnimationEngine {
 	private static final Logger LOGGER = LoggerFactory.getLogger(BlockAnimationEngine.class);
@@ -134,10 +135,27 @@ public final class BlockAnimationEngine {
 
 	/**
 	 * 每帧调用：根据时间线时间更新动画，移除已结束实例。
+	 * STEP + NEXT_BEAT 由 {@link #tickStepBeats} 按 Timeline BPM 网格推进。
 	 */
 	public void tick(double timelineTimeSeconds) {
 		animationPlayer.removeEnded(timelineTimeSeconds);
 		animationPlayer.update(timelineTimeSeconds);
+	}
+
+	/** 按 Timeline BPM 网格推进 STEP 序列（不依赖实时音频派发）。 */
+	public void tickStepBeats(double previousTimeSeconds, double currentTimeSeconds, double bpm) {
+		if (stepSequences.isEmpty() || bpm <= 0 || currentTimeSeconds + 1e-6 < previousTimeSeconds) {
+			return;
+		}
+		double beatInterval = 60.0 / bpm;
+		double beat = Math.floor(previousTimeSeconds / beatInterval) * beatInterval;
+		if (beat <= previousTimeSeconds + 1e-6) {
+			beat += beatInterval;
+		}
+		while (beat <= currentTimeSeconds + 1e-6) {
+			advanceStepSequencesOnBeat(beat);
+			beat += beatInterval;
+		}
 	}
 
 	/**
@@ -245,14 +263,13 @@ public final class BlockAnimationEngine {
 		stepSequences.add(state);
 	}
 
-	public void onBeatEvent(BeatEvent beatEvent) {
-		if (beatEvent == null || stepSequences.isEmpty()) return;
-		double beatTime = Math.max(0.0, beatEvent.getTimestamp());
+	private void advanceStepSequencesOnBeat(double beatTimeSeconds) {
+		if (stepSequences.isEmpty()) return;
 		List<StepSequenceState> done = new ArrayList<>();
 		for (StepSequenceState state : stepSequences) {
-			if (state == null) continue;
-			if (beatTime + 1e-6 < state.startGateTime) continue;
-			advanceStepSequence(state, beatTime);
+			if (state == null || state.startMode != StepStartMode.NEXT_BEAT) continue;
+			if (beatTimeSeconds + 1e-6 < state.startGateTime) continue;
+			advanceStepSequence(state, beatTimeSeconds);
 			if (state.finished()) done.add(state);
 		}
 		if (!done.isEmpty()) {

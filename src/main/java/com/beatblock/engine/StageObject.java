@@ -8,8 +8,11 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * 演出对象：定义哪些方块参与演出。动画针对方块集合（如 Temple、Bridge、Wave Blocks）。
- * center 用于旋转、波动、爆炸等效果的中心参考。
+ * 第 2 层 — 舞台对象：参与演出的一组方块（概念模型中的「对象」）。
+ * <p>
+ * 动画与建造动作通过 {@link com.beatblock.timeline.TimelineAnimationEvent#getTargetObjectId()}
+ * 引用本类实例。与 {@link com.beatblock.timeline.StageObject}（时间轴 UI 侧）对应，
+ * 由 {@link StageObjectSystem} 管理运行时副本。
  */
 public final class StageObject {
 

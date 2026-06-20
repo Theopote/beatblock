@@ -3,8 +3,11 @@ package com.beatblock.audio.beatmap;
 import java.util.List;
 
 /**
- * Beatmap 根对象 —— 对应 JSON 契约的顶层结构。
- * 由 BeatmapReader 从 .beatmap 文件反序列化而来，之后只读。
+ * 第 1 层 — 音频分析契约（磁盘缓存，只读导入）。
+ * <p>
+ * Python {@code analyze.py} 输出的 .beatmap JSON。经
+ * {@link com.beatblock.audio.analysis.AudioAnalysisEngine#fillTimelineFromBeatmap}
+ * 一次性写入时间轴参考轨后，<strong>不参与播放</strong>。
  */
 public final class Beatmap {
 
