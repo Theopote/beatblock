@@ -2,6 +2,7 @@ package com.beatblock.client;
 
 import com.beatblock.BeatBlock;
 import com.beatblock.engine.BlockControlExecutor;
+import com.beatblock.timeline.ReferenceBeatResolver;
 import com.beatblock.timeline.TimelineAnimationActionMode;
 import com.beatblock.timeline.TimelineAnimationEvent;
 import net.minecraft.block.BlockState;
@@ -83,7 +84,7 @@ public final class BeatBlockClientDriver {
 		}
 		syncTimelineBlockAnimationEvents(currentTime, previewOnly);
 		syncTimelineAutoAnimationEvents(currentTime, previewOnly);
-		BeatBlock.blockAnimationEngine.tickStepBeats(lastStepBeatTickTime, currentTime, readTimelineBpm());
+		BeatBlock.blockAnimationEngine.tickStepBeats(lastStepBeatTickTime, currentTime, readReferenceBeatTimes());
 		BeatBlock.blockAnimationEngine.tick(currentTime);
 		lastStepBeatTickTime = currentTime;
 		if (!previewOnly && world != null) {
@@ -91,20 +92,11 @@ public final class BeatBlockClientDriver {
 		}
 	}
 
-	private static double readTimelineBpm() {
-		if (BeatBlock.timeline == null) return 120.0;
-		Object raw = BeatBlock.timeline.getMetadata("bpm");
-		if (raw instanceof Number n) {
-			return Math.max(1.0, n.doubleValue());
+	private static double[] readReferenceBeatTimes() {
+		if (BeatBlock.timeline == null) {
+			return new double[0];
 		}
-		if (raw != null) {
-			try {
-				return Math.max(1.0, Double.parseDouble(String.valueOf(raw).trim()));
-			} catch (Exception ignored) {
-				// fall through
-			}
-		}
-		return 120.0;
+		return ReferenceBeatResolver.resolveBeatTimesSeconds(BeatBlock.timeline);
 	}
 
 	private static void syncStemMixerToMusicPlayer() {

@@ -106,12 +106,6 @@
 - **CameraEvent**：主动设计的下落/牵引路径（segment + 关键帧），相机是演出主体之一
 - **参数**：`usePhaseAnimation`、空间派发等见 STEP 文档
 
-## 已知过渡点（待收敛）
-
-| 项 | 现状 | 目标 |
-|----|------|------|
-| STEP + `NEXT_BEAT` | `tickStepBeats` 读 Timeline 元数据 `bpm`（来自分析导入） | 改为读参考轨上的显式节拍标记，或创作者可编辑的节拍网格 |
-
 ## 相关文档
 
 - [STEP 三段式动画与参数](step-phase-animation-and-cleanup.md)

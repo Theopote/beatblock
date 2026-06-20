@@ -135,27 +135,47 @@ public final class BlockAnimationEngine {
 
 	/**
 	 * 每帧调用：根据时间线时间更新动画，移除已结束实例。
-	 * STEP + NEXT_BEAT 由 {@link #tickStepBeats} 按 Timeline BPM 网格推进。
+	 * STEP + NEXT_BEAT 由 {@link #tickStepBeats} 按参考轨节拍点推进。
 	 */
 	public void tick(double timelineTimeSeconds) {
 		animationPlayer.removeEnded(timelineTimeSeconds);
 		animationPlayer.update(timelineTimeSeconds);
 	}
 
-	/** 按 Timeline BPM 网格推进 STEP 序列（不依赖实时音频派发）。 */
-	public void tickStepBeats(double previousTimeSeconds, double currentTimeSeconds, double bpm) {
-		if (stepSequences.isEmpty() || bpm <= 0 || currentTimeSeconds + 1e-6 < previousTimeSeconds) {
+	/**
+	 * 按参考轨显式节拍时刻推进 STEP 序列（{@code (previous, current]} 区间内各触发一次）。
+	 *
+	 * @param referenceBeatTimesSeconds 升序节拍时刻；为空时不推进
+	 */
+	public void tickStepBeats(double previousTimeSeconds, double currentTimeSeconds, double[] referenceBeatTimesSeconds) {
+		if (stepSequences.isEmpty()
+			|| referenceBeatTimesSeconds == null
+			|| referenceBeatTimesSeconds.length == 0
+			|| currentTimeSeconds + 1e-6 < previousTimeSeconds) {
 			return;
 		}
-		double beatInterval = 60.0 / bpm;
-		double beat = Math.floor(previousTimeSeconds / beatInterval) * beatInterval;
-		if (beat <= previousTimeSeconds + 1e-6) {
-			beat += beatInterval;
-		}
-		while (beat <= currentTimeSeconds + 1e-6) {
+		int start = firstBeatIndexAfter(previousTimeSeconds, referenceBeatTimesSeconds);
+		for (int i = start; i < referenceBeatTimesSeconds.length; i++) {
+			double beat = referenceBeatTimesSeconds[i];
+			if (beat > currentTimeSeconds + 1e-6) {
+				break;
+			}
 			advanceStepSequencesOnBeat(beat);
-			beat += beatInterval;
 		}
+	}
+
+	private static int firstBeatIndexAfter(double timeSeconds, double[] beatTimesSeconds) {
+		int lo = 0;
+		int hi = beatTimesSeconds.length;
+		while (lo < hi) {
+			int mid = (lo + hi) >>> 1;
+			if (beatTimesSeconds[mid] <= timeSeconds + 1e-6) {
+				lo = mid + 1;
+			} else {
+				hi = mid;
+			}
+		}
+		return lo;
 	}
 
 	/**
