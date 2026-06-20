@@ -16,6 +16,8 @@
 - 在切回 BURST 时一次性清理所有 STEP 专属参数。
 - 使参数契约与 UI 行为保持可预测的一致性。
 
+> **与 4.5 生成式 STEP 的关系（2026-06）**：运行时 `StepSequenceState` 已删除。持久化推荐路径是工具栏 **「烘焙 STEP」**（`StepSequenceBaker`），将一条 STEP 事件展开为 N 个 BURST 普通事件后再保存；详见 [REFACTOR_ROADMAP.md](REFACTOR_ROADMAP.md) §4.5 与 [architecture.md](architecture.md)。
+
 ## 2. 变更范围
 
 ### 2.1 已修改文件

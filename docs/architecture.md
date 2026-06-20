@@ -73,7 +73,12 @@
 
 自动映射（`AnimationBindingEngine`、`TimelineRenderer.populateAnimationTrackFromAudioFeatures`、`AutoMapGenerator`）在**编辑/导入时**从第 1 层生成第 2 层初稿，经 `TimelineDraftWriter` 写入（可 Undo），属于创作辅助，不是播放路径。
 
-STEP 派发在**调度时**由 `StepSequencePlanner` + `PacingStrategy` 展开为带绝对时间戳的单块动画实例，播放器不再维护 `StepSequenceState` 运行时状态机。
+STEP 序列有两种落地方式（均无 `StepSequenceState` 运行时状态机）：
+
+1. **推荐（持久化）**：工具栏「烘焙 STEP」→ `StepSequenceBaker` 将一条 `dispatchModel=STEP` 事件展开为 N 个 `BURST` 普通事件（`singleBlockX/Y/Z`），经 `TimelineDraftWriter` 写入第 2 层；保存后播放器只看到 N 个带绝对时间戳的事件。
+2. **过渡（未烘焙）**：Timeline 仍存 `dispatchModel=STEP` 时，`BlockAnimationEngine.scheduleExpandedStepSequence` 在**首次调度**时用 `StepSequencePlanner` + `PacingStrategy` 一次性算出 N 个 `EngineAnimationInstance`（读 Layer 1 参考轨 via `ReferenceBeatResolver`，不监听实时 beat）。
+
+规划/算时间戳：`timeline/generation/PacingStrategy`、`StepSequencePlanner`、`StepBurstEventFactory`。
 
 ### 第 3 层：播放器
 

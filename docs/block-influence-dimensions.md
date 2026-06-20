@@ -10,10 +10,10 @@
 
 | 路径 | 代码 | 实际在改什么 |
 |------|------|--------------|
-| 渲染层变换 | `AnimationEffect` → `AnimatedBlock` | 位置 / 旋转 / 缩放 |
+| 渲染层变换 | `BlockInfluenceEvaluator` → `AnimatedBlock` | 位置 / 旋转 / 缩放（preset 通道） |
 | 世界写入·建造 | `BuildSequencer` | 按序 `setBlockState`（出现/溶解） |
 | 世界写入·控制 | `BlockControlExecutor` | 瞬间换材质 / 放置 / 清除 |
-| 派发时序 | `BlockAnimationEngine` STEP 序列 | 每参考轨节拍推进若干块 |
+| 派发时序 | `StepSequencePlanner` + 烘焙/调度展开 | 生成时算每块绝对时间；无运行时序列状态机 |
 
 `JumpEffect`、`DropEffect`、`MeteorEffect` 等同属 `AnimationEffect`，但各自硬编码曲线；`MeteorEffect` 已同时改**位置 + 缩放**两个维度。`BuildSequencer` 管**存在性**，却与 `AnimationPlayer` 完全分离。新增一种演出很容易再复制一个 `*Effect` 类或再开一个 Sequencer。
 
@@ -142,7 +142,7 @@ BlockInfluenceEvaluator          ◄── 目标：单一求值器
 | 策略 | 代码现状 | 与维度关系 |
 |------|----------|------------|
 | **BURST** | 事件时刻全体同时 sample | 共用同一 `t` |
-| **STEP** | `BlockAnimationEngine` + 参考轨节拍 | 每块独立 `t` 起点；EXISTENCE 建造与 ANIMATE 步进共用排序器 |
+| **STEP** | `StepSequencePlanner` → 烘焙或调度展开 | 每块独立 `t` 起点；排序由 `spatialMode` / `buildMode` 决定 |
 | **空间序** | `spatialMode`、`buildMode` | 只影响块顺序，不改变曲线形状 |
 
 建筑 = **EXISTENCE 维度** + **STEP/BUILD 派发** + 排序策略。  
