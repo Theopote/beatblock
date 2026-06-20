@@ -164,10 +164,14 @@ BlockInfluenceEvaluator          ◄── 目标：单一求值器
 - `AnimationPlayer` 与 `BuildSequencer` 经 orchestrator 单 tick；`BeatBlockClientDriver` 不再单独调 build tick
 - `AnimationLibrary` 由 `BlockInfluencePresets` 注册；`AnimationDefinition` 持有 preset
 
-### 期 3：VFX 解耦与第 2 层编辑
+### 期 3：VFX 解耦与第 2 层编辑 ✅
 
-- `VfxEmitter` 订阅 evaluator 边沿（existence 0→1、appearance flip）
-- UI：`animationTypeId` 展示为 preset 名；高级面板编辑各 channel（可选）
+- `VfxEmitter`（客户端）消费 `InfluenceFrame.vfxTriggers`
+- `AppearancePulseTracker`：APPEARANCE 通道中点闪烁 + 实例结束还原
+- 建造 EXISTENCE mutation 附带 `existence_place` / `existence_dissolve` VFX
+- 新 preset `BlockTap`（跑酷踩点：跳起 + 缩放 + APPEARANCE）
+- 事件属性面板：Preset 通道预览、`vfxEnabled`、`flashBlock`
+- 删除期 1 遗留 `AnimationEffect` 及 `engine/effects/*` 实现类
 
 ## 新增效果检查清单
 

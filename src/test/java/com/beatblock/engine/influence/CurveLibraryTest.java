@@ -48,6 +48,6 @@ class CurveLibraryTest {
 	void builtInPresetsMirrorAnimationLibraryIds() {
 		assertTrue(BlockInfluencePresets.get("BlockJump") != null);
 		assertTrue(BlockInfluencePresets.get("Meteor") != null);
-		assertEquals(9, BlockInfluencePresets.getAll().size());
+		assertEquals(10, BlockInfluencePresets.getAll().size());
 	}
 }

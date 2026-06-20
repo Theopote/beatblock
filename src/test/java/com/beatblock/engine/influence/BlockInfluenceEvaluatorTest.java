@@ -40,7 +40,7 @@ class BlockInfluenceEvaluatorTest {
 		AnimationDefinition jump = library.get("BlockJump");
 		assertNotNull(jump);
 		assertNotNull(jump.getPreset());
-		assertEquals(9, library.getAll().size());
+		assertEquals(10, library.getAll().size());
 		assertTrue(library.getAll().values().stream().allMatch(def -> def.getPreset() != null));
 	}
 }

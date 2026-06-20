@@ -41,7 +41,7 @@ public final class InfluenceFrame {
 		}
 	}
 
-	void addVfxTrigger(VfxTrigger trigger) {
+	public void addVfxTrigger(VfxTrigger trigger) {
 		if (trigger != null) {
 			vfxTriggers.add(trigger);
 		}

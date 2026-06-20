@@ -147,8 +147,11 @@ public final class BlockAnimationEngine {
 	 * 统一影响帧 tick：渲染层 preset 求值 + 可选世界层 BUILD mutation。
 	 */
 	public void tick(double timelineTimeSeconds, World world) {
-		animationPlayer.removeEnded(timelineTimeSeconds);
 		influenceOrchestrator.tick(timelineTimeSeconds, animationPlayer, buildSequencer, world);
+	}
+
+	public com.beatblock.engine.influence.InfluenceFrame getLastInfluenceFrame() {
+		return influenceOrchestrator.getLastFrame();
 	}
 
 	/**

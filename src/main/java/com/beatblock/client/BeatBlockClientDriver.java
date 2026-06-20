@@ -1,6 +1,7 @@
 package com.beatblock.client;
 
 import com.beatblock.BeatBlock;
+import com.beatblock.client.vfx.VfxEmitter;
 import com.beatblock.engine.BlockControlExecutor;
 import com.beatblock.timeline.ReferenceBeatResolver;
 import com.beatblock.timeline.TimelineAnimationActionMode;
@@ -86,6 +87,9 @@ public final class BeatBlockClientDriver {
 		syncTimelineAutoAnimationEvents(currentTime, previewOnly);
 		BeatBlock.blockAnimationEngine.tickStepBeats(lastStepBeatTickTime, currentTime, readReferenceBeatTimes());
 		BeatBlock.blockAnimationEngine.tick(currentTime, previewOnly ? null : world);
+		if (!previewOnly && world != null && BeatBlock.blockAnimationEngine != null) {
+			VfxEmitter.emit(MinecraftClient.getInstance(), BeatBlock.blockAnimationEngine.getLastInfluenceFrame());
+		}
 		lastStepBeatTickTime = currentTime;
 	}
 

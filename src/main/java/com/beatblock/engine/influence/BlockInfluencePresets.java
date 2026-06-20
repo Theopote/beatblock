@@ -32,6 +32,31 @@ public final class BlockInfluencePresets {
 	}
 
 	private static void registerBuiltIns() {
+		register(BlockInfluencePreset.builder("BlockTap", "跑酷踩点")
+			.durationSeconds(0.35f)
+			.channel(ChannelSpec.enabled(
+				InfluenceDimension.TRANSFORM_POSITION,
+				PathKind.OFFSET_Y,
+				CurveKind.SINE_BUMP,
+				0f,
+				0.8f
+			))
+			.channel(ChannelSpec.enabled(
+				InfluenceDimension.TRANSFORM_SCALE,
+				PathKind.SCALE_UNIFORM,
+				CurveKind.SINE_BUMP,
+				1f,
+				1.15f
+			))
+			.channel(ChannelSpec.enabled(
+				InfluenceDimension.APPEARANCE,
+				PathKind.BLOCK_STATE,
+				CurveKind.SINE_BUMP,
+				0f,
+				1f
+			))
+			.build());
+
 		register(BlockInfluencePreset.builder("BlockJump", "跳跃")
 			.durationSeconds(0.6f)
 			.channel(ChannelSpec.enabled(

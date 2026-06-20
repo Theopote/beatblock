@@ -103,6 +103,12 @@ public final class BuildSequencer {
 					if (!current.equals(inst.targetState)) {
 						frame.addWorldMutation(new BlockControlExecutor.BlockMutation(
 							pos.toImmutable(), current, inst.targetState));
+						frame.addVfxTrigger(new com.beatblock.engine.influence.VfxTrigger(
+							inst.dissolve ? "existence_dissolve" : "existence_place",
+							pos.toImmutable(),
+							currentTime,
+							1f
+						));
 					}
 				}
 				inst.placedCount++;

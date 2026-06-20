@@ -4,6 +4,10 @@ import com.beatblock.BeatBlock;
 import com.beatblock.client.BeatBlockClientDriver;
 import com.beatblock.client.camera.CameraKeyframeActions;
 import com.beatblock.engine.AnimationDefinition;
+import com.beatblock.engine.influence.BlockInfluencePreset;
+import com.beatblock.engine.influence.BlockInfluencePresets;
+import com.beatblock.engine.influence.ChannelSpec;
+import com.beatblock.engine.influence.InfluenceDimension;
 import com.beatblock.engine.StageObject;
 import com.beatblock.timeline.Clip;
 import com.beatblock.timeline.EventType;
@@ -62,6 +66,7 @@ public class EventPropertiesPanel {
 	private final ImString idleDurationBuffer = new ImString(INPUT_BUFFER_SIZE);
 	private final ImString exitDurationBuffer = new ImString(INPUT_BUFFER_SIZE);
 	private final ImString placeBlockBuffer = new ImString(INPUT_BUFFER_SIZE);
+	private final ImString flashBlockBuffer = new ImString(INPUT_BUFFER_SIZE);
 	private final ImString camSegDurBuffer = new ImString(INPUT_BUFFER_SIZE);
 	private final ImString camXBuffer = new ImString(INPUT_BUFFER_SIZE);
 	private final ImString camYBuffer = new ImString(INPUT_BUFFER_SIZE);
@@ -280,8 +285,23 @@ public class EventPropertiesPanel {
 		if (ImGui.combo("动作模式##eventActionMode", actionIndex, actionLabels)) {
 			validationError = null;
 		}
-		if (ImGui.combo("动画模板##eventAnimation", animationIndex, animationLabels)) {
+		if (ImGui.combo("动画模板 (Preset)##eventAnimation", animationIndex, animationLabels)) {
 			validationError = null;
+		}
+		renderPresetChannelPreview(animationOptions.get(animationIndex.get()).id());
+		boolean vfxEnabled = booleanParam(params, "vfxEnabled", true);
+		ImBoolean vfxEnabledProxy = new ImBoolean(vfxEnabled);
+		if (ImGui.checkbox("粒子强调 (VFX)##eventVfxEnabled", vfxEnabledProxy)) {
+			vfxEnabled = vfxEnabledProxy.get();
+			validationError = null;
+		}
+		BlockInfluencePreset selectedPreset = BlockInfluencePresets.get(animationOptions.get(animationIndex.get()).id());
+		if (selectedPreset != null && !selectedPreset.channelsFor(InfluenceDimension.APPEARANCE).isEmpty()) {
+			ImGui.setNextItemWidth(-1f);
+			ImGui.inputText("踩点闪烁方块##eventFlashBlock", flashBlockBuffer);
+			if (ImGui.isItemHovered()) {
+				ImGui.setTooltip("APPEARANCE 通道在动画中点切换到此方块，结束后还原。默认: minecraft:gold_block");
+			}
 		}
 		if (ImGui.combo("目标对象##eventTarget", targetIndex, targetLabels)) {
 			validationError = null;
@@ -392,7 +412,8 @@ public class EventPropertiesPanel {
 				cameraAdaptiveStep,
 				cameraFrustumGating,
 				numericParam(params, "cameraEdgePriority", 0.0),
-				usePhaseAnimation);
+				usePhaseAnimation,
+				vfxEnabled);
 		}
 		if (reset) {
 			bindBuffers(ref);
@@ -421,7 +442,7 @@ public class EventPropertiesPanel {
 	                                  String targetObjectId, boolean inheritGroupSpatial, String spatialMode,
 	                                  boolean stepDispatch, String stepStartMode, String stepCompletionMode,
 	                                  boolean cameraAdaptiveStep, boolean cameraFrustumGating, double cameraEdgePriority,
-	                                  boolean usePhaseAnimation) {
+	                                  boolean usePhaseAnimation, boolean vfxEnabled) {
 		try {
 			double newTime = Math.max(0.0, Double.parseDouble(valueOf(timeBuffer).trim()));
 			double newDuration = Math.max(0.01, Double.parseDouble(valueOf(durationBuffer).trim()));
@@ -562,6 +583,21 @@ public class EventPropertiesPanel {
 				ref.event().removeParameter("placeBlock");
 				ref.event().removeParameter("placeBlockId");
 			}
+			ref.event().setParameter("vfxEnabled", vfxEnabled);
+			BlockInfluencePreset preset = BlockInfluencePresets.get(animationId);
+			if (preset != null && !preset.channelsFor(InfluenceDimension.APPEARANCE).isEmpty()) {
+				String flashBlockId = valueOf(flashBlockBuffer).trim();
+				if (flashBlockId.isEmpty()) flashBlockId = "minecraft:gold_block";
+				Identifier flashParsed = Identifier.tryParse(flashBlockId);
+				if (flashParsed == null || !Registries.BLOCK.containsId(flashParsed)) {
+					validationError = "闪烁方块ID无效，示例: minecraft:gold_block";
+					return;
+				}
+				ref.event().setParameter("flashBlock", flashParsed.toString());
+			} else {
+				ref.event().removeParameter("flashBlock");
+				ref.event().removeParameter("flashBlockId");
+			}
 			ref.clip().setStartTimeSeconds(newTime);
 			ref.clip().setEndTimeSeconds(newTime + newDuration);
 			timeline.markAnimationEventsDirty(ref.track().getId());
@@ -602,6 +638,8 @@ public class EventPropertiesPanel {
 		cameraEdgePriorityBuffer.set(String.format(Locale.ROOT, "%.2f", numericParam(params, "cameraEdgePriority", 0.0)));
 		String placeBlock = stringParam(params, "placeBlock", stringParam(params, "placeBlockId", "minecraft:diamond_block"));
 		placeBlockBuffer.set(placeBlock);
+		String flashBlock = stringParam(params, "flashBlock", stringParam(params, "flashBlockId", "minecraft:gold_block"));
+		flashBlockBuffer.set(flashBlock);
 		if (event.getType() == EventType.CAMERA_SEGMENT && ref.clip() != null) {
 			camSegDurBuffer.set(String.format(Locale.ROOT, "%.6f", ref.clip().getDurationSeconds()));
 			camSegPathVisibleProxy.set(CameraPathMetadata.isPathVisible(BeatBlock.timeline, ref.clip().getId()));
@@ -1041,6 +1079,22 @@ public class EventPropertiesPanel {
 			}
 		}
 		return -1;
+	}
+
+	private void renderPresetChannelPreview(String presetId) {
+		BlockInfluencePreset preset = BlockInfluencePresets.get(presetId);
+		if (preset == null || preset.getChannels().isEmpty()) return;
+		if (!ImGui.treeNode("Preset 通道##eventPresetChannels")) return;
+		try {
+			ImGui.textDisabled(preset.getDisplayName() + " · " + preset.getDefaultDurationSeconds() + "s");
+			for (ChannelSpec channel : preset.getChannels()) {
+				if (channel == null || !channel.enabled()) continue;
+				ImGui.bulletText(String.format(Locale.ROOT, "%s / %s / %s (%.2f→%.2f)",
+					channel.dimension(), channel.path(), channel.curve(), channel.from(), channel.to()));
+			}
+		} finally {
+			ImGui.treePop();
+		}
 	}
 
 	private List<Option> collectAnimationOptions() {
