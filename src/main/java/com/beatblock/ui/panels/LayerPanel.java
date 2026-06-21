@@ -70,7 +70,7 @@ public class LayerPanel {
 	private void renderContent() {
 		ImGui.text("建造图层");
 		ImGui.separator();
-		ImGui.textWrapped("从选区创建图层 → 点击眼睛隐藏 → 拖入「建造还原」轨道绑定片段播放。");
+		ImGui.textWrapped("从选区创建图层 → 点击眼睛隐藏 → 拖入「建造还原」轨道绑定片段播放。已属于某图层的方块无法再次选入其他图层。");
 
 		var selMgr = BeatBlockSelectionManager.get();
 		int selCount = selMgr.getSelectionCount();
@@ -118,8 +118,11 @@ public class LayerPanel {
 		boolean selected = layer.getId().equals(selectedLayerId);
 
 		IconButtonStyle.pushBeatBlockIconButton();
-		renderVisibilityIcon(layer);
+		String visTooltip = renderVisibilityIconButton(layer);
 		IconButtonStyle.popBeatBlockIconButton();
+		if (visTooltip != null) {
+			ImGui.setTooltip(visTooltip);
+		}
 
 		ImGui.sameLine();
 		float nameWidth = Math.max(80f, ImGui.getContentRegionAvail().x - 8f);
@@ -183,7 +186,7 @@ public class LayerPanel {
 		ImGui.popID();
 	}
 
-	private void renderVisibilityIcon(BuildLayer layer) {
+	private String renderVisibilityIconButton(BuildLayer layer) {
 		boolean canToggle = layer.canToggleVisibility();
 		boolean visible = layer.getState() == LayerVisibilityState.FREE_VISIBLE;
 		String icon = visible ? Icons.EYE : Icons.Action.HIDDEN;
@@ -205,15 +208,17 @@ public class LayerPanel {
 			ImGui.popStyleColor();
 		}
 
+		String tooltip = null;
 		if (ImGui.isItemHovered()) {
 			if (!canToggle) {
-				ImGui.setTooltip("已绑定轨道，可见性由片段播放头控制");
+				tooltip = "已绑定轨道，可见性由片段播放头控制";
 			} else if (visible) {
-				ImGui.setTooltip("当前可见，点击隐藏（世界方块变为空气）");
+				tooltip = "当前可见，点击隐藏（世界方块变为空气）";
 			} else {
-				ImGui.setTooltip("当前隐藏，点击显示（恢复捕获的方块）");
+				tooltip = "当前隐藏，点击显示（恢复捕获的方块）";
 			}
 		}
+		return tooltip;
 	}
 
 	private void renderDeleteConfirmPopup() {
@@ -301,18 +306,26 @@ public class LayerPanel {
 			statusMessage = "请先建立方块选区。";
 			return;
 		}
+		var manager = BeatBlock.blockAnimationEngine.getBuildLayerManager();
+		int claimed = manager.countClaimedBlocks(blocks);
+		if (claimed >= blocks.size()) {
+			statusMessage = "选区内方块均已属于其他图层，无法创建新图层。";
+			return;
+		}
 		String name = newLayerNameBuffer.get() != null ? newLayerNameBuffer.get().trim() : "";
-		var cmd = new CreateLayerCommand(
-			BeatBlock.blockAnimationEngine.getBuildLayerManager(),
-			name.isEmpty() ? "layer" : name,
-			blocks
-		);
+		var cmd = new CreateLayerCommand(manager, name.isEmpty() ? "layer" : name, blocks);
 		BeatBlock.timelineEditor.getCommandManager().execute(cmd);
 		if (cmd.getCreatedLayer() != null) {
 			BuildLayer created = cmd.getCreatedLayer();
 			selectedLayerId = created.getId();
 			nameCommitted.put(created.getId(), created.getName());
 			statusMessage = "已创建图层：" + created.getName();
+			if (claimed > 0) {
+				statusMessage += String.format(Locale.ROOT, "（已跳过 %d 个已属于其他图层的方块）", claimed);
+			}
+			selMgr.removeBlocks(created.getStageObject().getBlocks());
+		} else {
+			statusMessage = "创建图层失败。";
 		}
 	}
 
