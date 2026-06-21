@@ -1,5 +1,7 @@
 package com.beatblock.selection;
 
+import com.beatblock.BeatBlock;
+import com.beatblock.engine.layer.BuildLayer;
 import net.minecraft.block.BlockState;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.math.BlockPos;
@@ -351,6 +353,10 @@ public final class BeatBlockSelectionManager {
 	private void handleClickTool(World world, BlockPos pos, boolean shiftDown) {
 		if (!isWithinCameraReach(pos)) {
 			lastMessage = "点击选择：该方块超出「相对视角最大距离」。";
+			return;
+		}
+		if (isClaimedByBuildLayer(pos)) {
+			lastMessage = layerClaimedMessage(pos);
 			return;
 		}
 		SelectionOperation op = shiftDown ? SelectionOperation.ADD : operation;
@@ -772,6 +778,16 @@ public final class BeatBlockSelectionManager {
 	}
 
 	private void mergeBlockListIntoSelection(List<BlockPos> blocks, SelectionOperation op, boolean quiet) {
+		int skippedLayer = countLayerClaimed(blocks);
+		blocks = excludeLayerClaimed(blocks);
+		if (blocks.isEmpty()) {
+			if (!quiet) {
+				lastMessage = skippedLayer > 0
+					? "选区内方块均已属于某图层，无法加入选区。"
+					: mergeMessageNew(0);
+			}
+			return;
+		}
 		switch (op) {
 			case NEW -> {
 				selected.clear();
@@ -798,6 +814,9 @@ public final class BeatBlockSelectionManager {
 					lastMessage = mergeMessageAfterIntersect();
 				}
 			}
+		}
+		if (!quiet && skippedLayer > 0) {
+			lastMessage = lastMessage + String.format("（已跳过 %d 个已属于图层的方块）", skippedLayer);
 		}
 		LOGGER.debug("[BeatBlockSelection] merge op={} size={}", op, selected.size());
 	}
@@ -899,7 +918,42 @@ public final class BeatBlockSelectionManager {
 	}
 
 	public void addBlocks(Collection<BlockPos> toAdd) {
-		selected.addAll(toAdd);
+		if (toAdd == null || toAdd.isEmpty()) return;
+		for (BlockPos pos : toAdd) {
+			if (pos == null || isClaimedByBuildLayer(pos)) continue;
+			selected.add(pos.toImmutable());
+		}
+	}
+
+	private static boolean isClaimedByBuildLayer(BlockPos pos) {
+		if (pos == null || BeatBlock.blockAnimationEngine == null) return false;
+		return BeatBlock.blockAnimationEngine.getBuildLayerManager().isBlockClaimed(pos);
+	}
+
+	private static String layerClaimedMessage(BlockPos pos) {
+		if (BeatBlock.blockAnimationEngine == null) return "该方块已属于某图层，无法选入选区。";
+		BuildLayer owner = BeatBlock.blockAnimationEngine.getBuildLayerManager().getLayerOwningBlock(pos);
+		if (owner == null) return "该方块已属于某图层，无法选入选区。";
+		return "该方块已属于图层「" + owner.getName() + "」，无法选入选区。";
+	}
+
+	private static List<BlockPos> excludeLayerClaimed(List<BlockPos> blocks) {
+		if (blocks == null || blocks.isEmpty()) return List.of();
+		List<BlockPos> out = new ArrayList<>(blocks.size());
+		for (BlockPos pos : blocks) {
+			if (pos == null || isClaimedByBuildLayer(pos)) continue;
+			out.add(pos.toImmutable());
+		}
+		return out;
+	}
+
+	private static int countLayerClaimed(List<BlockPos> blocks) {
+		if (blocks == null || blocks.isEmpty()) return 0;
+		int count = 0;
+		for (BlockPos pos : blocks) {
+			if (pos != null && isClaimedByBuildLayer(pos)) count++;
+		}
+		return count;
 	}
 
 	/** 与 {@link #computePlaneSliceBounds(World, BlockPos, Direction)} 一致，供预览使用。 */

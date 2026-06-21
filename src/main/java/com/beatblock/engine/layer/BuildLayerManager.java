@@ -12,6 +12,7 @@ import net.minecraft.world.World;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -24,6 +25,8 @@ public final class BuildLayerManager {
 
 	private final StageObjectSystem stageObjectSystem;
 	private final Map<String, BuildLayer> layers = new LinkedHashMap<>();
+	/** 方块 → 所属图层 id，保证同一 BlockPos 只能归属一个图层。 */
+	private final Map<BlockPos, String> blockOwnerByPos = new HashMap<>();
 
 	public BuildLayerManager(StageObjectSystem stageObjectSystem) {
 		this.stageObjectSystem = stageObjectSystem;
@@ -47,23 +50,58 @@ public final class BuildLayerManager {
 
 	public BuildLayer createFromSelection(String name, List<BlockPos> blocks) {
 		if (blocks == null || blocks.isEmpty()) return null;
+		List<BlockPos> available = filterUnclaimedBlocks(blocks);
+		if (available.isEmpty()) return null;
+
 		String layerName = uniqueLayerName(name);
 		String id = uniqueLayerId(layerName);
 		String stageId = id + "_stage";
 		StageObject stageObject = StageObjectSystem.fromSelectionSnapshot(
-			stageId, layerName, blocks, com.beatblock.engine.GroupSortingStrategy.SEQUENTIAL, 0.0);
+			stageId, layerName, available, com.beatblock.engine.GroupSortingStrategy.SEQUENTIAL, 0.0);
 		stageObjectSystem.register(stageObject);
 
 		Map<BlockPos, BlockState> initialCapture = new LinkedHashMap<>();
 		World world = currentWorld();
 		if (world != null) {
-			snapshotBlocksFromWorld(blocks, world, initialCapture);
+			snapshotBlocksFromWorld(available, world, initialCapture);
 		}
 
 		BuildLayer layer = new BuildLayer(
 			id, layerName, stageObject, LayerVisibilityState.FREE_VISIBLE, initialCapture, null);
 		layers.put(id, layer);
+		claimBlocks(layer);
 		return layer;
+	}
+
+	/** 选区中已被任意图层占用的方块数量。 */
+	public int countClaimedBlocks(List<BlockPos> blocks) {
+		if (blocks == null || blocks.isEmpty()) return 0;
+		int count = 0;
+		for (BlockPos pos : blocks) {
+			if (pos != null && isBlockClaimed(pos)) count++;
+		}
+		return count;
+	}
+
+	public boolean isBlockClaimed(BlockPos pos) {
+		if (pos == null) return false;
+		return blockOwnerByPos.containsKey(pos.toImmutable());
+	}
+
+	public BuildLayer getLayerOwningBlock(BlockPos pos) {
+		if (pos == null) return null;
+		String layerId = blockOwnerByPos.get(pos.toImmutable());
+		return layerId != null ? layers.get(layerId) : null;
+	}
+
+	public List<BlockPos> filterUnclaimedBlocks(List<BlockPos> blocks) {
+		if (blocks == null || blocks.isEmpty()) return List.of();
+		List<BlockPos> out = new ArrayList<>(blocks.size());
+		for (BlockPos pos : blocks) {
+			if (pos == null || isBlockClaimed(pos)) continue;
+			out.add(pos.toImmutable());
+		}
+		return out;
 	}
 
 	public boolean renameLayer(BuildLayer layer, String newName) {
@@ -90,6 +128,7 @@ public final class BuildLayerManager {
 		if (layer.getStageObject() != null) {
 			stageObjectSystem.register(layer.getStageObject());
 		}
+		claimBlocks(layer);
 	}
 
 	public boolean hideLayer(BuildLayer layer, World world) {
@@ -142,6 +181,7 @@ public final class BuildLayerManager {
 			showLayer(layer, world);
 		}
 		layers.remove(layer.getId());
+		releaseBlocks(layer);
 		stageObjectSystem.remove(layer.getStageObjectId());
 		return true;
 	}
@@ -168,6 +208,27 @@ public final class BuildLayerManager {
 
 	public void clear() {
 		layers.clear();
+		blockOwnerByPos.clear();
+	}
+
+	private void claimBlocks(BuildLayer layer) {
+		if (layer == null || layer.getStageObject() == null) return;
+		for (BlockPos pos : layer.getStageObject().getBlocks()) {
+			if (pos == null) continue;
+			blockOwnerByPos.put(pos.toImmutable(), layer.getId());
+		}
+	}
+
+	private void releaseBlocks(BuildLayer layer) {
+		if (layer == null || layer.getStageObject() == null) return;
+		for (BlockPos pos : layer.getStageObject().getBlocks()) {
+			if (pos == null) continue;
+			BlockPos immutable = pos.toImmutable();
+			String owner = blockOwnerByPos.get(immutable);
+			if (layer.getId().equals(owner)) {
+				blockOwnerByPos.remove(immutable);
+			}
+		}
 	}
 
 	/** 工程加载后：将 FREE_HIDDEN / BOUND_TO_TRACK 图层写回空气（不重新捕获）。 */
