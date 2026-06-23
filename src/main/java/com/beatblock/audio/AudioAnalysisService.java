@@ -4,40 +4,20 @@ import com.beatblock.audio.beatmap.Beatmap;
 import com.beatblock.audio.cache.BeatmapAnalysisCache;
 import com.beatblock.audio.python.PythonAudioAnalyzer;
 import com.beatblock.audio.python.PythonEnvironmentDiagnostics;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import com.beatblock.audio.python.PythonRuntimeHealthMonitor;
 
 import java.nio.file.Path;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
 /**
- * 音频分析对外入口：任务调度委托 {@link AudioAnalysisOrchestrator}，
- * Python 运行时健康检查由本类缓存刷新。
+ * 音频分析对外入口：任务调度见 {@link AudioAnalysisOrchestrator}，
+ * Python 环境健康见 {@link PythonRuntimeHealthMonitor}。
  */
 public final class AudioAnalysisService {
 
-	private static final Logger LOGGER = LoggerFactory.getLogger(AudioAnalysisService.class);
-
-	private final PythonEnvironmentDiagnostics pythonDiagnostics;
 	private final AudioAnalysisOrchestrator orchestrator;
-
-	private final ExecutorService summaryExecutor = Executors.newSingleThreadExecutor(r -> {
-		Thread t = new Thread(r, "beatblock-python-summary");
-		t.setDaemon(true);
-		return t;
-	});
-
-	private volatile String cachedPythonSummary = "Python: 检测中...";
-	private volatile long nextPythonSummaryRefreshAtMs;
-	private volatile boolean pythonSummaryRefreshInFlight;
-	private volatile PythonEnvironmentDiagnostics.RuntimeHealthSnapshot cachedRuntimeHealthSnapshot =
-		PythonEnvironmentDiagnostics.RuntimeHealthSnapshot.empty();
-	private volatile long nextRuntimeHealthRefreshAtMs;
-	private final AtomicBoolean runtimeHealthRefreshInFlight = new AtomicBoolean();
+	private final PythonRuntimeHealthMonitor runtimeHealthMonitor;
 
 	private volatile boolean useDemucs = true;
 
@@ -46,18 +26,21 @@ public final class AudioAnalysisService {
 	}
 
 	public AudioAnalysisService(PythonEnvironmentDiagnostics pythonDiagnostics) {
-		this.pythonDiagnostics = pythonDiagnostics;
 		this.orchestrator = new AudioAnalysisOrchestrator(new PythonAudioAnalyzer(pythonDiagnostics));
+		this.runtimeHealthMonitor = new PythonRuntimeHealthMonitor(pythonDiagnostics);
 	}
 
 	AudioAnalysisService(IAudioAnalyzer analyzer, PythonEnvironmentDiagnostics pythonDiagnostics) {
-		this.pythonDiagnostics = pythonDiagnostics;
 		this.orchestrator = new AudioAnalysisOrchestrator(analyzer);
+		this.runtimeHealthMonitor = new PythonRuntimeHealthMonitor(pythonDiagnostics);
 	}
 
-	AudioAnalysisService(AudioAnalysisOrchestrator orchestrator, PythonEnvironmentDiagnostics pythonDiagnostics) {
+	AudioAnalysisService(
+		AudioAnalysisOrchestrator orchestrator,
+		PythonRuntimeHealthMonitor runtimeHealthMonitor
+	) {
 		this.orchestrator = orchestrator;
-		this.pythonDiagnostics = pythonDiagnostics;
+		this.runtimeHealthMonitor = runtimeHealthMonitor;
 	}
 
 	public IAudioAnalyzer getAnalyzer() {
@@ -154,7 +137,7 @@ public final class AudioAnalysisService {
 
 	public void shutdown() {
 		orchestrator.shutdown();
-		summaryExecutor.shutdownNow();
+		runtimeHealthMonitor.shutdown();
 	}
 
 	public int clearBeatmapCacheForAudio(Path audioPath) {
@@ -166,65 +149,10 @@ public final class AudioAnalysisService {
 	}
 
 	public String getPythonRuntimeSummary() {
-		long now = System.currentTimeMillis();
-		if (cachedPythonSummary == null || cachedPythonSummary.isBlank()) {
-			cachedPythonSummary = "Python: 检测中...";
-		}
-		if (now >= nextPythonSummaryRefreshAtMs) {
-			triggerPythonSummaryRefreshAsync();
-		}
-		return cachedPythonSummary;
+		return runtimeHealthMonitor.getRuntimeSummary();
 	}
 
 	public PythonEnvironmentDiagnostics.RuntimeHealthSnapshot getRuntimeHealthSnapshot() {
-		long now = System.currentTimeMillis();
-		if (now >= nextRuntimeHealthRefreshAtMs) {
-			triggerRuntimeHealthRefreshAsync();
-		}
-		return cachedRuntimeHealthSnapshot;
-	}
-
-	private void triggerPythonSummaryRefreshAsync() {
-		if (pythonSummaryRefreshInFlight) return;
-		synchronized (this) {
-			if (pythonSummaryRefreshInFlight) return;
-			pythonSummaryRefreshInFlight = true;
-		}
-
-		summaryExecutor.submit(() -> {
-			try {
-				Path configDir = pythonDiagnostics.configDirOrNull();
-				String summary = configDir != null
-					? pythonDiagnostics.probeRuntimeSummary(configDir)
-					: "Python: 未检测到配置目录";
-				if (!summary.isBlank()) {
-					cachedPythonSummary = summary;
-				}
-			} catch (Exception e) {
-				if (cachedPythonSummary == null || cachedPythonSummary.isBlank()) {
-					cachedPythonSummary = "Python: 检测失败（" + e.getClass().getSimpleName() + "）";
-				}
-			} finally {
-				nextPythonSummaryRefreshAtMs = System.currentTimeMillis() + 5000L;
-				pythonSummaryRefreshInFlight = false;
-			}
-		});
-	}
-
-	private void triggerRuntimeHealthRefreshAsync() {
-		if (!runtimeHealthRefreshInFlight.compareAndSet(false, true)) return;
-		summaryExecutor.submit(() -> {
-			try {
-				Path configDir = pythonDiagnostics.configDirOrNull();
-				cachedRuntimeHealthSnapshot = configDir != null
-					? pythonDiagnostics.probeRuntimeHealth(configDir)
-					: PythonEnvironmentDiagnostics.RuntimeHealthSnapshot.empty();
-			} catch (Exception e) {
-				LOGGER.debug("BeatBlock AudioAnalysis: runtime health probe failed: {}", e.toString());
-			} finally {
-				nextRuntimeHealthRefreshAtMs = System.currentTimeMillis() + 5000L;
-				runtimeHealthRefreshInFlight.set(false);
-			}
-		});
+		return runtimeHealthMonitor.getRuntimeHealthSnapshot();
 	}
 }
