@@ -155,4 +155,16 @@ class LayerCommandsTest {
 		command.execute();
 		assertEquals("Alpha", layerManager.get("layer-a").getName());
 	}
+
+	@Test
+	void deleteLayerCommandSkipsBoundLayers() {
+		BlockPos pos = new BlockPos(8, 64, 0);
+		StageObject stage = StageObjectSystem.fromBlocks("s1", "Bound", List.of(pos));
+		layerManager.registerRestored(new BuildLayer(
+			"layer-bound", "Bound", stage, LayerVisibilityState.BOUND_TO_TRACK, Map.of(), "clip-x"));
+
+		DeleteLayerCommand command = new DeleteLayerCommand(layerManager, "layer-bound");
+		command.execute();
+		assertNotNull(layerManager.get("layer-bound"));
+	}
 }
