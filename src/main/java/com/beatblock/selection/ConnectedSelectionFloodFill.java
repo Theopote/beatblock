@@ -1,7 +1,5 @@
 package com.beatblock.selection;
 
-import net.minecraft.block.BlockState;
-import net.minecraft.block.Blocks;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
 
@@ -55,6 +53,16 @@ public final class ConnectedSelectionFloodFill {
 	private ConnectedSelectionFloodFill() {}
 
 	public static Result collect(BlockStateLookup lookup, Request request) {
+		if (lookup == null || request == null) {
+			return new Result(List.of(), false);
+		}
+		return collect(
+			ConnectedCellLookup.fromBlockStateLookup(lookup, request.matchFullBlockState()),
+			request
+		);
+	}
+
+	public static Result collect(ConnectedCellLookup lookup, Request request) {
 		if (lookup == null || request == null || request.start() == null) {
 			return new Result(List.of(), false);
 		}
@@ -63,7 +71,11 @@ public final class ConnectedSelectionFloodFill {
 			return new Result(List.of(), false);
 		}
 
-		BlockState anchor = lookup.getBlockState(start);
+		int anchorMaterial = lookup.materialAt(start);
+		if (!request.includeAir() && anchorMaterial == 0) {
+			return new Result(List.of(), false);
+		}
+
 		ArrayDeque<BlockPos> queue = new ArrayDeque<>();
 		HashSet<BlockPos> visited = new HashSet<>();
 		List<BlockPos> result = new ArrayList<>();
@@ -86,9 +98,9 @@ public final class ConnectedSelectionFloodFill {
 				if (!withinBounds(request, n)) continue;
 				if (!withinReach(request, n)) continue;
 				if (!withinSpread(request, start, n)) continue;
-				BlockState st = lookup.getBlockState(n);
-				if (!request.includeAir() && st.isAir()) continue;
-				if (!connectedMatches(st, anchor, request.matchFullBlockState())) continue;
+				int material = lookup.materialAt(n);
+				if (!request.includeAir() && material == 0) continue;
+				if (material != anchorMaterial) continue;
 				visited.add(n);
 				queue.add(n.toImmutable());
 			}
@@ -118,22 +130,5 @@ public final class ConnectedSelectionFloodFill {
 		double dy = (pos.getY() + 0.5) - (seed.getY() + 0.5);
 		double dz = (pos.getZ() + 0.5) - (seed.getZ() + 0.5);
 		return dx * dx + dy * dy + dz * dz <= (double) maxSpread * maxSpread;
-	}
-
-	private static boolean connectedMatches(BlockState state, BlockState anchor, boolean matchFullBlockState) {
-		if (matchFullBlockState) return state.equals(anchor);
-		return state.getBlock() == anchor.getBlock();
-	}
-
-	public static BlockStateLookup fromStates(java.util.Map<BlockPos, BlockState> states, BlockState missing) {
-		BlockState fallback = missing != null ? missing : Blocks.AIR.getDefaultState();
-		return pos -> {
-			if (pos == null) return fallback;
-			return states.getOrDefault(pos.toImmutable(), fallback);
-		};
-	}
-
-	public static BlockStateLookup fromStates(java.util.Map<BlockPos, BlockState> states) {
-		return fromStates(states, null);
 	}
 }

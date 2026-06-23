@@ -1,8 +1,5 @@
 package com.beatblock.selection;
 
-import com.beatblock.testutil.TestBlockStates;
-import net.minecraft.block.Block;
-import net.minecraft.block.BlockState;
 import net.minecraft.util.math.BlockPos;
 import org.junit.jupiter.api.Test;
 
@@ -17,23 +14,19 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ConnectedSelectionFloodFillTest {
 
-	private static BlockStateLookup lookup(Map<BlockPos, BlockState> states) {
-		return ConnectedSelectionFloodFill.fromStates(states, TestBlockStates.air());
-	}
+	private static final int STONE = 1;
+	private static final int DIRT = 2;
 
 	@Test
-	void floodFillSelectsSameBlockTypeNeighbors() {
-		Block block = TestBlockStates.mockBlock("stone");
-		BlockState stone = TestBlockStates.ofBlock(block);
-		BlockState dirt = TestBlockStates.ofBlock("dirt");
-		Map<BlockPos, BlockState> states = new HashMap<>();
-		states.put(new BlockPos(0, 64, 0), stone);
-		states.put(new BlockPos(1, 64, 0), TestBlockStates.ofBlock(block));
-		states.put(new BlockPos(2, 64, 0), TestBlockStates.ofBlock(block));
-		states.put(new BlockPos(1, 64, 1), dirt);
+	void floodFillSelectsSameMaterialNeighbors() {
+		Map<BlockPos, Integer> grid = new HashMap<>();
+		grid.put(new BlockPos(0, 64, 0), STONE);
+		grid.put(new BlockPos(1, 64, 0), STONE);
+		grid.put(new BlockPos(2, 64, 0), STONE);
+		grid.put(new BlockPos(1, 64, 1), DIRT);
 
 		var result = ConnectedSelectionFloodFill.collect(
-			lookup(states),
+			ConnectedCellLookup.fromMaterialGrid(grid),
 			ConnectedSelectionFloodFill.Request.unbounded(
 				new BlockPos(0, 64, 0), false, false, 100, 0)
 		);
@@ -49,15 +42,13 @@ class ConnectedSelectionFloodFillTest {
 
 	@Test
 	void boundedRequestClipsToCuboid() {
-		Block block = TestBlockStates.mockBlock("stone");
-		BlockState stone = TestBlockStates.ofBlock(block);
-		Map<BlockPos, BlockState> states = new HashMap<>();
-		states.put(new BlockPos(0, 64, 0), stone);
-		states.put(new BlockPos(1, 64, 0), TestBlockStates.ofBlock(block));
-		states.put(new BlockPos(2, 64, 0), TestBlockStates.ofBlock(block));
+		Map<BlockPos, Integer> grid = new HashMap<>();
+		grid.put(new BlockPos(0, 64, 0), STONE);
+		grid.put(new BlockPos(1, 64, 0), STONE);
+		grid.put(new BlockPos(2, 64, 0), STONE);
 
 		var result = ConnectedSelectionFloodFill.collect(
-			lookup(states),
+			ConnectedCellLookup.fromMaterialGrid(grid),
 			new ConnectedSelectionFloodFill.Request(
 				new BlockPos(0, 64, 0),
 				new BlockPos(0, 64, 0),
@@ -75,14 +66,13 @@ class ConnectedSelectionFloodFillTest {
 
 	@Test
 	void maxBlocksTruncatesExpansion() {
-		Block block = TestBlockStates.mockBlock("stone");
-		Map<BlockPos, BlockState> states = new HashMap<>();
+		Map<BlockPos, Integer> grid = new HashMap<>();
 		for (int x = 0; x < 5; x++) {
-			states.put(new BlockPos(x, 64, 0), TestBlockStates.ofBlock(block));
+			grid.put(new BlockPos(x, 64, 0), STONE);
 		}
 
 		var result = ConnectedSelectionFloodFill.collect(
-			lookup(states),
+			ConnectedCellLookup.fromMaterialGrid(grid),
 			ConnectedSelectionFloodFill.Request.unbounded(
 				new BlockPos(0, 64, 0), false, false, 3, 0)
 		);
@@ -93,14 +83,13 @@ class ConnectedSelectionFloodFillTest {
 
 	@Test
 	void spreadLimitRestrictsDistanceFromSeed() {
-		Block block = TestBlockStates.mockBlock("stone");
-		Map<BlockPos, BlockState> states = new HashMap<>();
+		Map<BlockPos, Integer> grid = new HashMap<>();
 		for (int x = 0; x < 4; x++) {
-			states.put(new BlockPos(x, 64, 0), TestBlockStates.ofBlock(block));
+			grid.put(new BlockPos(x, 64, 0), STONE);
 		}
 
 		var result = ConnectedSelectionFloodFill.collect(
-			lookup(states),
+			ConnectedCellLookup.fromMaterialGrid(grid),
 			ConnectedSelectionFloodFill.Request.unbounded(
 				new BlockPos(0, 64, 0), false, false, 100, 1)
 		);
@@ -110,16 +99,12 @@ class ConnectedSelectionFloodFillTest {
 
 	@Test
 	void excludeAirSkipsAirNeighbors() {
-		Block block = TestBlockStates.mockBlock("stone");
-		BlockState stone = TestBlockStates.ofBlock(block);
-		BlockState air = TestBlockStates.air();
-		Map<BlockPos, BlockState> states = new HashMap<>();
-		states.put(new BlockPos(0, 64, 0), stone);
-		states.put(new BlockPos(1, 64, 0), air);
-		states.put(new BlockPos(0, 64, 1), TestBlockStates.ofBlock(block));
+		Map<BlockPos, Integer> grid = new HashMap<>();
+		grid.put(new BlockPos(0, 64, 0), STONE);
+		grid.put(new BlockPos(0, 64, 1), STONE);
 
 		var result = ConnectedSelectionFloodFill.collect(
-			lookup(states),
+			ConnectedCellLookup.fromMaterialGrid(grid),
 			ConnectedSelectionFloodFill.Request.unbounded(
 				new BlockPos(0, 64, 0), false, false, 100, 0)
 		);

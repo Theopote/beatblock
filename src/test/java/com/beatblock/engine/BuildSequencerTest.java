@@ -2,7 +2,6 @@ package com.beatblock.engine;
 
 import com.beatblock.engine.influence.InfluenceFrame;
 import com.beatblock.selection.BlockStateLookup;
-import com.beatblock.testutil.TestBlockStates;
 import com.beatblock.timeline.TimelineAnimationEvent;
 import net.minecraft.block.BlockState;
 import net.minecraft.util.math.BlockPos;
@@ -19,6 +18,10 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class BuildSequencerTest {
+
+	private static final BlockState AIR = new BlockStateToken("air");
+	private static final BlockState PLACED = new BlockStateToken("placed");
+	private static final BlockState GOLD = new BlockStateToken("gold");
 
 	private StageObjectSystem stageObjectSystem;
 	private BuildSequencer sequencer;
@@ -40,16 +43,14 @@ class BuildSequencerTest {
 	void contributeExistenceMutationsPlacesBlocksOverTime() {
 		BlockPos p0 = new BlockPos(0, 64, 0);
 		BlockPos p1 = new BlockPos(1, 64, 0);
-		BlockState air = TestBlockStates.air();
-		BlockState placed = TestBlockStates.ofBlock("build");
 
 		sequencer.enqueueBuildInstance(new BuildSequencer.BuildInstance(
-			"ev1", List.of(p0, p1), placed, null, 10.0, 12.0, false));
+			"ev1", List.of(p0, p1), PLACED, null, 10.0, 12.0, false));
 
 		Map<BlockPos, BlockState> world = new HashMap<>();
-		world.put(p0, air);
-		world.put(p1, air);
-		BlockStateLookup lookup = pos -> world.getOrDefault(pos.toImmutable(), air);
+		world.put(p0, AIR);
+		world.put(p1, AIR);
+		BlockStateLookup lookup = pos -> world.getOrDefault(pos.toImmutable(), AIR);
 
 		InfluenceFrame frame = new InfluenceFrame();
 		sequencer.contributeExistenceMutations(frame, 9.0, lookup, pos -> true);
@@ -57,7 +58,7 @@ class BuildSequencerTest {
 
 		sequencer.contributeExistenceMutations(frame, 11.0, lookup, pos -> true);
 		assertEquals(1, frame.getWorldMutations().size());
-		assertEquals(placed, frame.getWorldMutations().getFirst().toState());
+		assertEquals(PLACED, frame.getWorldMutations().getFirst().toState());
 
 		sequencer.contributeExistenceMutations(frame, 12.0, lookup, pos -> true);
 		assertEquals(2, frame.getWorldMutations().size());
@@ -67,22 +68,45 @@ class BuildSequencerTest {
 	@Test
 	void layerRevealUsesCapturedStates() {
 		BlockPos pos = new BlockPos(0, 64, 0);
-		BlockState air = TestBlockStates.air();
-		BlockState captured = TestBlockStates.ofBlock("gold");
 
 		Map<BlockPos, BlockState> perBlock = new LinkedHashMap<>();
-		perBlock.put(pos, captured);
+		perBlock.put(pos, GOLD);
 		sequencer.enqueueBuildInstance(new BuildSequencer.BuildInstance(
-			"ev_layer", List.of(pos), air, perBlock, 5.0, 6.0, true));
+			"ev_layer", List.of(pos), AIR, perBlock, 5.0, 6.0, true));
 
 		Map<BlockPos, BlockState> world = new HashMap<>();
-		world.put(pos, air);
-		BlockStateLookup lookup = p -> world.getOrDefault(p.toImmutable(), air);
+		world.put(pos, AIR);
+		BlockStateLookup lookup = p -> world.getOrDefault(p.toImmutable(), AIR);
 
 		InfluenceFrame frame = new InfluenceFrame();
 		sequencer.contributeExistenceMutations(frame, 6.0, lookup, p -> true);
 
 		assertEquals(1, frame.getWorldMutations().size());
-		assertEquals(captured, frame.getWorldMutations().getFirst().toState());
+		assertEquals(GOLD, frame.getWorldMutations().getFirst().toState());
+	}
+
+	/** 测试用 {@link BlockState} 替身（不触发注册表）。 */
+	private static final class BlockStateToken extends BlockState {
+		private final String label;
+
+		private BlockStateToken(String label) {
+			super(null, null, null);
+			this.label = label;
+		}
+
+		@Override
+		public boolean isAir() {
+			return "air".equals(label);
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			return obj instanceof BlockStateToken other && label.equals(other.label);
+		}
+
+		@Override
+		public int hashCode() {
+			return label.hashCode();
+		}
 	}
 }
