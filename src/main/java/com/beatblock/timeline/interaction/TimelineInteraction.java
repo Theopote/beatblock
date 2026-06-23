@@ -12,10 +12,15 @@ import com.beatblock.timeline.FeatureEvent;
 import com.beatblock.timeline.FeatureTrack;
 import com.beatblock.timeline.IAudioPlayer;
 import com.beatblock.timeline.Timeline;
+import com.beatblock.timeline.TimelineEditor;
 import com.beatblock.timeline.TimelineEvent;
 import com.beatblock.timeline.TimelineMarker;
 import com.beatblock.timeline.TimelineOperations;
 import com.beatblock.timeline.Track;
+import com.beatblock.timeline.editing.AnimationEventSnapshot;
+import com.beatblock.timeline.editing.ClipDragStateSnapshot;
+import com.beatblock.timeline.editing.GenericEventPropertiesEditor;
+import com.beatblock.timeline.editing.TimelineEventEditActions;
 import com.beatblock.timeline.editor.*;
 import com.beatblock.timeline.rendering.*;
 import imgui.ImGui;
@@ -118,6 +123,12 @@ public final class TimelineInteraction {
 	private final Map<String, List<double[]>> dragFeatureEventSnapshot = new HashMap<>();
 	/** 摄像机片段整体拖动：片内事件的原始时间 */
 	private final Map<String, Double> dragCameraClipEventOriginalTimes = new HashMap<>();
+	/** 事件拖动开始时的 timeSeconds */
+	private double dragEventInitialTimeSeconds;
+	/** 片段拖动开始时的快照（用于 Undo） */
+	private ClipDragStateSnapshot dragClipBeforeSnapshot;
+	/** 摄像机片段缩放开始时的快照（用于 Undo） */
+	private ClipDragStateSnapshot resizeClipBeforeSnapshot;
 
 	private static final float CAMERA_EDGE_HIT_PX = 6f;
 	private static final double CAMERA_MIN_CLIP_DURATION = 0.05;
@@ -250,26 +261,37 @@ public final class TimelineInteraction {
 
 		if (ImGui.isMouseReleased(0)) {
 			if (interactionState.getMode() == InteractionMode.RESIZE_CLIP) {
+				finishResizeClipDrag(timeline, interactionState, mx, my);
 				cameraResizeEventOrigTimes.clear();
 			}
 			if (interactionState.getMode() == InteractionMode.DRAG_CLIP && interactionState.getActiveClipId() != null) {
 				float dx = mx - interactionState.getMouseStartX();
 				float dy = my - interactionState.getMouseStartY();
-				if (dx * dx + dy * dy < DRAG_THRESHOLD_PX * DRAG_THRESHOLD_PX) {
+				boolean belowThreshold = dx * dx + dy * dy < DRAG_THRESHOLD_PX * DRAG_THRESHOLD_PX;
+				if (belowThreshold) {
 					selectionState.clearClips();
 					selectionState.selectClip(interactionState.getActiveClipId());
+					revertClipDrag(timeline, dragClipBeforeSnapshot);
+				} else {
+					commitClipDrag(timeline, dragClipBeforeSnapshot);
 				}
 				dragLinkedEventOriginalTimes.clear();
 				dragFeatureEventSnapshot.clear();
 				dragCameraClipEventOriginalTimes.clear();
+				dragClipBeforeSnapshot = null;
 			}
 			if (interactionState.getMode() == InteractionMode.DRAG_EVENT && interactionState.getActiveEventId() != null) {
 				float dx = mx - interactionState.getMouseStartX();
 				float dy = my - interactionState.getMouseStartY();
-				if (dx * dx + dy * dy < DRAG_THRESHOLD_PX * DRAG_THRESHOLD_PX) {
+				boolean belowThreshold = dx * dx + dy * dy < DRAG_THRESHOLD_PX * DRAG_THRESHOLD_PX;
+				if (belowThreshold) {
 					selectionState.clearEvents();
 					selectionState.selectEvent(interactionState.getActiveEventId());
+					revertEventDrag(timeline, interactionState);
+				} else {
+					commitEventDrag(timeline, interactionState);
 				}
+				dragEventInitialTimeSeconds = 0.0;
 			}
 			if (interactionState.getMode() == InteractionMode.BOX_SELECT
 					&& selectionBox != null && selectionBox.isActive()) {
@@ -636,6 +658,13 @@ public final class TimelineInteraction {
 							for (TimelineEvent se : c.getEvents()) {
 								cameraResizeEventOrigTimes.put(se.getId(), se.getTimeSeconds());
 							}
+							resizeClipBeforeSnapshot = ClipDragStateSnapshot.capture(
+								timeline,
+								Timeline.TRACK_ID_CAMERA,
+								edge.clipId(),
+								cameraResizeEventOrigTimes,
+								Map.of()
+							);
 							return;
 						}
 					}
@@ -687,6 +716,13 @@ public final class TimelineInteraction {
 							for (FeatureEvent fe : evts) snap.add(new double[]{fe.getTimeSeconds(), fe.getEnergy()});
 							dragFeatureEventSnapshot.put(entry.getKey(), snap);
 						}
+						dragClipBeforeSnapshot = ClipDragStateSnapshot.capture(
+							timeline,
+							hit.getTrackId(),
+							hit.getClipId(),
+							dragLinkedEventOriginalTimes,
+							dragFeatureEventSnapshot
+						);
 						if (!ctrl) selectionState.clearClips();
 						selectionState.selectClip(hit.getClipId());
 					}
@@ -710,6 +746,13 @@ public final class TimelineInteraction {
 						for (TimelineEvent se : hitClip.getEvents()) {
 							dragCameraClipEventOriginalTimes.put(se.getId(), se.getTimeSeconds());
 						}
+						dragClipBeforeSnapshot = ClipDragStateSnapshot.capture(
+							timeline,
+							hit.getTrackId(),
+							hit.getClipId(),
+							dragCameraClipEventOriginalTimes,
+							Map.of()
+						);
 						if (!ctrl) selectionState.clearClips();
 						selectionState.selectClip(hit.getClipId());
 					}
@@ -721,6 +764,13 @@ public final class TimelineInteraction {
 					interactionState.setActiveEventId(hit.getEventId());
 					interactionState.setActiveClipId(hit.getClipId());
 					interactionState.setActiveTrackId(hit.getTrackId());
+					dragEventInitialTimeSeconds = 0.0;
+					if (hit.getEventId() != null) {
+						EventRef dragRef = findEventRef(timeline, hit.getEventId());
+						if (dragRef != null && dragRef.event != null) {
+							dragEventInitialTimeSeconds = dragRef.event.getTimeSeconds();
+						}
+					}
 					if (!ctrl) selectionState.clearEvents();
 					if (hit.getEventId() != null) selectionState.selectEvent(hit.getEventId());
 					else if (hit.getClipId() != null) selectionState.selectClip(hit.getClipId());
@@ -1431,34 +1481,43 @@ public final class TimelineInteraction {
 		}
 
 		if (ImGui.button("Apply") || applyRequested) {
-			String raw = propertiesTimeBuffer.get();
 			try {
-				double t = Math.max(0, Double.parseDouble(raw.trim()));
-				ref.event.setTimeSeconds(t);
-				Set<String> existing = new HashSet<>(ref.event.getParameters().keySet());
-				for (String key : existing) {
-					if (!propertiesParamBuffers.containsKey(key)) {
-						ref.event.removeParameter(key);
+				double t = Double.parseDouble(propertiesTimeBuffer.get().trim());
+				Map<String, String> paramRaw = new HashMap<>();
+				for (Map.Entry<String, ImString> entry : propertiesParamBuffers.entrySet()) {
+					paramRaw.put(entry.getKey(), entry.getValue().get());
+				}
+				var result = GenericEventPropertiesEditor.buildUpdatedSnapshot(
+					t,
+					paramRaw,
+					propertiesParamAsNumber,
+					ref.clip.getStartTimeSeconds(),
+					ref.clip.getEndTimeSeconds()
+				);
+				if (result instanceof GenericEventPropertiesEditor.Result.Err err) {
+					propertiesError = err.message();
+				} else {
+					AnimationEventSnapshot after = ((GenericEventPropertiesEditor.Result.Ok) result).snapshot();
+					AnimationEventSnapshot before = AnimationEventSnapshot.capture(ref.event, ref.clip);
+					TimelineEditor editor = BeatBlock.timelineEditor;
+					if (editor != null && TimelineEventEditActions.execute(
+						timeline,
+						editor.getCommandManager(),
+						ref.track.getId(),
+						ref.clip.getId(),
+						ref.event.getId(),
+						before,
+						after
+					)) {
+						propertiesOriginalTime = String.format(java.util.Locale.ROOT, "%.6f", ref.event.getTimeSeconds());
+						for (Map.Entry<String, ImString> entry : propertiesParamBuffers.entrySet()) {
+							String key = entry.getKey();
+							propertiesOriginalParamValues.put(key, entry.getValue().get());
+							propertiesOriginalParamAsNumber.put(key, propertiesParamAsNumber.getOrDefault(key, false));
+						}
+						propertiesError = null;
 					}
 				}
-				for (Map.Entry<String, ImString> entry : propertiesParamBuffers.entrySet()) {
-					String key = entry.getKey();
-					String valueRaw = entry.getValue().get();
-					boolean asNumber = propertiesParamAsNumber.getOrDefault(key, false);
-					if (asNumber) {
-						ref.event.setParameter(key, Double.parseDouble(valueRaw.trim()));
-					} else {
-						ref.event.setParameter(key, valueRaw);
-					}
-				}
-				timeline.markAnimationEventsDirty(ref.track.getId());
-				propertiesOriginalTime = String.format(java.util.Locale.ROOT, "%.6f", ref.event.getTimeSeconds());
-				for (Map.Entry<String, ImString> entry : propertiesParamBuffers.entrySet()) {
-					String key = entry.getKey();
-					propertiesOriginalParamValues.put(key, entry.getValue().get());
-					propertiesOriginalParamAsNumber.put(key, propertiesParamAsNumber.getOrDefault(key, false));
-				}
-				propertiesError = null;
 			} catch (Exception ex) {
 				propertiesError = "Invalid number in time/parameter";
 			}
@@ -1834,5 +1893,51 @@ public final class TimelineInteraction {
 		double yawStartDeg = Math.toDegrees(Math.atan2(-dx, dz));
 		double yawEndDeg = yawStartDeg + 270.0;
 		return new double[]{tx, ty, tz, radius, height, yawStartDeg, yawEndDeg};
+	}
+
+	private void commitEventDrag(Timeline timeline, InteractionState interactionState) {
+		TimelineEditor editor = BeatBlock.timelineEditor;
+		if (editor == null) return;
+		EventRef ref = findEventRef(timeline, interactionState.getActiveEventId());
+		if (ref == null || ref.event == null) return;
+		TimelineEventEditActions.commitEventMove(
+			timeline,
+			editor.getCommandManager(),
+			interactionState.getActiveTrackId(),
+			interactionState.getActiveClipId(),
+			interactionState.getActiveEventId(),
+			dragEventInitialTimeSeconds,
+			ref.event.getTimeSeconds()
+		);
+	}
+
+	private void revertEventDrag(Timeline timeline, InteractionState interactionState) {
+		EventRef ref = findEventRef(timeline, interactionState.getActiveEventId());
+		if (ref == null || ref.event == null) return;
+		ref.event.setTimeSeconds(dragEventInitialTimeSeconds);
+	}
+
+	private void commitClipDrag(Timeline timeline, ClipDragStateSnapshot before) {
+		if (before == null) return;
+		TimelineEditor editor = BeatBlock.timelineEditor;
+		if (editor == null) return;
+		ClipDragStateSnapshot after = before.captureCurrent(timeline);
+		TimelineEventEditActions.commitClipDrag(timeline, editor.getCommandManager(), before, after);
+	}
+
+	private void revertClipDrag(Timeline timeline, ClipDragStateSnapshot before) {
+		if (before != null) before.applyTo(timeline);
+	}
+
+	private void finishResizeClipDrag(Timeline timeline, InteractionState interactionState, float mx, float my) {
+		float dx = mx - interactionState.getMouseStartX();
+		float dy = my - interactionState.getMouseStartY();
+		boolean belowThreshold = dx * dx + dy * dy < DRAG_THRESHOLD_PX * DRAG_THRESHOLD_PX;
+		if (belowThreshold) {
+			revertClipDrag(timeline, resizeClipBeforeSnapshot);
+		} else {
+			commitClipDrag(timeline, resizeClipBeforeSnapshot);
+		}
+		resizeClipBeforeSnapshot = null;
 	}
 }

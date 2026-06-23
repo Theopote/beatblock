@@ -42,6 +42,18 @@ public final class MoveEventCommand implements Command {
 		Clip clip = track.getClip(clipId);
 		if (clip == null) return;
 		TimelineEvent e = clip.getEvent(eventId);
-		if (e != null) e.setTimeSeconds(timeSeconds);
+		if (e != null) {
+			e.setTimeSeconds(timeSeconds);
+			if (isAnimationTrack(trackId)) {
+				timeline.markAnimationEventsDirty(trackId);
+			}
+		}
+	}
+
+	private static boolean isAnimationTrack(String trackId) {
+		return Timeline.TRACK_ID_ANIMATION_BLOCK.equals(trackId)
+			|| Timeline.TRACK_ID_ANIMATION_AUTO.equals(trackId)
+			|| Timeline.TRACK_ID_BUILD_REVERSE.equals(trackId)
+			|| Timeline.isBlockAnimationFeatureTrackId(trackId);
 	}
 }

@@ -20,11 +20,11 @@ import com.beatblock.timeline.TimelineEditor;
 import com.beatblock.timeline.TimelineEvent;
 import com.beatblock.timeline.Track;
 import com.beatblock.timeline.binding.SpatialDispatchMode;
-import com.beatblock.timeline.command.UpdateAnimationEventCommand;
 import com.beatblock.timeline.editing.AnimationEventFormInput;
 import com.beatblock.timeline.editing.AnimationEventPropertiesEditor;
 import com.beatblock.timeline.editing.AnimationEventSnapshot;
 import com.beatblock.timeline.editing.CameraEventPropertiesEditor;
+import com.beatblock.timeline.editing.TimelineEventEditActions;
 import com.beatblock.timeline.editor.SelectionState;
 import com.beatblock.timeline.generation.DistancePacing;
 import com.beatblock.timeline.rendering.TimelineTrackMeta;
@@ -1002,20 +1002,15 @@ public class EventPropertiesPanel {
 	) {
 		TimelineEditor editor = BeatBlock.timelineEditor;
 		if (editor == null) return;
-		String eventId = ref.event() != null ? ref.event().getId() : null;
-		if (eventId == null && !ref.clip().getEvents().isEmpty()) {
-			eventId = ref.clip().getEvents().get(0).getId();
-		}
-		if (eventId == null) return;
-		var cmd = new UpdateAnimationEventCommand(
+		TimelineEventEditActions.execute(
 			timeline,
+			editor.getCommandManager(),
 			ref.track().getId(),
-			ref.clip().getId(),
-			eventId,
+			ref.clip(),
+			ref.event(),
 			before,
 			after
 		);
-		editor.getCommandManager().execute(cmd);
 	}
 
 	private EventRef resolvePropertiesRef(Timeline timeline, SelectionState selectionState) {

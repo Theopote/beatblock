@@ -24,13 +24,10 @@ public final class DragController {
 			double newTimeSeconds, double duration,
 			TimelineToolbarState toolbarState, TimelineViewState viewState,
 			InteractionState interactionState) {
-		if (timeline == null || trackId == null || clipId == null || eventId == null) return;
-
-		SnapSystem.SnapResult snapped = applySnapWithGuides(newTimeSeconds, eventId, timeline, toolbarState, viewState);
-		if (interactionState != null) {
-			interactionState.setAlignmentGuideTimes(snapped.guideTimes());
-		}
-		double t = Math.max(0, Math.min(snapped.timeSeconds(), duration > 0 ? duration : Double.MAX_VALUE));
+		double t = computeEventDragTime(
+			newTimeSeconds, eventId, duration, timeline, toolbarState, viewState, interactionState
+		);
+		if (Double.isNaN(t)) return;
 
 		Track track = timeline.getTrack(trackId);
 		if (track == null) return;
@@ -39,8 +36,38 @@ public final class DragController {
 		TimelineEvent e = clip.getEvent(eventId);
 		if (e != null) {
 			e.setTimeSeconds(t);
-			timeline.markAnimationEventsDirty(trackId);
+			if (isAnimationTrack(trackId)) {
+				timeline.markAnimationEventsDirty(trackId);
+			}
 		}
+	}
+
+	private static boolean isAnimationTrack(String trackId) {
+		return Timeline.TRACK_ID_ANIMATION_BLOCK.equals(trackId)
+			|| Timeline.TRACK_ID_ANIMATION_AUTO.equals(trackId)
+			|| Timeline.TRACK_ID_BUILD_REVERSE.equals(trackId)
+			|| Timeline.isBlockAnimationFeatureTrackId(trackId);
+	}
+
+	/**
+	 * 计算吸附后的目标时间，不修改时间线。
+	 */
+	public static double computeEventDragTime(
+		double newTimeSeconds,
+		String eventId,
+		double duration,
+		Timeline timeline,
+		TimelineToolbarState toolbarState,
+		TimelineViewState viewState,
+		InteractionState interactionState
+	) {
+		if (timeline == null) return Double.NaN;
+
+		SnapSystem.SnapResult snapped = applySnapWithGuides(newTimeSeconds, eventId, timeline, toolbarState, viewState);
+		if (interactionState != null) {
+			interactionState.setAlignmentGuideTimes(snapped.guideTimes());
+		}
+		return Math.max(0, Math.min(snapped.timeSeconds(), duration > 0 ? duration : Double.MAX_VALUE));
 	}
 
 	/**
