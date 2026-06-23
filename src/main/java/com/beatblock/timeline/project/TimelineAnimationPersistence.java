@@ -14,14 +14,16 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 动画轨道 clips/events ↔ JSON（.osc 持久化）。
+ * 时间线 clips/events ↔ JSON（.osc 持久化：动画 / 摄像机 / 全局事件轨）。
  */
 public final class TimelineAnimationPersistence {
 
-	private static final List<String> PERSISTED_TRACK_IDS = List.of(
+	private static final List<String> CORE_TRACK_IDS = List.of(
 		Timeline.TRACK_ID_ANIMATION_BLOCK,
 		Timeline.TRACK_ID_ANIMATION_AUTO,
-		Timeline.TRACK_ID_BUILD_REVERSE
+		Timeline.TRACK_ID_BUILD_REVERSE,
+		Timeline.TRACK_ID_CAMERA,
+		Timeline.TRACK_ID_GLOBAL
 	);
 
 	private TimelineAnimationPersistence() {}
@@ -29,7 +31,7 @@ public final class TimelineAnimationPersistence {
 	public static JsonArray toJson(Timeline timeline) {
 		JsonArray tracksArr = new JsonArray();
 		if (timeline == null) return tracksArr;
-		for (String trackId : PERSISTED_TRACK_IDS) {
+		for (String trackId : collectPersistedTrackIds(timeline)) {
 			Track track = timeline.getTrack(trackId);
 			if (track == null || track.getClips().isEmpty()) continue;
 			tracksArr.add(trackToJson(trackId, track));
@@ -39,8 +41,8 @@ public final class TimelineAnimationPersistence {
 
 	public static void loadInto(Timeline timeline, JsonArray arr) {
 		if (timeline == null) return;
-		for (String trackId : PERSISTED_TRACK_IDS) {
-			timeline.clearAnimationTrack(trackId);
+		for (String trackId : collectPersistedTrackIds(timeline)) {
+			clearTrack(timeline, trackId);
 		}
 		if (arr == null) return;
 		for (int i = 0; i < arr.size(); i++) {
@@ -48,6 +50,27 @@ public final class TimelineAnimationPersistence {
 			trackFromJson(timeline, arr.get(i).getAsJsonObject());
 		}
 		timeline.markAnimationEventsDirty();
+	}
+
+	private static List<String> collectPersistedTrackIds(Timeline timeline) {
+		java.util.ArrayList<String> ids = new java.util.ArrayList<>(CORE_TRACK_IDS);
+		if (timeline == null) return ids;
+		for (Track track : timeline.getTracks()) {
+			if (Timeline.isBlockAnimationFeatureTrackId(track.getId())) {
+				ids.add(track.getId());
+			}
+		}
+		return ids;
+	}
+
+	private static void clearTrack(Timeline timeline, String trackId) {
+		if (Timeline.TRACK_ID_CAMERA.equals(trackId)) {
+			timeline.clearCameraKeyframes();
+		} else if (Timeline.TRACK_ID_GLOBAL.equals(trackId)) {
+			timeline.clearGlobalEvents();
+		} else {
+			timeline.clearAnimationTrack(trackId);
+		}
 	}
 
 	private static JsonObject trackToJson(String trackId, Track track) {
@@ -86,7 +109,7 @@ public final class TimelineAnimationPersistence {
 	private static void trackFromJson(Timeline timeline, JsonObject root) {
 		if (root == null || !root.has("trackId")) return;
 		String trackId = root.get("trackId").getAsString();
-		Track track = timeline.getTrack(trackId);
+		Track track = ensureTrack(timeline, trackId);
 		if (track == null || !root.has("clips") || !root.get("clips").isJsonArray()) return;
 		JsonArray clipsArr = root.getAsJsonArray("clips");
 		for (int i = 0; i < clipsArr.size(); i++) {
@@ -94,6 +117,19 @@ public final class TimelineAnimationPersistence {
 			clipFromJson(track, clipsArr.get(i).getAsJsonObject());
 		}
 		timeline.markAnimationEventsDirty(trackId);
+	}
+
+	private static Track ensureTrack(Timeline timeline, String trackId) {
+		if (timeline == null || trackId == null) return null;
+		Track existing = timeline.getTrack(trackId);
+		if (existing != null) return existing;
+		if (Timeline.isBlockAnimationFeatureTrackId(trackId)) {
+			String featureKey = Timeline.blockAnimationFeatureKeyFromTrackId(trackId);
+			Track track = new Track(trackId, featureKey, com.beatblock.timeline.TrackType.ANIMATION);
+			timeline.addTrack(track);
+			return track;
+		}
+		return null;
 	}
 
 	private static void clipFromJson(Track track, JsonObject root) {
