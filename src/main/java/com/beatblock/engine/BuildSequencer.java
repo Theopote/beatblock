@@ -9,7 +9,6 @@ import net.minecraft.block.Blocks;
 import net.minecraft.registry.Registries;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
 
 import java.util.*;
@@ -103,7 +102,7 @@ public final class BuildSequencer {
 			? Blocks.AIR.getDefaultState()
 			: (layerReveal ? Blocks.AIR.getDefaultState() : resolveBuildBlockState(params));
 
-		List<BlockPos> ordered = sortBlocksForBuild(target, mode, event);
+		List<BlockPos> ordered = BlockBuildOrder.sortBlocks(target.getBlocks(), mode, target.getCenter(), event, target);
 		if (dissolve) Collections.reverse(ordered);
 
 		double startTime = event.getTimeSeconds();
@@ -180,61 +179,12 @@ public final class BuildSequencer {
 	}
 
 	private static int computeTargetCount(BuildInstance inst, double currentTime) {
-		if (currentTime >= inst.endTime) return inst.orderedBlocks.size();
-		double progress = (currentTime - inst.startTime) / (inst.endTime - inst.startTime);
-		progress = Math.max(0.0, Math.min(1.0, progress));
-		return (int) Math.ceil(progress * inst.orderedBlocks.size());
-	}
-
-	private List<BlockPos> sortBlocksForBuild(StageObject target, BuildSequenceMode mode, TimelineAnimationEvent event) {
-		List<BlockPos> blocks = new ArrayList<>(target.getBlocks());
-		if (blocks.size() <= 1) return blocks;
-		Vec3d center = target.getCenter();
-
-		switch (mode) {
-			case WALL -> blocks.sort(Comparator
-				.comparingInt(BlockPos::getY)
-				.thenComparingInt(BlockPos::getX)
-				.thenComparingInt(BlockPos::getZ));
-			case BRIDGE -> blocks.sort(Comparator
-				.comparingInt(BlockPos::getX)
-				.thenComparingInt(BlockPos::getZ)
-				.thenComparingInt(BlockPos::getY));
-			case TOWER -> blocks.sort(Comparator
-				.comparingDouble((BlockPos p) -> horizontalDistSq(p, center))
-				.thenComparingInt(BlockPos::getY));
-			case DISSOLVE -> {
-				long seed = buildSeed(event, target);
-				blocks.sort(Comparator.comparingLong(p -> mixHash(seed, p)));
-			}
-		}
-		return blocks;
-	}
-
-	private static double horizontalDistSq(BlockPos pos, Vec3d center) {
-		double dx = (pos.getX() + 0.5) - center.x;
-		double dz = (pos.getZ() + 0.5) - center.z;
-		return dx * dx + dz * dz;
-	}
-
-	private static long buildSeed(TimelineAnimationEvent event, StageObject target) {
-		long t = Double.doubleToLongBits(event.getTimeSeconds());
-		long id = Objects.hashCode(event.getEventId());
-		long tid = Objects.hashCode(target.getId());
-		return t ^ (id * 31L) ^ (tid * 131L);
-	}
-
-	private static long mixHash(long seed, BlockPos p) {
-		long h = seed;
-		h ^= ((long) p.getX()) * 0x9E3779B185EBCA87L;
-		h ^= ((long) p.getY()) * 0xC2B2AE3D27D4EB4FL;
-		h ^= ((long) p.getZ()) * 0x165667B19E3779F9L;
-		h ^= (h >>> 33);
-		h *= 0xff51afd7ed558ccdL;
-		h ^= (h >>> 33);
-		h *= 0xc4ceb9fe1a85ec53L;
-		h ^= (h >>> 33);
-		return h;
+		return BlockBuildOrder.computeTargetBlockCount(
+			inst.orderedBlocks.size(),
+			inst.startTime,
+			inst.endTime,
+			currentTime
+		);
 	}
 
 	private static BlockState resolveBuildBlockState(Map<String, Object> params) {
