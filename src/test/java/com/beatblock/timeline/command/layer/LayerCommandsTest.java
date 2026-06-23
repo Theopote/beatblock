@@ -140,4 +140,19 @@ class LayerCommandsTest {
 		command.undo();
 		assertEquals(LayerVisibilityState.FREE_VISIBLE, layerManager.get("layer-vis").getState());
 	}
+
+	@Test
+	void renameLayerCommandRejectsDuplicateName() {
+		BlockPos pos = new BlockPos(6, 64, 0);
+		StageObject a = StageObjectSystem.fromBlocks("s1", "Alpha", List.of(pos));
+		StageObject b = StageObjectSystem.fromBlocks("s2", "Beta", List.of(new BlockPos(7, 64, 0)));
+		layerManager.registerRestored(new BuildLayer(
+			"layer-a", "Alpha", a, LayerVisibilityState.FREE_VISIBLE, Map.of(), null));
+		layerManager.registerRestored(new BuildLayer(
+			"layer-b", "Beta", b, LayerVisibilityState.FREE_VISIBLE, Map.of(), null));
+
+		RenameLayerCommand command = new RenameLayerCommand(layerManager, "layer-a", "Beta");
+		command.execute();
+		assertEquals("Alpha", layerManager.get("layer-a").getName());
+	}
 }
