@@ -2,6 +2,7 @@ package com.beatblock.engine;
 
 import com.beatblock.engine.layer.BuildLayer;
 import com.beatblock.engine.layer.BuildLayerManager;
+import com.beatblock.selection.BlockStateLookup;
 import com.beatblock.timeline.TimelineAnimationEvent;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
@@ -12,6 +13,7 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 
 import java.util.*;
+import java.util.function.Predicate;
 
 /**
  * 累积式建造序列器：将 StageObject 的方块按 BuildSequenceMode 排序，
@@ -122,6 +124,20 @@ public final class BuildSequencer {
 		World world
 	) {
 		if (frame == null || world == null || activeInstances.isEmpty()) return;
+		contributeExistenceMutations(frame, currentTime, world::getBlockState, world::isChunkLoaded);
+	}
+
+	/**
+	 * 与 {@link #contributeExistenceMutations(com.beatblock.engine.influence.InfluenceFrame, double, World)}
+	 * 相同逻辑，注入方块查询与区块加载判定（供单元测试）。
+	 */
+	void contributeExistenceMutations(
+		com.beatblock.engine.influence.InfluenceFrame frame,
+		double currentTime,
+		BlockStateLookup blockStates,
+		Predicate<BlockPos> chunkLoaded
+	) {
+		if (frame == null || blockStates == null || chunkLoaded == null || activeInstances.isEmpty()) return;
 		Iterator<BuildInstance> it = activeInstances.iterator();
 		while (it.hasNext()) {
 			BuildInstance inst = it.next();
@@ -130,8 +146,8 @@ public final class BuildSequencer {
 			while (inst.placedCount < target && inst.placedCount < inst.orderedBlocks.size()) {
 				BlockPos pos = inst.orderedBlocks.get(inst.placedCount);
 				BlockState desired = inst.resolveTargetState(pos);
-				if (world.isChunkLoaded(pos)) {
-					BlockState current = world.getBlockState(pos);
+				if (chunkLoaded.test(pos)) {
+					BlockState current = blockStates.getBlockState(pos);
 					if (!current.equals(desired)) {
 						frame.addWorldMutation(new BlockControlExecutor.BlockMutation(
 							pos.toImmutable(), current, desired));
@@ -168,6 +184,11 @@ public final class BuildSequencer {
 
 	public void clear() {
 		activeInstances.clear();
+	}
+
+	/** 同包单元测试注入活跃实例（绕过 {@link World} / 注册表）。 */
+	void enqueueBuildInstance(BuildInstance instance) {
+		if (instance != null) activeInstances.add(instance);
 	}
 
 	private static String readLayerId(Map<String, Object> params) {

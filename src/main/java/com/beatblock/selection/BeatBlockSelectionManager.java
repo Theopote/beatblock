@@ -12,11 +12,9 @@ import net.minecraft.world.World;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
@@ -577,37 +575,23 @@ public final class BeatBlockSelectionManager {
 			lastMessage = "选区魔棒：起点超出「相对视角最大距离」。";
 			return null;
 		}
-		BlockState anchor = world.getBlockState(start);
-		ArrayDeque<BlockPos> queue = new ArrayDeque<>();
-		HashSet<BlockPos> visited = new HashSet<>();
-		List<BlockPos> result = new ArrayList<>();
-
-		queue.add(startImm);
-		visited.add(startImm);
-
-		while (!queue.isEmpty()) {
-			if (result.size() >= maxBlocks) {
-				lastMessage = String.format("选区魔棒已达上限 %d，已选 %d 个方块（未完全展开）。", maxBlocks, result.size());
-				break;
-			}
-			BlockPos p = queue.removeFirst();
-			result.add(p);
-
-			for (Direction d : Direction.values()) {
-				BlockPos n = p.offset(d);
-				if (visited.contains(n)) continue;
-				if (!containsInBounds(n, bMin, bMax)) continue;
-				if (!isWithinCameraReach(n)) continue;
-				if (!isWithinWandSpreadFromSeed(startImm, n)) continue;
-				BlockState st = world.getBlockState(n);
-				if (!includeAir && st.isAir()) continue;
-				if (!connectedMatches(st, anchor)) continue;
-				visited.add(n);
-				queue.add(n.toImmutable());
-			}
+		ConnectedSelectionFloodFill.Result result = ConnectedSelectionFloodFill.collect(
+			world::getBlockState,
+			new ConnectedSelectionFloodFill.Request(
+				startImm,
+				bMin,
+				bMax,
+				includeAir,
+				connectedMatchFullState,
+				maxBlocks,
+				maxMagicWandSpreadFromSeed,
+				this::isWithinCameraReach
+			)
+		);
+		if (result.truncated()) {
+			lastMessage = String.format("选区魔棒已达上限 %d，已选 %d 个方块（未完全展开）。", maxBlocks, result.blocks().size());
 		}
-
-		return result;
+		return result.blocks();
 	}
 
 	private List<BlockPos> collectBrush(World world, BlockPos center) {
@@ -618,25 +602,17 @@ public final class BeatBlockSelectionManager {
 	}
 
 	private List<BlockPos> collectCube(World world, BlockPos center, int r) {
-		long worst = (2L * r + 1) * (2L * r + 1) * (2L * r + 1);
-		if (worst > maxBlocks) {
+		List<BlockPos> raw = SelectionBrushRegions.cubePositions(center, r, maxBlocks);
+		if (raw == null) {
+			long worst = (2L * r + 1) * (2L * r + 1) * (2L * r + 1);
 			lastMessage = String.format("立方笔刷包络约 %d 方块，超过上限 %d。", worst, maxBlocks);
 			return null;
 		}
-		List<BlockPos> out = new ArrayList<>();
-		for (int dx = -r; dx <= r; dx++) {
-			for (int dy = -r; dy <= r; dy++) {
-				for (int dz = -r; dz <= r; dz++) {
-					BlockPos p = center.add(dx, dy, dz);
-					if (!isWithinCameraReach(p)) continue;
-					if (!includeAir && world.getBlockState(p).isAir()) continue;
-					out.add(p.toImmutable());
-					if (out.size() > maxBlocks) {
-						lastMessage = String.format("立方笔刷超过上限 %d。", maxBlocks);
-						return null;
-					}
-				}
-			}
+		List<BlockPos> out = new ArrayList<>(raw.size());
+		for (BlockPos p : raw) {
+			if (!isWithinCameraReach(p)) continue;
+			if (!includeAir && world.getBlockState(p).isAir()) continue;
+			out.add(p.toImmutable());
 		}
 		return out;
 	}
@@ -672,27 +648,17 @@ public final class BeatBlockSelectionManager {
 	}
 
 	private List<BlockPos> collectSphere(World world, BlockPos center, int r) {
-		int rr = r * r;
-		long worst = (2L * r + 1) * (2L * r + 1) * (2L * r + 1);
-		if (worst > maxBlocks) {
+		List<BlockPos> raw = SelectionBrushRegions.spherePositions(center, r, maxBlocks);
+		if (raw == null) {
+			long worst = (2L * r + 1) * (2L * r + 1) * (2L * r + 1);
 			lastMessage = String.format("球体包络方块数约 %d，超过上限 %d，请缩小半径。", worst, maxBlocks);
 			return null;
 		}
-		List<BlockPos> out = new ArrayList<>();
-		for (int dx = -r; dx <= r; dx++) {
-			for (int dy = -r; dy <= r; dy++) {
-				for (int dz = -r; dz <= r; dz++) {
-					if (dx * dx + dy * dy + dz * dz > rr) continue;
-					BlockPos p = center.add(dx, dy, dz);
-					if (!isWithinCameraReach(p)) continue;
-					if (!includeAir && world.getBlockState(p).isAir()) continue;
-					out.add(p.toImmutable());
-					if (out.size() > maxBlocks) {
-						lastMessage = String.format("球体选区超过上限 %d。", maxBlocks);
-						return null;
-					}
-				}
-			}
+		List<BlockPos> out = new ArrayList<>(raw.size());
+		for (BlockPos p : raw) {
+			if (!isWithinCameraReach(p)) continue;
+			if (!includeAir && world.getBlockState(p).isAir()) continue;
+			out.add(p.toImmutable());
 		}
 		return out;
 	}
@@ -723,40 +689,23 @@ public final class BeatBlockSelectionManager {
 			lastMessage = "魔棒：起点超出「相对视角最大距离」，请靠近或在属性面板调大范围。";
 			return null;
 		}
-		BlockState anchor = world.getBlockState(start);
-		ArrayDeque<BlockPos> queue = new ArrayDeque<>();
-		HashSet<BlockPos> visited = new HashSet<>();
-		List<BlockPos> result = new ArrayList<>();
-
-		queue.add(startImm);
-		visited.add(startImm);
-
-		while (!queue.isEmpty()) {
-			if (result.size() >= maxBlocks) {
-				lastMessage = String.format("魔棒已达上限 %d，已选 %d 个方块（未完全展开）。", maxBlocks, result.size());
-				break;
-			}
-			BlockPos p = queue.removeFirst();
-			result.add(p);
-
-			for (Direction d : Direction.values()) {
-				BlockPos n = p.offset(d);
-				if (visited.contains(n)) continue;
-				if (!isWithinCameraReach(n)) continue;
-				if (!isWithinWandSpreadFromSeed(startImm, n)) continue;
-				BlockState st = world.getBlockState(n);
-				if (!includeAir && st.isAir()) continue;
-				if (!connectedMatches(st, anchor)) continue;
-				visited.add(n);
-				queue.add(n.toImmutable());
-			}
+		ConnectedSelectionFloodFill.Result result = ConnectedSelectionFloodFill.collect(
+			world::getBlockState,
+			new ConnectedSelectionFloodFill.Request(
+				startImm,
+				null,
+				null,
+				includeAir,
+				connectedMatchFullState,
+				maxBlocks,
+				maxMagicWandSpreadFromSeed,
+				this::isWithinCameraReach
+			)
+		);
+		if (result.truncated()) {
+			lastMessage = String.format("魔棒已达上限 %d，已选 %d 个方块（未完全展开）。", maxBlocks, result.blocks().size());
 		}
-
-		return result;
-	}
-
-	private boolean connectedMatches(BlockState state, BlockState anchor) {
-		return connectedMatchFullState ? state.equals(anchor) : state.getBlock() == anchor.getBlock();
+		return result.blocks();
 	}
 
 	private void mergeBlockListIntoSelection(List<BlockPos> blocks, SelectionOperation op) {
