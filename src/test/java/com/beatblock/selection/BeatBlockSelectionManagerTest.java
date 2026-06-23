@@ -1,23 +1,40 @@
 package com.beatblock.selection;
 
+import com.beatblock.BeatBlock;
+import com.beatblock.engine.BlockAnimationEngine;
+import com.beatblock.engine.StageObject;
+import com.beatblock.engine.StageObjectSystem;
+import com.beatblock.engine.layer.BuildLayer;
+import com.beatblock.engine.layer.LayerVisibilityState;
 import net.minecraft.util.math.BlockPos;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class BeatBlockSelectionManagerTest {
 
 	private BeatBlockSelectionManager manager;
+	private BlockAnimationEngine engine;
 
 	@BeforeEach
 	void setUp() {
 		manager = BeatBlockSelectionManager.get();
 		manager.reset();
+		engine = new BlockAnimationEngine();
+		BeatBlock.blockAnimationEngine = engine;
+	}
+
+	@AfterEach
+	void tearDown() {
+		BeatBlock.blockAnimationEngine = null;
 	}
 
 	@Test
@@ -83,5 +100,22 @@ class BeatBlockSelectionManagerTest {
 
 		manager.setMaxDistanceFromCamera(-5);
 		assertEquals(8, manager.getMaxDistanceFromCamera());
+	}
+
+	@Test
+	void commitLassoSkipsBlocksClaimedByBuildLayer() {
+		BlockPos claimed = new BlockPos(0, 64, 0);
+		BlockPos free = new BlockPos(1, 64, 0);
+		StageObject stage = StageObjectSystem.fromBlocks("s1", "Layer", List.of(claimed));
+		engine.getBuildLayerManager().registerRestored(new BuildLayer(
+			"layer-1", "Layer", stage, LayerVisibilityState.FREE_VISIBLE, Map.of(), null));
+
+		manager.setMode(SelectionMode.LASSO);
+		manager.commitLassoSelection(List.of(claimed, free), SelectionOperation.NEW);
+
+		assertEquals(1, manager.getSelectionCount());
+		assertFalse(manager.getSelectedBlocks().contains(claimed));
+		assertTrue(manager.getSelectedBlocks().contains(free));
+		assertTrue(manager.getLastMessage().contains("跳过"));
 	}
 }

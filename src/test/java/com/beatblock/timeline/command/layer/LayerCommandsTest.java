@@ -125,4 +125,19 @@ class LayerCommandsTest {
 		assertNull(layerManager.get("layer-bind").getBoundClipId());
 		assertNull(track.getClip(command.getCreatedClipId()));
 	}
+
+	@Test
+	void toggleVisibilityCommandNoOpsWithoutWorld() {
+		BlockPos pos = new BlockPos(5, 64, 0);
+		StageObject stage = StageObjectSystem.fromBlocks("s1", "Visible", List.of(pos));
+		layerManager.registerRestored(new BuildLayer(
+			"layer-vis", "Visible", stage, LayerVisibilityState.FREE_VISIBLE, Map.of(), null));
+
+		ToggleLayerVisibilityCommand command = new ToggleLayerVisibilityCommand(layerManager, "layer-vis");
+		command.execute();
+		assertEquals(LayerVisibilityState.FREE_VISIBLE, layerManager.get("layer-vis").getState());
+
+		command.undo();
+		assertEquals(LayerVisibilityState.FREE_VISIBLE, layerManager.get("layer-vis").getState());
+	}
 }

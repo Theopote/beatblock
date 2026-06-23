@@ -90,4 +90,17 @@ class BuildLayerManagerTest {
 		assertNotNull(manager.getByClipId("clip-99"));
 		assertEquals("layer-1", manager.getByClipId("clip-99").getId());
 	}
+
+	@Test
+	void hideAndShowLayerReturnFalseWithoutWorld() {
+		BlockPos pos = new BlockPos(0, 64, 0);
+		StageObject stage = StageObjectSystem.fromBlocks("s1", "Stage", List.of(pos));
+		BuildLayer layer = new BuildLayer(
+			"layer-vis", "Stage", stage, LayerVisibilityState.FREE_VISIBLE, Map.of(), null);
+		manager.registerRestored(layer);
+
+		assertFalse(manager.hideLayer(layer, null));
+		assertEquals(LayerVisibilityState.FREE_VISIBLE, layer.getState());
+		assertFalse(manager.showLayer(layer, null));
+	}
 }
