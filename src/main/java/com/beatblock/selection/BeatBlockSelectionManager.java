@@ -480,57 +480,15 @@ public final class BeatBlockSelectionManager {
 	}
 
 	private PlaneSliceBounds computePlaneSliceBoundsInternal(World world, BlockPos pos, Direction face) {
-		Direction.Axis axis = face.getAxis();
-		BlockPos bMin = getBoundingMin();
-		BlockPos bMax = getBoundingMax();
-		boolean useSel = bMin != null && bMax != null;
-		int bottom = world.getBottomY();
-		int top = bottom + world.getHeight() - 1;
-
-		ChunkPos cp = new ChunkPos(pos);
-		int cx0 = cp.getStartX();
-		int cx1 = cx0 + 15;
-		int cz0 = cp.getStartZ();
-		int cz1 = cz0 + 15;
-
-		return switch (axis) {
-			case Y -> {
-				int y = pos.getY();
-				if (useSel) {
-					BlockPos smin = Objects.requireNonNull(bMin);
-					BlockPos smax = Objects.requireNonNull(bMax);
-					if (y < smin.getY() || y > smax.getY()) {
-						yield PlaneSliceBounds.EMPTY;
-					}
-					yield new PlaneSliceBounds(smin.getX(), smax.getX(), y, y, smin.getZ(), smax.getZ());
-				}
-				yield new PlaneSliceBounds(cx0, cx1, y, y, cz0, cz1);
-			}
-			case X -> {
-				int x = pos.getX();
-				if (useSel) {
-					BlockPos smin = Objects.requireNonNull(bMin);
-					BlockPos smax = Objects.requireNonNull(bMax);
-					if (x < smin.getX() || x > smax.getX()) {
-						yield PlaneSliceBounds.EMPTY;
-					}
-					yield new PlaneSliceBounds(x, x, smin.getY(), smax.getY(), smin.getZ(), smax.getZ());
-				}
-				yield new PlaneSliceBounds(x, x, bottom, top, cz0, cz1);
-			}
-			case Z -> {
-				int z = pos.getZ();
-				if (useSel) {
-					BlockPos smin = Objects.requireNonNull(bMin);
-					BlockPos smax = Objects.requireNonNull(bMax);
-					if (z < smin.getZ() || z > smax.getZ()) {
-						yield PlaneSliceBounds.EMPTY;
-					}
-					yield new PlaneSliceBounds(smin.getX(), smax.getX(), smin.getY(), smax.getY(), z, z);
-				}
-				yield new PlaneSliceBounds(cx0, cx1, bottom, top, z, z);
-			}
-		};
+		return PlaneSliceBounds.compute(
+			pos,
+			face,
+			getBoundingMin(),
+			getBoundingMax(),
+			new ChunkPos(pos),
+			world.getBottomY(),
+			world.getBottomY() + world.getHeight() - 1
+		);
 	}
 
 	private List<BlockPos> collectPlaneSlice(World world, BlockPos pos, Direction face) {
@@ -800,25 +758,11 @@ public final class BeatBlockSelectionManager {
 	}
 
 	public BlockPos getBoundingMin() {
-		if (selected.isEmpty()) return null;
-		int minX = Integer.MAX_VALUE, minY = Integer.MAX_VALUE, minZ = Integer.MAX_VALUE;
-		for (BlockPos p : selected) {
-			minX = Math.min(minX, p.getX());
-			minY = Math.min(minY, p.getY());
-			minZ = Math.min(minZ, p.getZ());
-		}
-		return new BlockPos(minX, minY, minZ);
+		return SelectionBounds.fromPositions(selected).min();
 	}
 
 	public BlockPos getBoundingMax() {
-		if (selected.isEmpty()) return null;
-		int maxX = Integer.MIN_VALUE, maxY = Integer.MIN_VALUE, maxZ = Integer.MIN_VALUE;
-		for (BlockPos p : selected) {
-			maxX = Math.max(maxX, p.getX());
-			maxY = Math.max(maxY, p.getY());
-			maxZ = Math.max(maxZ, p.getZ());
-		}
-		return new BlockPos(maxX, maxY, maxZ);
+		return SelectionBounds.fromPositions(selected).max();
 	}
 
 	public List<BlockPos> copySelectionAsList() {
@@ -850,35 +794,10 @@ public final class BeatBlockSelectionManager {
 	}
 
 	private static List<BlockPos> excludeLayerClaimed(List<BlockPos> blocks) {
-		if (blocks == null || blocks.isEmpty()) return List.of();
-		List<BlockPos> out = new ArrayList<>(blocks.size());
-		for (BlockPos pos : blocks) {
-			if (pos == null || isClaimedByBuildLayer(pos)) continue;
-			out.add(pos.toImmutable());
-		}
-		return out;
+		return SelectionLayerBlocks.excludeClaimed(blocks, BeatBlockSelectionManager::isClaimedByBuildLayer);
 	}
 
 	private static int countLayerClaimed(List<BlockPos> blocks) {
-		if (blocks == null || blocks.isEmpty()) return 0;
-		int count = 0;
-		for (BlockPos pos : blocks) {
-			if (pos != null && isClaimedByBuildLayer(pos)) count++;
-		}
-		return count;
-	}
-
-	/** 与 {@link #computePlaneSliceBounds(World, BlockPos, Direction)} 一致，供预览使用。 */
-	public record PlaneSliceBounds(int minX, int maxX, int minY, int maxY, int minZ, int maxZ) {
-		public static final PlaneSliceBounds EMPTY = new PlaneSliceBounds(1, 0, 1, 0, 1, 0);
-
-		public boolean isEmpty() {
-			return minX > maxX || minY > maxY || minZ > maxZ;
-		}
-
-		public long volume() {
-			if (isEmpty()) return 0;
-			return (long) (maxX - minX + 1) * (maxY - minY + 1) * (maxZ - minZ + 1);
-		}
+		return SelectionLayerBlocks.countClaimed(blocks, BeatBlockSelectionManager::isClaimedByBuildLayer);
 	}
 }
