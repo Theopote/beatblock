@@ -8,7 +8,6 @@ import com.beatblock.engine.influence.BlockInfluencePresets;
 import com.beatblock.engine.influence.ChannelSpec;
 import com.beatblock.engine.influence.InfluenceDimension;
 import com.beatblock.runtime.BeatBlockContext;
-import com.beatblock.timeline.Clip;
 import com.beatblock.timeline.EventType;
 import com.beatblock.timeline.camera.CameraSegmentKind;
 import com.beatblock.timeline.camera.CameraTrackFactory;
@@ -16,7 +15,6 @@ import com.beatblock.timeline.Timeline;
 import com.beatblock.timeline.TimelineAnimationActionMode;
 import com.beatblock.timeline.TimelineEditor;
 import com.beatblock.timeline.TimelineEvent;
-import com.beatblock.timeline.Track;
 import com.beatblock.timeline.editing.AnimationEventFormInput;
 import com.beatblock.timeline.editing.AnimationEventPropertiesEditor;
 import com.beatblock.timeline.editing.CameraEventPropertiesEditor;
@@ -36,7 +34,6 @@ import imgui.type.ImBoolean;
 import imgui.type.ImInt;
 import imgui.type.ImString;
 
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -526,8 +523,8 @@ public class EventPropertiesPanel {
 				vfxEnabled
 			);
 			var result = presenter.applyAnimationEvent(ref, timeline, editor.getCommandManager(), input);
-			if (result instanceof EventPropertiesPresenter.ApplyResult.Err err) {
-				validationError = err.message();
+			if (result instanceof EventPropertiesPresenter.ApplyResult.Err(String message)) {
+				validationError = message;
 				return;
 			}
 			validationError = null;
@@ -614,8 +611,8 @@ public class EventPropertiesPanel {
 				newEnd,
 				camClipPathVisibleProxy.get()
 			);
-			if (result instanceof EventPropertiesPresenter.ApplyResult.Err err) {
-				validationError = err.message();
+			if (result instanceof EventPropertiesPresenter.ApplyResult.Err(String message)) {
+				validationError = message;
 				return;
 			}
 			validationError = null;
@@ -757,8 +754,8 @@ public class EventPropertiesPanel {
 			return;
 		}
 		var result = presenter.applyCameraKindChange(ref, timeline, editor.getCommandManager(), newKind);
-		if (result instanceof EventPropertiesPresenter.ApplyResult.Err err) {
-			validationError = err.message();
+		if (result instanceof EventPropertiesPresenter.ApplyResult.Err(String message)) {
+			validationError = message;
 			return;
 		}
 		validationError = null;
@@ -789,8 +786,8 @@ public class EventPropertiesPanel {
 				camSegPathVisibleProxy.get(),
 				rawParams
 			);
-			if (result instanceof EventPropertiesPresenter.ApplyResult.Err err) {
-				validationError = err.message();
+			if (result instanceof EventPropertiesPresenter.ApplyResult.Err(String message)) {
+				validationError = message;
 				return;
 			}
 			validationError = null;
@@ -920,8 +917,8 @@ public class EventPropertiesPanel {
 				pitch,
 				ease
 			);
-			if (result instanceof EventPropertiesPresenter.ApplyResult.Err err) {
-				validationError = err.message();
+			if (result instanceof EventPropertiesPresenter.ApplyResult.Err(String message)) {
+				validationError = message;
 				return;
 			}
 			validationError = null;
