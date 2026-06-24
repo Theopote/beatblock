@@ -28,7 +28,7 @@
 	<!-- Timeline layout constants shared with render helpers -->
 	<Match>
 		<Package name="~com\.beatblock\.timeline\.rendering.*" />
-		<Bug pattern="MS_PKGPROTECT,URF_UNREAD_PUBLIC_OR_PROTECTED_FIELD" />
+		<Bug pattern="MS_PKGPROTECT,URF_UNREAD_PUBLIC_OR_PROTECTED_FIELD,PA_PUBLIC_PRIMITIVE_ATTRIBUTE" />
 	</Match>
 
 	<!-- Client singletons / frame state (Minecraft client thread) -->
