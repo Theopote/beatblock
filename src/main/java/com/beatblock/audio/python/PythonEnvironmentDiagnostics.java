@@ -3,7 +3,7 @@ package com.beatblock.audio.python;
 import com.beatblock.audio.AnalysisCancelControl;
 import com.beatblock.audio.AnalysisProgressCallback;
 import com.beatblock.audio.AnalyzerInstaller;
-import com.beatblock.audio.ffmpeg.FfmpegLocator;
+import com.beatblock.audio.ffmpeg.FfmpegService;
 import com.beatblock.audio.process.ProcessIo;
 import net.fabricmc.loader.api.FabricLoader;
 import org.slf4j.Logger;
@@ -376,7 +376,7 @@ public final class PythonEnvironmentDiagnostics {
 	}
 
 	private HealthItem probeFfmpegHealth() {
-		String executable = FfmpegLocator.resolveExecutable();
+		String executable = FfmpegService.resolveExecutable();
 		if (executable == null || executable.isBlank()) {
 			return new HealthItem("missing", "未找到");
 		}

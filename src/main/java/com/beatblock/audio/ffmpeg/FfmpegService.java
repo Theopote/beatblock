@@ -22,7 +22,7 @@ public final class FfmpegService {
 		return FfmpegPcmDecoder.decodeToPcm(inputFile, sampleRate, channels, maxOutputBytes);
 	}
 
-	public static FfmpegTranscoder.Outcome transcodeToMp3(
+	public static FfmpegTranscodeOutcome transcodeToMp3(
 		Path inputAudio,
 		Path fallbackOutputDir,
 		FfmpegTranscoder.ProgressListener onProgress

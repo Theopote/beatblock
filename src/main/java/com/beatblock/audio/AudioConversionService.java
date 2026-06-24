@@ -1,6 +1,7 @@
 package com.beatblock.audio;
 
 import com.beatblock.audio.ffmpeg.FfmpegService;
+import com.beatblock.audio.ffmpeg.FfmpegTranscodeOutcome;
 import net.fabricmc.loader.api.FabricLoader;
 
 import java.nio.file.Path;
@@ -42,17 +43,17 @@ public final class AudioConversionService {
 			onProgress != null ? onProgress::accept : null
 		);
 
-		if (outcome instanceof FfmpegTranscoder.Outcome.AlreadyMp3 already) {
+		if (outcome instanceof FfmpegTranscodeOutcome.AlreadyMp3 already) {
 			if (onProgress != null) {
 				onProgress.accept("源文件已是 MP3，跳过转换。", 100);
 			}
 			onComplete.accept(already.path());
-		} else if (outcome instanceof FfmpegTranscoder.Outcome.Success success) {
+		} else if (outcome instanceof FfmpegTranscodeOutcome.Success success) {
 			if (onProgress != null) {
 				onProgress.accept("转换完成。", 100);
 			}
 			onComplete.accept(success.outputPath());
-		} else if (outcome instanceof FfmpegTranscoder.Outcome.Failure failure) {
+		} else if (outcome instanceof FfmpegTranscodeOutcome.Failure failure) {
 			onError.accept(failure.message());
 		}
 	}

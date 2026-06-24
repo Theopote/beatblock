@@ -1,6 +1,6 @@
 package com.beatblock.audio;
 
-import com.beatblock.audio.ffmpeg.FfmpegPcmDecoder;
+import com.beatblock.audio.ffmpeg.FfmpegService;
 import com.beatblock.timeline.IAudioPlayer;
 import org.lwjgl.openal.AL10;
 import org.lwjgl.openal.AL11;
@@ -423,7 +423,7 @@ public final class StemMixer implements IAudioPlayer {
 		final int sampleRate = 44100;
 		final int channels = 2;
 		try {
-			byte[] pcm = FfmpegPcmDecoder.decodeToPcm(inputFile, sampleRate, channels, 512 * 1024 * 1024);
+			byte[] pcm = FfmpegService.decodeToPcm(inputFile, sampleRate, channels, 512 * 1024 * 1024);
 			return new StemPcmData(pcm, sampleRate, channels);
 		} catch (InterruptedException e) {
 			Thread.currentThread().interrupt();

@@ -15,14 +15,6 @@ import java.util.List;
  */
 public final class FfmpegTranscoder {
 
-	public sealed interface Outcome permits Outcome.AlreadyMp3, Outcome.Success, Outcome.Failure {
-		record AlreadyMp3(Path path) implements Outcome {}
-
-		record Success(Path outputPath) implements Outcome {}
-
-		record Failure(String message) implements Outcome {}
-	}
-
 	@FunctionalInterface
 	public interface ProgressListener {
 		void onProgress(String message, int percent);
@@ -30,7 +22,7 @@ public final class FfmpegTranscoder {
 
 	private FfmpegTranscoder() {}
 
-	public static Outcome transcodeToMp3(
+	public static FfmpegTranscodeOutcome transcodeToMp3(
 		Path inputAudio,
 		Path fallbackOutputDir,
 		ProgressListener onProgress
@@ -38,19 +30,19 @@ public final class FfmpegTranscoder {
 		return transcodeToMp3(inputAudio, fallbackOutputDir, FfmpegLocator::resolveExecutable, onProgress);
 	}
 
-	static Outcome transcodeToMp3(
+	static FfmpegTranscodeOutcome transcodeToMp3(
 		Path inputAudio,
 		Path fallbackOutputDir,
 		ExecutableResolver executableResolver,
 		ProgressListener onProgress
 	) {
 		if (inputAudio == null || !Files.isRegularFile(inputAudio)) {
-			return new Outcome.Failure("待转换文件不存在。");
+			return new FfmpegTranscodeOutcome.Failure("待转换文件不存在。");
 		}
 
 		String fileName = inputAudio.getFileName() != null ? inputAudio.getFileName().toString() : "";
 		if (fileName.toLowerCase().endsWith(".mp3")) {
-			return new Outcome.AlreadyMp3(inputAudio);
+			return new FfmpegTranscodeOutcome.AlreadyMp3(inputAudio);
 		}
 
 		String ffmpeg = executableResolver != null ? executableResolver.resolve() : null;
@@ -58,7 +50,7 @@ public final class FfmpegTranscoder {
 			Path gameDir = fallbackOutputDir != null
 				? fallbackOutputDir
 				: FabricLoader.getInstance().getGameDir();
-			return new Outcome.Failure(
+			return new FfmpegTranscodeOutcome.Failure(
 				"找不到 ffmpeg。请将 ffmpeg.exe 放到游戏目录（" + gameDir + "）下，"
 					+ "或在 config/beatblock/ffmpeg_path.txt 中写入 ffmpeg.exe 的完整路径。"
 			);
@@ -75,7 +67,7 @@ public final class FfmpegTranscoder {
 				.redirectErrorStream(true)
 				.start();
 		} catch (IOException e) {
-			return new Outcome.Failure("无法启动 ffmpeg: " + e.getMessage());
+			return new FfmpegTranscodeOutcome.Failure("无法启动 ffmpeg: " + e.getMessage());
 		}
 
 		StringBuilder out = new StringBuilder();
@@ -97,14 +89,14 @@ public final class FfmpegTranscoder {
 		} catch (InterruptedException e) {
 			Thread.currentThread().interrupt();
 			process.destroyForcibly();
-			return new Outcome.Failure("音频转换被中断。");
+			return new FfmpegTranscodeOutcome.Failure("音频转换被中断。");
 		}
 
 		if (exitCode != 0 || !Files.isRegularFile(output)) {
-			return new Outcome.Failure("ffmpeg 转换失败。" + summarizeProcessOutput(out));
+			return new FfmpegTranscodeOutcome.Failure("ffmpeg 转换失败。" + summarizeProcessOutput(out));
 		}
 
-		return new Outcome.Success(output);
+		return new FfmpegTranscodeOutcome.Success(output);
 	}
 
 	static List<String> buildMp3Command(String ffmpegExecutable, Path inputAudio, Path outputAudio) {

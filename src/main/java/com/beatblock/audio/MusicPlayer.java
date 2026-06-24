@@ -1,7 +1,6 @@
 package com.beatblock.audio;
 
-import com.beatblock.audio.ffmpeg.FfmpegLocator;
-import com.beatblock.audio.ffmpeg.FfmpegPcmDecoder;
+import com.beatblock.audio.ffmpeg.FfmpegService;
 import com.beatblock.timeline.IAudioPlayer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -472,7 +471,7 @@ public class MusicPlayer implements IAudioPlayer {
 	}
 
 	private boolean tryLoadViaFfmpegFallback(Path originalFile) {
-		if (!FfmpegLocator.isAvailable()) {
+		if (!FfmpegService.isAvailable()) {
 			lastLoadError = "格式不受支持，且找不到 ffmpeg 进行解码兜底";
 			return false;
 		}
@@ -487,7 +486,7 @@ public class MusicPlayer implements IAudioPlayer {
 			int channels = c[1];
 			byte[] pcmBytes;
 			try {
-				pcmBytes = FfmpegPcmDecoder.decodeToPcm(originalFile, sampleRate, channels, 256 * 1024 * 1024);
+				pcmBytes = FfmpegService.decodeToPcm(originalFile, sampleRate, channels, 256 * 1024 * 1024);
 			} catch (Exception e) {
 				lastLoadError = "ffmpeg 解码失败: " + e.getMessage();
 				return false;
