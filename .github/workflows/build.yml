@@ -23,9 +23,17 @@ jobs:
         run: chmod +x ./gradlew
       - name: build
         run: ./gradlew build
-        # build → check → test（ImGui JNI 加载）+ verifyBundledDependencies（三平台 natives 已打入 jar）
+        # build → check → test + jacocoTestReport + spotbugsMain + verifyBundledDependencies
       - name: capture build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: Artifacts
           path: build/libs/
+      - name: upload quality reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: quality-reports
+          path: |
+            build/reports/jacoco/
+            build/reports/spotbugs/

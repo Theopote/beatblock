@@ -1,6 +1,7 @@
 plugins {
 	id 'fabric-loom' version "${loom_version}"
 	id 'maven-publish'
+	id 'jacoco'
 }
 
 version = project.mod_version
@@ -12,6 +13,10 @@ base {
 
 repositories {
 	mavenCentral()
+}
+
+configurations {
+	spotbugs
 }
 
 loom {
@@ -52,6 +57,8 @@ dependencies {
 	testImplementation "org.junit.jupiter:junit-jupiter:5.11.4"
 	testImplementation "net.fabricmc:fabric-loader-junit:${project.loader_version}"
 	testRuntimeOnly "org.junit.platform:junit-platform-launcher"
+
+	spotbugs 'com.github.spotbugs:spotbugs:4.10.2'
 }
 
 processResources {
@@ -101,6 +108,64 @@ tasks.register('verifyBundledDependencies') {
 }
 
 check.dependsOn verifyBundledDependencies
+
+jacoco {
+	toolVersion = '0.8.12'
+}
+
+tasks.named('jacocoTestReport', JacocoReport) {
+	dependsOn test
+
+	reports {
+		xml.required = true
+		html.required = true
+	}
+
+	classDirectories.setFrom files(sourceSets.main.output.classesDirs).asFileTree.matching {
+		include 'com/beatblock/**'
+	}
+	sourceDirectories.setFrom sourceSets.main.java.srcDirs
+	executionData.setFrom fileTree(layout.buildDirectory.dir('jacoco')).include('**/*.exec')
+}
+
+tasks.named('test') {
+	finalizedBy jacocoTestReport
+}
+
+def spotbugsReportDir = layout.buildDirectory.dir('reports/spotbugs/main')
+
+tasks.register('spotbugsMain', JavaExec) {
+	group = 'verification'
+	description = 'Run SpotBugs static analysis on main classes'
+	dependsOn classes
+
+	classpath = configurations.spotbugs
+	mainClass = 'edu.umd.cs.findbugs.FindBugs2'
+
+	def htmlReport = spotbugsReportDir.get().file('index.html').asFile
+	def excludeFile = file('config/spotbugs/exclude.xml')
+
+	doFirst {
+		htmlReport.parentFile.mkdirs()
+		def classDir = layout.buildDirectory.dir('classes/java/main').get().asFile
+		if (!classDir.directory || !classDir.exists()) {
+			throw new GradleException("No compiled classes found for SpotBugs analysis at ${classDir}")
+		}
+
+		setArgs([
+			'-effort:max',
+			'-medium',
+			'-html',
+			'-output', htmlReport.absolutePath,
+			'-exclude', excludeFile.absolutePath,
+			'-onlyAnalyze', 'com.beatblock.-',
+			'-auxclasspath', sourceSets.main.compileClasspath.asPath,
+			classDir.absolutePath,
+		])
+	}
+}
+
+check.dependsOn spotbugsMain
 
 java {
 	// Loom will automatically attach sourcesJar to a RemapSourcesJar task and to the "build" task
