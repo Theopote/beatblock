@@ -44,47 +44,47 @@ public final class AudioAnalysisPanel implements AudioAnalysisPanelHost {
 		return uiState;
 	}
 
-	public void render(ImBoolean pOpen) {
-		if (!pOpen.get()) {
-			BeatBlockDockPanelBegin.markClosed(BeatBlockDockSpaceLayoutBuilder.AUDIO_ANALYSIS_WINDOW);
-			return;
-		}
+    public void render(ImBoolean pOpen) {
+        if (!pOpen.get()) {
+            BeatBlockDockPanelBegin.markClosed(BeatBlockDockSpaceLayoutBuilder.AUDIO_ANALYSIS_WINDOW);
+            return;
+        }
 		ImGui.pushStyleVar(ImGuiStyleVar.WindowPadding,
 			AudioAnalysisPanelRenderer.outerPaddingX(),
 			AudioAnalysisPanelRenderer.outerPaddingY());
-		if (!BeatBlockDockPanelBegin.begin(BeatBlockDockSpaceLayoutBuilder.AUDIO_ANALYSIS_WINDOW, pOpen, WINDOW_FLAGS)) {
-			ImGui.popStyleVar();
-			return;
-		}
-		ImGui.popStyleVar();
-		try {
+        if (!BeatBlockDockPanelBegin.begin(BeatBlockDockSpaceLayoutBuilder.AUDIO_ANALYSIS_WINDOW, pOpen, WINDOW_FLAGS)) {
+            ImGui.popStyleVar();
+            return;
+        }
+        ImGui.popStyleVar();
+        try {
 			AudioAnalysisPanelRenderer.renderContent(this);
-		} finally {
-			BeatBlockDockPanelBegin.endWithRecord(BeatBlockDockSpaceLayoutBuilder.AUDIO_ANALYSIS_WINDOW);
-		}
-	}
+        } finally {
+            BeatBlockDockPanelBegin.endWithRecord(BeatBlockDockSpaceLayoutBuilder.AUDIO_ANALYSIS_WINDOW);
+        }
+    }
 
 	@Override
 	public boolean handleIncomingAudioPath(String path) {
-		if (path == null || path.isBlank()) return false;
-		AudioAssetManager manager = AudioAssetManager.getInstance();
-		if (!manager.isSupportedAudioPath(path)) {
+        if (path == null || path.isBlank()) return false;
+        AudioAssetManager manager = AudioAssetManager.getInstance();
+        if (!manager.isSupportedAudioPath(path)) {
 			uiState.setPanelHint("仅支持 " + manager.getSupportedAudioExtensionsLabel(), true);
-			return false;
-		}
+            return false;
+        }
 		AudioAsset asset = manager.addFromPath(path);
-		if (asset != null) {
+        if (asset != null) {
 			uiState.setSelectedAsset(asset);
 			manager.startAnalysis(asset);
 			uiState.setPanelHint("已添加并开始解析: " + asset.getFileName(), false);
-			return true;
-		}
+            return true;
+        }
 		uiState.setPanelHint("路径无效或文件不存在", true);
-		return false;
-	}
+        return false;
+    }
 
 	@Override
 	public String chooseAudioFilePath() {
 		return AudioAnalysisPanelRenderer.chooseFilePath(this);
-	}
+    }
 }
