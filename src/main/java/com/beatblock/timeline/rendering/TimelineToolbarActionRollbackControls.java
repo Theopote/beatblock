@@ -29,9 +29,10 @@ final class TimelineToolbarActionRollbackControls {
 		config.ensureActionExecutionConfigLoaded();
 		comboIndex.set(TimelineToolbarConfigPresenter.indexOfActionRollbackValue(config.readActionRollbackMode()));
 		String label = compactPopup ? "Rollback##tlMoreActionRollback" : "Rollback";
-		ImGui.setNextItemWidth(TimelineToolbarImGui.comboWidthForLabels(TimelineToolbarConfigPresenter.ACTION_ROLLBACK_LABELS));
-		if (ImGui.combo(label, comboIndex, TimelineToolbarConfigPresenter.ACTION_ROLLBACK_LABELS)) {
-			config.writeActionRollbackMode(TimelineToolbarConfigPresenter.ACTION_ROLLBACK_VALUES[comboIndex.get()]);
+		String[] rollbackLabels = TimelineToolbarConfigPresenter.actionRollbackLabels();
+		ImGui.setNextItemWidth(TimelineToolbarImGui.comboWidthForLabels(rollbackLabels));
+		if (ImGui.combo(label, comboIndex, rollbackLabels)) {
+			config.writeActionRollbackMode(TimelineToolbarConfigPresenter.actionRollbackValueAt(comboIndex.get()));
 		}
 		if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_ACTION_ROLLBACK);
 	}

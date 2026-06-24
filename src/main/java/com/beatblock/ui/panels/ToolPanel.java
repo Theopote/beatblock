@@ -114,7 +114,7 @@ public class ToolPanel {
 		var state = presenter.selectionToolViewState();
 		ImGui.setNextItemWidth(ImGui.getContentRegionAvail().x);
 		if (ImGui.beginCombo("##bselCombo", ToolPanelPresenter.selectionModeLabel(state.mode()))) {
-			for (SelectionMode mode : ToolPanelPresenter.SELECTION_COMBO_ORDER) {
+			for (SelectionMode mode : ToolPanelPresenter.selectionComboOrder()) {
 				boolean selected = state.mode() == mode;
 				if (ImGui.selectable(ToolPanelPresenter.selectionModeLabel(mode), selected)) {
 					if (state.mode() != mode) {

@@ -78,8 +78,9 @@ final class TimelineToolbarLoopSpeedControls {
 
 	private void renderSpeed(TimelineEditor editor, String label, String tooltipOverride) {
 		speedComboIndex.set(TimelineToolbarViewPresenter.indexOfClosestSpeed(transport.currentPlaybackSpeed(editor)));
-		ImGui.setNextItemWidth(TimelineToolbarImGui.comboWidthForLabels(TimelineToolbarViewPresenter.SPEED_LABELS));
-		if (ImGui.combo(label, speedComboIndex, TimelineToolbarViewPresenter.SPEED_LABELS)) {
+		String[] speedLabels = TimelineToolbarViewPresenter.speedLabels();
+		ImGui.setNextItemWidth(TimelineToolbarImGui.comboWidthForLabels(speedLabels));
+		if (ImGui.combo(label, speedComboIndex, speedLabels)) {
 			TimelineToolbarViewPresenter.applySpeedPreset(editor, transport, speedComboIndex.get());
 		}
 		if (ImGui.isItemHovered()) ImGui.setTooltip(tooltipOverride.isEmpty() ? TOOLTIP_SPEED : tooltipOverride);

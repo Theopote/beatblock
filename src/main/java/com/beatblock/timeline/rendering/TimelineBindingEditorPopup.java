@@ -86,8 +86,8 @@ final class TimelineBindingEditorPopup {
 			dirty = true;
 		}
 
-		ImGui.setNextItemWidth(TimelineToolbarImGui.comboWidthForLabels(TimelineBindingEditorPresenter.TEMPLATE_LABELS));
-		ImGui.combo("Template##bindingTemplate", bindingTemplateComboIndex, TimelineBindingEditorPresenter.TEMPLATE_LABELS);
+		ImGui.setNextItemWidth(TimelineToolbarImGui.comboWidthForLabels(TimelineBindingEditorPresenter.templateLabels()));
+		ImGui.combo("Template##bindingTemplate", bindingTemplateComboIndex, TimelineBindingEditorPresenter.templateLabels());
 		if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_BINDING_TEMPLATE);
 		ImGui.sameLine();
 		if (ImGui.button("Replace##bindingApplyTemplate")) {
@@ -197,19 +197,17 @@ final class TimelineBindingEditorPopup {
 		animationIndex = animationCombo.get();
 		if (animationIndex < 0 || animationIndex >= animationIds.size()) animationIndex = 0;
 
-		int actionIndex = TimelineBindingEditorPresenter.indexOfValue(
-			TimelineBindingEditorPresenter.ACTION_VALUES, rule.actionMode().name());
+		int actionIndex = TimelineBindingEditorPresenter.indexOfActionValue(rule.actionMode().name());
 		ImInt actionCombo = new ImInt(Math.max(0, actionIndex));
-		if (ImGui.combo("Action", actionCombo, TimelineBindingEditorPresenter.ACTION_LABELS)) changed = true;
+		if (ImGui.combo("Action", actionCombo, TimelineBindingEditorPresenter.actionLabels())) changed = true;
 		actionIndex = actionCombo.get();
-		if (actionIndex < 0 || actionIndex >= TimelineBindingEditorPresenter.ACTION_VALUES.length) actionIndex = 0;
+		if (actionIndex < 0 || actionIndex >= TimelineBindingEditorPresenter.actionValueCount()) actionIndex = 0;
 
-		int spatialIndex = TimelineBindingEditorPresenter.indexOfValue(
-			TimelineBindingEditorPresenter.SPATIAL_VALUES, rule.spatialMode().name());
+		int spatialIndex = TimelineBindingEditorPresenter.indexOfSpatialValue(rule.spatialMode().name());
 		ImInt spatialCombo = new ImInt(Math.max(0, spatialIndex));
-		if (ImGui.combo("Spatial", spatialCombo, TimelineBindingEditorPresenter.SPATIAL_LABELS)) changed = true;
+		if (ImGui.combo("Spatial", spatialCombo, TimelineBindingEditorPresenter.spatialLabels())) changed = true;
 		spatialIndex = spatialCombo.get();
-		if (spatialIndex < 0 || spatialIndex >= TimelineBindingEditorPresenter.SPATIAL_VALUES.length) spatialIndex = 0;
+		if (spatialIndex < 0 || spatialIndex >= TimelineBindingEditorPresenter.spatialValueCount()) spatialIndex = 0;
 
 		int targetIndex = TimelineBindingEditorPresenter.indexOfTargetDisplay(
 			targetDisplays, targetDisplayToId, rule.targetObjectId());
@@ -252,7 +250,7 @@ final class TimelineBindingEditorPopup {
 		String uiAnimation = animationIds.isEmpty() ? rule.animationTypeId() : animationIds.get(animationIndex);
 		changed |= renderAnimationExtraParams(uiAnimation, extraCopy);
 
-		String uiAction = TimelineBindingEditorPresenter.ACTION_VALUES[actionIndex];
+		String uiAction = TimelineBindingEditorPresenter.actionValueAt(actionIndex);
 		if ("BUILD".equalsIgnoreCase(uiAction)) {
 			changed |= renderBuildExtraParams(extraCopy);
 		}
@@ -271,7 +269,7 @@ final class TimelineBindingEditorPopup {
 					nameBuf.get(),
 					selectedFeature,
 					selectedAnimation,
-					TimelineBindingEditorPresenter.ACTION_VALUES[actionIndex],
+					TimelineBindingEditorPresenter.actionValueAt(actionIndex),
 					spatialIndex,
 					selectedTargetId,
 					selectedSection,

@@ -38,8 +38,9 @@ final class TimelineToolbarViewControls {
 
 	private void renderZoom(TimelineEditor editor, String label, String tooltipOverride) {
 		zoomComboIndex.set(TimelineToolbarViewPresenter.indexOfClosestZoom(editor.getViewState().getZoom()));
-		ImGui.setNextItemWidth(TimelineToolbarImGui.comboWidthForLabels(TimelineToolbarViewPresenter.ZOOM_PRESET_LABELS));
-		if (ImGui.combo(label, zoomComboIndex, TimelineToolbarViewPresenter.ZOOM_PRESET_LABELS)) {
+		String[] zoomLabels = TimelineToolbarViewPresenter.zoomPresetLabels();
+		ImGui.setNextItemWidth(TimelineToolbarImGui.comboWidthForLabels(zoomLabels));
+		if (ImGui.combo(label, zoomComboIndex, zoomLabels)) {
 			TimelineToolbarViewPresenter.applyZoomPreset(editor, zoomComboIndex.get());
 		}
 		if (ImGui.isItemHovered()) ImGui.setTooltip(tooltipOverride.isEmpty() ? TOOLTIP_ZOOM : tooltipOverride);

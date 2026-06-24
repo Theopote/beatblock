@@ -70,18 +70,20 @@ final class TimelineDemucsMappingControls {
 	}
 
 	private void renderPresetCombo(String label) {
-		ImGui.setNextItemWidth(TimelineToolbarImGui.comboWidthForLabels(TimelineToolbarConfigPresenter.DEMUCS_PRESET_LABELS));
-		if (ImGui.combo(label, demucsPresetComboIndex, TimelineToolbarConfigPresenter.DEMUCS_PRESET_LABELS)) {
-			config.writeDemucsPreset(TimelineToolbarConfigPresenter.DEMUCS_PRESET_VALUES[demucsPresetComboIndex.get()]);
+		String[] presetLabels = TimelineToolbarConfigPresenter.demucsPresetLabels();
+		ImGui.setNextItemWidth(TimelineToolbarImGui.comboWidthForLabels(presetLabels));
+		if (ImGui.combo(label, demucsPresetComboIndex, presetLabels)) {
+			config.writeDemucsPreset(TimelineToolbarConfigPresenter.demucsPresetValueAt(demucsPresetComboIndex.get()));
 		}
 		if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_DEMUCS_PRESET);
 	}
 
 	private void renderClipModeCombo(String label) {
-		ImGui.setNextItemWidth(TimelineToolbarImGui.comboWidthForLabels(TimelineToolbarConfigPresenter.CLIP_GENERATION_MODE_LABELS));
-		if (ImGui.combo(label, clipGenerationModeComboIndex, TimelineToolbarConfigPresenter.CLIP_GENERATION_MODE_LABELS)) {
+		String[] modeLabels = TimelineToolbarConfigPresenter.clipGenerationModeLabels();
+		ImGui.setNextItemWidth(TimelineToolbarImGui.comboWidthForLabels(modeLabels));
+		if (ImGui.combo(label, clipGenerationModeComboIndex, modeLabels)) {
 			config.writeClipGenerationMode(
-				TimelineToolbarConfigPresenter.CLIP_GENERATION_MODE_VALUES[clipGenerationModeComboIndex.get()]);
+				TimelineToolbarConfigPresenter.clipGenerationModeValueAt(clipGenerationModeComboIndex.get()));
 		}
 		if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_CLIP_GENERATION_MODE);
 	}
@@ -119,9 +121,9 @@ final class TimelineDemucsMappingControls {
 
 		ImGui.separator();
 		if (ImGui.treeNode("Per-Feature Overrides##demucsFeatureOverrides")) {
-			for (int i = 0; i < TimelineToolbarConfigPresenter.DEMUCS_FEATURE_KEYS.length; i++) {
-				String featureKey = TimelineToolbarConfigPresenter.DEMUCS_FEATURE_KEYS[i];
-				String label = TimelineToolbarConfigPresenter.DEMUCS_FEATURE_LABELS[i];
+			for (int i = 0; i < TimelineToolbarConfigPresenter.demucsFeatureCount(); i++) {
+				String featureKey = TimelineToolbarConfigPresenter.demucsFeatureKeyAt(i);
+				String label = TimelineToolbarConfigPresenter.demucsFeatureLabelAt(i);
 				if (ImGui.treeNode(label + "##demucsFeatureNode_" + featureKey)) {
 					boolean nodeChanged = false;
 					float[] fDur = new float[] { (float) config.readFeatureScale(featureKey, "duration") };
