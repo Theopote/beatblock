@@ -55,28 +55,13 @@ import static com.beatblock.timeline.interaction.TimelineInteractiveTrackSlots.b
  * 时间线输入：鼠标按下/拖拽/释放，使用 TimelineLayout 四区域做 HitTest，驱动状态与 Clock。
  * 支持：标尺/播放头拖动（SCRUB）、事件拖拽、框选。
  */
-public final class TimelineInteraction {
+public final class TimelineInteraction implements TimelineInteractionPopupHost {
 
 	private IAudioPlayer audioPlayer;
 	private MusicPlayer musicPlayer;
 	private TimelineEditor timelineEditor;
 	private final List<TimelineInteractionClipboard.ClipboardEvent> clipboardEvents = new ArrayList<>();
-	private String contextTrackId;
-	private String contextClipId;
-	private double contextTimeSeconds;
-	private String propertiesEventId;
-	private final ImString propertiesTimeBuffer = new ImString(TIME_INPUT_BUFFER_SIZE);
-	private String propertiesOriginalTime = "0";
-	private final Map<String, ImString> propertiesParamBuffers = new HashMap<>();
-	private final Map<String, Boolean> propertiesParamAsNumber = new HashMap<>();
-	private final Map<String, String> propertiesOriginalParamValues = new HashMap<>();
-	private final Map<String, Boolean> propertiesOriginalParamAsNumber = new HashMap<>();
-	private final ImString propertiesNewParamKey = new ImString(PARAM_INPUT_BUFFER_SIZE);
-	private final ImString propertiesNewParamValue = new ImString(PARAM_INPUT_BUFFER_SIZE);
-	private boolean propertiesNewParamAsNumber;
-	private String propertiesError;
-	private String contextMarkerId;
-	private final ImString markerNameBuffer = new ImString(MARKER_NAME_BUFFER_SIZE);
+	private final TimelineInteractionPopupState popupState = new TimelineInteractionPopupState();
 
 	// ── 音频片段拖拽快照（DRAG_CLIP 模式使用） ────────────────────────────────
 	/** 拖拽开始时片段的 startTimeSeconds */
@@ -98,10 +83,7 @@ public final class TimelineInteraction {
 	/** 摄像机片段缩放开始时的快照（用于 Undo） */
 	private ClipDragStateSnapshot resizeClipBeforeSnapshot;
 
-	private double cameraResizeInitialStart;
-	private double cameraResizeInitialEnd;
-	private final Map<String, Double> cameraResizeEventOrigTimes = new HashMap<>();
-	private final ImBoolean contextCameraShowPath = new ImBoolean(true);
+	private TimelineCameraClipResizeHandler.Session cameraResizeSession;
 
 	public void setAudioPlayer(IAudioPlayer audioPlayer) {
 		this.audioPlayer = audioPlayer;
@@ -116,7 +98,22 @@ public final class TimelineInteraction {
 	}
 
 	public TimelineInteraction() {
-		contextTimeSeconds = 0;
+		popupState.contextTimeSeconds = 0;
+	}
+
+	@Override
+	public TimelineInteractionPopupState popupState() {
+		return popupState;
+	}
+
+	@Override
+	public List<TimelineInteractionClipboard.ClipboardEvent> clipboardEvents() {
+		return clipboardEvents;
+	}
+
+	@Override
+	public TimelineEditor timelineEditor() {
+		return timelineEditor;
 	}
 
 	public void update(
