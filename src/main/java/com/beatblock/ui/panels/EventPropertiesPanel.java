@@ -3,12 +3,10 @@ package com.beatblock.ui.panels;
 import com.beatblock.BeatBlock;
 import com.beatblock.client.BeatBlockClientDriver;
 import com.beatblock.client.camera.CameraKeyframeActions;
-import com.beatblock.engine.AnimationDefinition;
 import com.beatblock.engine.influence.BlockInfluencePreset;
 import com.beatblock.engine.influence.BlockInfluencePresets;
 import com.beatblock.engine.influence.ChannelSpec;
 import com.beatblock.engine.influence.InfluenceDimension;
-import com.beatblock.engine.StageObject;
 import com.beatblock.timeline.Clip;
 import com.beatblock.timeline.EventType;
 import com.beatblock.timeline.camera.CameraPathMetadata;
@@ -19,30 +17,25 @@ import com.beatblock.timeline.TimelineAnimationActionMode;
 import com.beatblock.timeline.TimelineEditor;
 import com.beatblock.timeline.TimelineEvent;
 import com.beatblock.timeline.Track;
-import com.beatblock.timeline.binding.SpatialDispatchMode;
 import com.beatblock.timeline.editing.AnimationEventFormInput;
 import com.beatblock.timeline.editing.AnimationEventPropertiesEditor;
-import com.beatblock.timeline.editing.AnimationEventSnapshot;
 import com.beatblock.timeline.editing.CameraEventPropertiesEditor;
-import com.beatblock.timeline.editing.TimelineEventEditActions;
 import com.beatblock.timeline.editor.SelectionState;
 import com.beatblock.timeline.generation.DistancePacing;
-import com.beatblock.timeline.rendering.TimelineTrackMeta;
-import com.beatblock.timeline.rendering.TrackDefinition;
-import com.beatblock.timeline.rendering.TrackRegistry;
 import com.beatblock.ui.layout.BeatBlockDockPanelBegin;
 import com.beatblock.ui.layout.BeatBlockDockSpaceLayoutBuilder;
+import com.beatblock.ui.presenter.EventPropertiesOption;
+import com.beatblock.ui.presenter.EventPropertiesPresenter;
+import com.beatblock.ui.presenter.EventPropertiesRef;
+import com.beatblock.ui.presenter.PresenterFactories;
+import com.beatblock.timeline.rendering.TrackRegistry;
 import imgui.ImGui;
 import imgui.flag.ImGuiWindowFlags;
 import imgui.type.ImBoolean;
 import imgui.type.ImInt;
 import imgui.type.ImString;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.registry.Registries;
-import net.minecraft.util.Identifier;
 
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -88,6 +81,16 @@ public class EventPropertiesPanel {
 	private final ImBoolean camClipPathVisibleProxy = new ImBoolean(true);
 	private final ImBoolean camSegPathVisibleProxy = new ImBoolean(true);
 	private String validationError;
+	private final EventPropertiesPresenter presenter;
+
+	public EventPropertiesPanel() {
+		this(PresenterFactories.eventPropertiesPresenter());
+	}
+
+	EventPropertiesPanel(EventPropertiesPresenter presenter) {
+		this.presenter = presenter;
+	}
+
 	private static final String[] SPATIAL_MODE_LABELS = {
 		"同时 (ALL)",
 		"顺序 (SEQUENTIAL)",
@@ -141,10 +144,6 @@ public class EventPropertiesPanel {
 		"EXIT"
 	};
 
-	/** event 可为 null，表示仅选中摄像机片段（无具体事件焦点）。 */
-	private record EventRef(Track track, Clip clip, TimelineEvent event) {}
-	private record Option(String id, String label) {}
-
 	public void render(ImBoolean pOpen) {
 		if (!pOpen.get()) {
 			BeatBlockDockPanelBegin.markClosed(BeatBlockDockSpaceLayoutBuilder.EVENT_PROPERTIES_WINDOW);
@@ -164,7 +163,7 @@ public class EventPropertiesPanel {
 				return;
 			}
 
-			EventRef ref = resolvePropertiesRef(timeline, editor.getSelectionState());
+			EventPropertiesRef ref = presenter.resolvePropertiesRef(timeline, editor.getSelectionState());
 			if (ref == null) {
 				boundRefKey = null;
 				validationError = null;
@@ -172,7 +171,7 @@ public class EventPropertiesPanel {
 				return;
 			}
 
-			String rk = refKey(ref);
+			String rk = EventPropertiesRef.refKey(ref);
 			if (!rk.equals(boundRefKey)) {
 				bindBuffers(ref);
 			}
@@ -180,7 +179,7 @@ public class EventPropertiesPanel {
 			renderEventSummary(ref, timeline);
 			ImGui.separator();
 
-			boolean trackLocked = isTrackLocked(timeline, editor, ref.track().getId());
+			boolean trackLocked = presenter.isTrackLocked(timeline, editor, ref.track().getId());
 			if (trackLocked) {
 				ImGui.textDisabled("当前轨道已锁定，属性只读。");
 				ImGui.separator();
@@ -210,7 +209,7 @@ public class EventPropertiesPanel {
 		}
 	}
 
-	private void renderEventSummary(EventRef ref, Timeline timeline) {
+	private void renderEventSummary(EventPropertiesRef ref, Timeline timeline) {
 		ImGui.textDisabled("Track");
 		ImGui.sameLine();
 		ImGui.text(ref.track().getName().isBlank() ? ref.track().getId() : ref.track().getName());
@@ -263,11 +262,11 @@ public class EventPropertiesPanel {
 		}
 	}
 
-	private void renderAnimationEditor(EventRef ref, Timeline timeline) {
+	private void renderAnimationEditor(EventPropertiesRef ref, Timeline timeline) {
 		Map<String, Object> params = ref.event().getParameters();
-		List<Option> actionOptions = collectActionOptions();
-		List<Option> animationOptions = collectAnimationOptions();
-		List<Option> targetOptions = collectTargetOptions();
+		List<EventPropertiesOption> actionOptions = presenter.actionOptions();
+		List<EventPropertiesOption> animationOptions = presenter.animationOptions();
+		List<EventPropertiesOption> targetOptions = presenter.targetOptions();
 
 		ImGui.text("Timing");
 		ImGui.setNextItemWidth(-1f);
@@ -455,7 +454,7 @@ public class EventPropertiesPanel {
 		}
 	}
 
-	private void renderRuntimeStatus(EventRef ref) {
+	private void renderRuntimeStatus(EventPropertiesRef ref) {
 		String eventId = ref != null && ref.event() != null ? ref.event().getId() : "";
 		if (eventId == null || eventId.isBlank()) return;
 		BeatBlockClientDriver.TimelineActionExecutionReport report = BeatBlockClientDriver.getTimelineActionExecutionReport(eventId);
@@ -473,7 +472,7 @@ public class EventPropertiesPanel {
 		}
 	}
 
-	private void applyAnimationChanges(EventRef ref, Timeline timeline, String actionMode, String animationId,
+	private void applyAnimationChanges(EventPropertiesRef ref, Timeline timeline, String actionMode, String animationId,
 	                                  String targetObjectId, boolean inheritGroupSpatial, String spatialMode,
 	                                  boolean stepDispatch, String stepStartMode, String stepCompletionMode,
 	                                  String pacingMode, boolean cameraAdaptiveStep, boolean cameraFrustumGating,
@@ -517,23 +516,11 @@ public class EventPropertiesPanel {
 				usePhaseAnimation,
 				vfxEnabled
 			);
-			var result = AnimationEventPropertiesEditor.buildUpdatedSnapshot(
-				input,
-				new HashMap<>(ref.event().getParameters()),
-				id -> BeatBlock.blockAnimationEngine != null
-					&& BeatBlock.blockAnimationEngine.getStageObjectSystem().get(id) != null,
-				blockId -> {
-					Identifier parsed = Identifier.tryParse(blockId);
-					return parsed != null && Registries.BLOCK.containsId(parsed);
-				}
-			);
-			if (result instanceof AnimationEventPropertiesEditor.Result.Err err) {
+			var result = presenter.applyAnimationEvent(ref, timeline, editor.getCommandManager(), input);
+			if (result instanceof EventPropertiesPresenter.ApplyResult.Err err) {
 				validationError = err.message();
 				return;
 			}
-			AnimationEventSnapshot after = ((AnimationEventPropertiesEditor.Result.Ok) result).snapshot();
-			AnimationEventSnapshot before = AnimationEventSnapshot.capture(ref.event(), ref.clip());
-			executeEventEdit(ref, timeline, before, after);
 			validationError = null;
 			bindBuffers(ref);
 		} catch (NumberFormatException ex) {
@@ -541,18 +528,13 @@ public class EventPropertiesPanel {
 		}
 	}
 
-	private static String refKey(EventRef ref) {
-		if (ref.event() == null) return "clip:" + ref.clip().getId();
-		return "event:" + ref.event().getId();
-	}
-
-	private void bindBuffers(EventRef ref) {
+	private void bindBuffers(EventPropertiesRef ref) {
 		camSegParamBuffers.clear();
-		boundRefKey = refKey(ref);
+		boundRefKey = EventPropertiesRef.refKey(ref);
 		if (ref.event() == null) {
 			camClipStartBuffer.set(String.format(Locale.ROOT, "%.6f", ref.clip().getStartTimeSeconds()));
 			camClipEndBuffer.set(String.format(Locale.ROOT, "%.6f", ref.clip().getEndTimeSeconds()));
-			camClipPathVisibleProxy.set(CameraPathMetadata.isPathVisible(BeatBlock.timeline, ref.clip().getId()));
+			camClipPathVisibleProxy.set(EventPropertiesPresenter.isPathVisible(BeatBlock.timeline, ref.clip().getId()));
 			validationError = null;
 			return;
 		}
@@ -579,7 +561,7 @@ public class EventPropertiesPanel {
 		flashBlockBuffer.set(flashBlock);
 		if (event.getType() == EventType.CAMERA_SEGMENT && ref.clip() != null) {
 			camSegDurBuffer.set(String.format(Locale.ROOT, "%.6f", ref.clip().getDurationSeconds()));
-			camSegPathVisibleProxy.set(CameraPathMetadata.isPathVisible(BeatBlock.timeline, ref.clip().getId()));
+			camSegPathVisibleProxy.set(EventPropertiesPresenter.isPathVisible(BeatBlock.timeline, ref.clip().getId()));
 			for (Map.Entry<String, Object> e : params.entrySet()) {
 				String k = e.getKey();
 				if ("kind".equals(k)) continue;
@@ -597,7 +579,7 @@ public class EventPropertiesPanel {
 		validationError = null;
 	}
 
-	private void renderCameraClipOnlyPanel(EventRef ref, Timeline timeline) {
+	private void renderCameraClipOnlyPanel(EventPropertiesRef ref, Timeline timeline) {
 		ImGui.text("片段起止时间（秒）");
 		ImGui.setNextItemWidth(-1f);
 		ImGui.inputText("开始##camClipStart", camClipStartBuffer);
@@ -618,7 +600,7 @@ public class EventPropertiesPanel {
 		}
 	}
 
-	private void applyCameraClipOnly(EventRef ref, Timeline timeline) {
+	private void applyCameraClipOnly(EventPropertiesRef ref, Timeline timeline) {
 		TimelineEditor editor = BeatBlock.timelineEditor;
 		if (editor == null) {
 			validationError = "时间线编辑器未初始化。";
@@ -627,22 +609,18 @@ public class EventPropertiesPanel {
 		try {
 			double newStart = Double.parseDouble(valueOf(camClipStartBuffer).trim());
 			double newEnd = Double.parseDouble(valueOf(camClipEndBuffer).trim());
-			double oldStart = ref.clip().getStartTimeSeconds();
-			Map<String, Double> existingTimes = new HashMap<>();
-			for (TimelineEvent ev : ref.clip().getEvents()) {
-				existingTimes.put(ev.getId(), ev.getTimeSeconds());
-			}
-			var result = CameraEventPropertiesEditor.buildClipOnlySnapshot(
-				oldStart, newStart, newEnd, camClipPathVisibleProxy.get(),
-				existingTimes, timeline, ref.clip().getId()
+			var result = presenter.applyCameraClipOnly(
+				ref,
+				timeline,
+				editor.getCommandManager(),
+				newStart,
+				newEnd,
+				camClipPathVisibleProxy.get()
 			);
-			if (result instanceof CameraEventPropertiesEditor.Result.Err err) {
+			if (result instanceof EventPropertiesPresenter.ApplyResult.Err err) {
 				validationError = err.message();
 				return;
 			}
-			AnimationEventSnapshot after = ((CameraEventPropertiesEditor.Result.Ok) result).snapshot();
-			AnimationEventSnapshot before = AnimationEventSnapshot.captureClipOnly(ref.clip(), timeline, ref.clip().getId());
-			executeEventEdit(ref, timeline, before, after);
 			validationError = null;
 			bindBuffers(ref);
 		} catch (NumberFormatException ex) {
@@ -660,7 +638,7 @@ public class EventPropertiesPanel {
 		return 0;
 	}
 
-	private void renderCameraSegmentPanel(EventRef ref, Timeline timeline) {
+	private void renderCameraSegmentPanel(EventPropertiesRef ref, Timeline timeline) {
 		CameraSegmentKind kind = CameraSegmentKind.fromParam(ref.event().getParameters().get("kind"));
 
 		// 镜头类型下拉选择
@@ -763,68 +741,34 @@ public class EventPropertiesPanel {
 	}
 
 	private void captureCurrentViewToSegment(CameraSegmentKind kind) {
-		MinecraftClient mc = MinecraftClient.getInstance();
-		if (mc == null || mc.gameRenderer == null || mc.gameRenderer.getCamera() == null) {
+		var captured = presenter.captureSegmentViewParams(kind);
+		if (captured.isEmpty()) {
 			validationError = "无可用相机，无法捕获。";
 			return;
 		}
-		net.minecraft.client.render.Camera camera = mc.gameRenderer.getCamera();
-		net.minecraft.util.math.Vec3d eye = camera.getCameraPos();
-		float yaw = camera.getYaw();
-		float pitch = camera.getPitch();
-		switch (kind) {
-			case DOLLY -> {
-				setSegBuf("startX", eye.x); setSegBuf("startY", eye.y); setSegBuf("startZ", eye.z);
-				setSegBuf("baseYawDeg", yaw);
-				setSegBuf("basePitchDeg", pitch);
-			}
-			case ORBIT -> {
-				setSegBuf("targetX", eye.x); setSegBuf("targetY", eye.y); setSegBuf("targetZ", eye.z);
-			}
-			case CRANE -> {
-				setSegBuf("startX", eye.x); setSegBuf("startY", eye.y); setSegBuf("startZ", eye.z);
-				setSegBuf("yawDeg", yaw); setSegBuf("pitchDeg", pitch);
-			}
-			case SHAKE -> {
-				setSegBuf("anchorX", eye.x); setSegBuf("anchorY", eye.y); setSegBuf("anchorZ", eye.z);
-				setSegBuf("yawDeg", yaw); setSegBuf("pitchDeg", pitch);
-			}
-			default -> {}
+		for (Map.Entry<String, String> entry : captured.get().entrySet()) {
+			ImString buf = camSegParamBuffers.computeIfAbsent(entry.getKey(), k -> new ImString(INPUT_BUFFER_SIZE));
+			buf.set(entry.getValue());
 		}
 		validationError = null;
 	}
 
-	private void setSegBuf(String key, double value) {
-        ImString buf = camSegParamBuffers.computeIfAbsent(key, k -> new ImString(INPUT_BUFFER_SIZE));
-        buf.set(String.format(Locale.ROOT, "%.6f", value));
-	}
-
-	private void applyCameraKindChange(EventRef ref, Timeline timeline, CameraSegmentKind newKind) {
+	private void applyCameraKindChange(EventPropertiesRef ref, Timeline timeline, CameraSegmentKind newKind) {
 		TimelineEditor editor = BeatBlock.timelineEditor;
 		if (editor == null) {
 			validationError = "时间线编辑器未初始化。";
 			return;
 		}
-		var result = CameraEventPropertiesEditor.buildKindChangeSnapshot(
-			newKind,
-			ref.event().getParameters(),
-			buildSegmentDefaultValues(newKind),
-			ref.clip().getStartTimeSeconds(),
-			ref.clip().getEndTimeSeconds()
-		);
-		if (result instanceof CameraEventPropertiesEditor.Result.Err err) {
+		var result = presenter.applyCameraKindChange(ref, timeline, editor.getCommandManager(), newKind);
+		if (result instanceof EventPropertiesPresenter.ApplyResult.Err err) {
 			validationError = err.message();
 			return;
 		}
-		AnimationEventSnapshot after = ((CameraEventPropertiesEditor.Result.Ok) result).snapshot();
-		AnimationEventSnapshot before = AnimationEventSnapshot.capture(
-			ref.event(), ref.clip(), timeline, ref.clip().getId());
-		executeEventEdit(ref, timeline, before, after);
 		validationError = null;
 		bindBuffers(ref);
 	}
 
-	private void applyCameraSegmentPanel(EventRef ref, Timeline timeline) {
+	private void applyCameraSegmentPanel(EventPropertiesRef ref, Timeline timeline) {
 		TimelineEditor editor = BeatBlock.timelineEditor;
 		if (editor == null) {
 			validationError = "时间线编辑器未初始化。";
@@ -840,24 +784,18 @@ public class EventPropertiesPanel {
 					rawParams.put(key, valueOf(buf));
 				}
 			}
-			var result = CameraEventPropertiesEditor.buildSegmentSnapshot(
-				ref.clip().getStartTimeSeconds(),
+			var result = presenter.applyCameraSegment(
+				ref,
+				timeline,
+				editor.getCommandManager(),
 				duration,
 				camSegPathVisibleProxy.get(),
-				currentKind,
-				new HashMap<>(ref.event().getParameters()),
-				rawParams,
-				timeline,
-				ref.clip().getId()
+				rawParams
 			);
-			if (result instanceof CameraEventPropertiesEditor.Result.Err err) {
+			if (result instanceof EventPropertiesPresenter.ApplyResult.Err err) {
 				validationError = err.message();
 				return;
 			}
-			AnimationEventSnapshot after = ((CameraEventPropertiesEditor.Result.Ok) result).snapshot();
-			AnimationEventSnapshot before = AnimationEventSnapshot.capture(
-				ref.event(), ref.clip(), timeline, ref.clip().getId());
-			executeEventEdit(ref, timeline, before, after);
 			validationError = null;
 			bindBuffers(ref);
 		} catch (NumberFormatException ex) {
@@ -865,7 +803,7 @@ public class EventPropertiesPanel {
 		}
 	}
 
-	private void renderCameraKeyframePanel(EventRef ref, Timeline timeline, SelectionState selectionState) {
+	private void renderCameraKeyframePanel(EventPropertiesRef ref, Timeline timeline, SelectionState selectionState) {
 		// 所属片段上下文
 		if (ref.clip() != null) {
 			TimelineEvent seg = CameraTrackFactory.findSegmentHeadEvent(ref.clip());
@@ -915,18 +853,17 @@ public class EventPropertiesPanel {
 		}
 		ImGui.spacing();
 		if (ImGui.button("捕获当前视角##camKfCapture", 160f, 0f)) {
-			MinecraftClient mc = MinecraftClient.getInstance();
-			if (mc != null && mc.gameRenderer != null && mc.gameRenderer.getCamera() != null) {
-				net.minecraft.client.render.Camera camera = mc.gameRenderer.getCamera();
-				net.minecraft.util.math.Vec3d eye = camera.getCameraPos();
-				camXBuffer.set(String.format(Locale.ROOT, "%.6f", eye.x));
-				camYBuffer.set(String.format(Locale.ROOT, "%.6f", eye.y));
-				camZBuffer.set(String.format(Locale.ROOT, "%.6f", eye.z));
-				camYawBuffer.set(String.format(Locale.ROOT, "%.3f", camera.getYaw()));
-				camPitchBuffer.set(String.format(Locale.ROOT, "%.3f", camera.getPitch()));
-				validationError = null;
-			} else {
+			var view = presenter.currentCameraView();
+			if (view.isEmpty()) {
 				validationError = "无可用相机，无法捕获。";
+			} else {
+				EventPropertiesPresenter.CameraViewSample sample = view.get();
+				camXBuffer.set(String.format(Locale.ROOT, "%.6f", sample.x()));
+				camYBuffer.set(String.format(Locale.ROOT, "%.6f", sample.y()));
+				camZBuffer.set(String.format(Locale.ROOT, "%.6f", sample.z()));
+				camYawBuffer.set(String.format(Locale.ROOT, "%.3f", sample.yaw()));
+				camPitchBuffer.set(String.format(Locale.ROOT, "%.3f", sample.pitch()));
+				validationError = null;
 			}
 		}
 		ImGui.sameLine();
@@ -960,7 +897,7 @@ public class EventPropertiesPanel {
 		} catch (NumberFormatException ignored) {}
 	}
 
-	private void applyCameraKeyframe(EventRef ref, Timeline timeline) {
+	private void applyCameraKeyframe(EventPropertiesRef ref, Timeline timeline) {
 		TimelineEditor editor = BeatBlock.timelineEditor;
 		if (editor == null) {
 			validationError = "时间线编辑器未初始化。";
@@ -974,113 +911,27 @@ public class EventPropertiesPanel {
 			double yaw = Double.parseDouble(valueOf(camYawBuffer).trim());
 			double pitch = Double.parseDouble(valueOf(camPitchBuffer).trim());
 			String ease = valueOf(camEaseBuffer).trim();
-			var result = CameraEventPropertiesEditor.buildKeyframeSnapshot(
-				ref.clip().getStartTimeSeconds(),
-				ref.clip().getEndTimeSeconds(),
-				newTime, x, y, z, yaw, pitch, ease,
-				new HashMap<>(ref.event().getParameters())
+			var result = presenter.applyCameraKeyframe(
+				ref,
+				timeline,
+				editor.getCommandManager(),
+				newTime,
+				x,
+				y,
+				z,
+				yaw,
+				pitch,
+				ease
 			);
-			if (result instanceof CameraEventPropertiesEditor.Result.Err err) {
+			if (result instanceof EventPropertiesPresenter.ApplyResult.Err err) {
 				validationError = err.message();
 				return;
 			}
-			AnimationEventSnapshot after = ((CameraEventPropertiesEditor.Result.Ok) result).snapshot();
-			AnimationEventSnapshot before = AnimationEventSnapshot.capture(ref.event(), ref.clip());
-			executeEventEdit(ref, timeline, before, after);
 			validationError = null;
 			bindBuffers(ref);
 		} catch (NumberFormatException ex) {
 			validationError = "时间或坐标格式不正确。";
 		}
-	}
-
-	private void executeEventEdit(
-		EventRef ref,
-		Timeline timeline,
-		AnimationEventSnapshot before,
-		AnimationEventSnapshot after
-	) {
-		TimelineEditor editor = BeatBlock.timelineEditor;
-		if (editor == null) return;
-		TimelineEventEditActions.execute(
-			timeline,
-			editor.getCommandManager(),
-			ref.track().getId(),
-			ref.clip(),
-			ref.event(),
-			before,
-			after
-		);
-	}
-
-	private EventRef resolvePropertiesRef(Timeline timeline, SelectionState selectionState) {
-		EventRef fromEvent = resolveSelectedEventRefFromEvents(timeline, selectionState);
-		if (fromEvent != null) return fromEvent;
-		if (timeline == null || selectionState == null || selectionState.getSelectedClips().isEmpty()) return null;
-		Track cam = timeline.getTrack(Timeline.TRACK_ID_CAMERA);
-		if (cam == null) return null;
-		List<String> clipIds = new ArrayList<>(selectionState.getSelectedClips());
-		clipIds.sort(String::compareTo);
-		for (String clipId : clipIds) {
-			if (clipId == null) continue;
-			Clip c = cam.getClip(clipId);
-			if (c == null) continue;
-			TimelineEvent seg = CameraTrackFactory.findSegmentHeadEvent(c);
-			if (seg != null) return new EventRef(cam, c, seg);
-			return new EventRef(cam, c, null);
-		}
-		return null;
-	}
-
-	private EventRef resolveSelectedEventRefFromEvents(Timeline timeline, SelectionState selectionState) {
-		if (timeline == null || selectionState == null || selectionState.getSelectedEvents().isEmpty()) return null;
-		List<String> selectedIds = new ArrayList<>(selectionState.getSelectedEvents());
-		selectedIds.sort(String::compareTo);
-		for (String eventId : selectedIds) {
-			for (Track track : timeline.getTracks()) {
-				for (Clip clip : track.getClips()) {
-					TimelineEvent event = clip.getEvent(eventId);
-					if (event != null) return new EventRef(track, clip, event);
-				}
-			}
-		}
-		return null;
-	}
-
-	private boolean isTrackLocked(Timeline timeline, TimelineEditor editor, String trackId) {
-		if (editor == null || trackId == null || trackId.isBlank()) return false;
-		int rowIndex = logicalRowForTrackId(timeline, trackId);
-		return rowIndex >= 0 && editor.getTrackListState().isLocked(rowIndex);
-	}
-
-	private int logicalRowForTrackId(Timeline timeline, String trackId) {
-		if (trackId == null || trackId.isBlank()) return -1;
-        switch (trackId) {
-            case Timeline.TRACK_ID_AUDIO -> {
-                return TimelineTrackMeta.ROW_AUDIO_GROUP;
-            }
-            case Timeline.TRACK_ID_ANIMATION_BLOCK -> {
-                return TimelineTrackMeta.ROW_ANIM_BLOCK;
-            }
-            case Timeline.TRACK_ID_ANIMATION_AUTO -> {
-                return TimelineTrackMeta.ROW_ANIM_AUTO;
-            }
-            case Timeline.TRACK_ID_CAMERA -> {
-                return TimelineTrackMeta.ROW_CAMERA;
-            }
-            case Timeline.TRACK_ID_GLOBAL -> {
-                return TimelineTrackMeta.ROW_GLOBAL_EVENT;
-            }
-        }
-        if (timeline != null && Timeline.isBlockAnimationFeatureTrackId(trackId)) {
-			List<TrackDefinition> defs = TrackRegistry.buildBlockAnimationControlTracks(timeline);
-			for (int i = 0; i < defs.size() && i < TimelineTrackMeta.MAX_ANIMATION_SUB_ROWS; i++) {
-				if (trackId.equals(defs.get(i).getKey())) {
-					return TimelineTrackMeta.ROW_ANIM_FEATURES_START + i;
-				}
-			}
-		}
-		return -1;
 	}
 
 	private void renderPresetChannelPreview(String presetId) {
@@ -1099,52 +950,16 @@ public class EventPropertiesPanel {
 		}
 	}
 
-	private List<Option> collectAnimationOptions() {
-		List<Option> options = new ArrayList<>();
-		options.add(new Option("", "未绑定"));
-		if (BeatBlock.blockAnimationEngine == null) return options;
-		List<AnimationDefinition> defs = new ArrayList<>(BeatBlock.blockAnimationEngine.getAnimationLibrary().getAll().values());
-		defs.sort(Comparator.comparing(AnimationDefinition::getName, String.CASE_INSENSITIVE_ORDER));
-		for (AnimationDefinition def : defs) {
-			options.add(new Option(def.getId(), def.getName() + " [" + def.getId() + "]"));
-		}
-		return options;
-	}
-
-	private List<Option> collectActionOptions() {
-		List<Option> options = new ArrayList<>();
-		for (TimelineAnimationActionMode mode : TimelineAnimationActionMode.values()) {
-			String label = switch (mode) {
-				case ANIMATE -> "动画";
-				case PLACE -> "放置";
-				case CLEAR -> "清除";
-				case BUILD -> "建造";
-			};
-			options.add(new Option(mode.name(), label + " [" + mode.name() + "]"));
-		}
-		return options;
-	}
-
-	private List<Option> collectTargetOptions() {
-		List<Option> options = new ArrayList<>();
-		options.add(new Option("", "未绑定"));
-		if (BeatBlock.blockAnimationEngine == null) return options;
-		List<StageObject> objects = new ArrayList<>(BeatBlock.blockAnimationEngine.getStageObjectSystem().getAll());
-		objects.sort(Comparator.comparing(StageObject::getName, String.CASE_INSENSITIVE_ORDER));
-		for (StageObject object : objects) {
-			options.add(new Option(object.getId(), object.getName() + " [" + object.getId() + "]"));
-		}
-		return options;
-	}
-
-	private static int indexOfOption(List<Option> options, String id) {
+	private static int indexOfOption(List<EventPropertiesOption> options, String id) {
 		for (int i = 0; i < options.size(); i++) {
-			if (options.get(i).id().equals(id)) return i;
+			if (options.get(i).id().equals(id)) {
+				return i;
+			}
 		}
 		return 0;
 	}
 
-	private static String[] optionLabels(List<Option> options) {
+	private static String[] optionLabels(List<EventPropertiesOption> options) {
 		String[] labels = new String[options.size()];
 		for (int i = 0; i < options.size(); i++) {
 			labels[i] = options.get(i).label();
@@ -1184,47 +999,6 @@ public class EventPropertiesPanel {
 			if (target.equalsIgnoreCase(values[i])) return i;
 		}
 		return 0;
-	}
-
-	/** 切换镜头类型时，为新类型尚未设置的参数填入默认值（尽量使用当前玩家视角）。 */
-	private static Map<String, Object> buildSegmentDefaultValues(CameraSegmentKind kind) {
-		Map<String, Object> defaults = new HashMap<>();
-		MinecraftClient mc = MinecraftClient.getInstance();
-		double ex = 0, ey = 64, ez = 0;
-		float yaw = 0f, pitch = 0f;
-		if (mc != null && mc.player != null) {
-			net.minecraft.util.math.Vec3d eye = mc.player.getEyePos();
-			ex = eye.x; ey = eye.y; ez = eye.z;
-			yaw = mc.player.getYaw();
-			pitch = mc.player.getPitch();
-		}
-		switch (kind) {
-			case DOLLY -> {
-				defaults.put("startX", ex); defaults.put("startY", ey); defaults.put("startZ", ez);
-				defaults.put("endX", ex); defaults.put("endY", ey); defaults.put("endZ", ez);
-				defaults.put("baseYawDeg", yaw);
-				defaults.put("basePitchDeg", pitch);
-			}
-			case ORBIT -> {
-				defaults.put("targetX", ex); defaults.put("targetY", ey); defaults.put("targetZ", ez);
-				defaults.put("radius", 10.0); defaults.put("height", 4.0);
-				defaults.put("yawStartDeg", 0.0); defaults.put("yawEndDeg", 270.0);
-			}
-			case CRANE -> {
-				defaults.put("startX", ex); defaults.put("startY", ey); defaults.put("startZ", ez);
-				defaults.put("endX", ex); defaults.put("endY", ey + 8.0); defaults.put("endZ", ez);
-				defaults.put("yawDeg", yaw); defaults.put("pitchDeg", pitch);
-			}
-			case SHAKE -> {
-				defaults.put("anchorX", ex); defaults.put("anchorY", ey); defaults.put("anchorZ", ez);
-				defaults.put("yawDeg", yaw); defaults.put("pitchDeg", pitch);
-				defaults.put("distance", 10.0); defaults.put("amplitude", 0.35);
-				defaults.put("frequencyHz", 18.0); defaults.put("beatSync", 1.0);
-				defaults.put("beatsPerPulse", 0.5);
-			}
-			case PATH -> {}
-		}
-		return defaults;
 	}
 
 	private static String valueOf(ImString text) {

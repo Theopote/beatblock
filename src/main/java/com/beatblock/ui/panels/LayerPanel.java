@@ -5,11 +5,9 @@ import com.beatblock.engine.layer.BuildLayer;
 import com.beatblock.engine.layer.BuildLayerManager;
 import com.beatblock.engine.layer.LayerVisibilityState;
 import com.beatblock.selection.BeatBlockSelectionManager;
-import com.beatblock.timeline.command.layer.CreateLayerCommand;
-import com.beatblock.timeline.command.layer.DeleteLayerCommand;
-import com.beatblock.timeline.command.layer.RenameLayerCommand;
-import com.beatblock.timeline.command.layer.ToggleLayerVisibilityCommand;
 import com.beatblock.ui.icons.Icons;
+import com.beatblock.ui.presenter.BuildLayersPresenter;
+import com.beatblock.ui.presenter.PresenterFactories;
 import com.beatblock.ui.imgui.IconButtonStyle;
 import com.beatblock.ui.layout.BeatBlockDockPanelBegin;
 import com.beatblock.ui.layout.BeatBlockDockSpaceLayoutBuilder;
@@ -21,7 +19,6 @@ import imgui.flag.ImGuiWindowFlags;
 import imgui.type.ImBoolean;
 import imgui.type.ImString;
 import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.World;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -50,6 +47,15 @@ public class LayerPanel {
 	private String selectedLayerId;
 	private String pendingDeleteLayerId;
 	private String statusMessage = "";
+	private final BuildLayersPresenter presenter;
+
+	public LayerPanel() {
+		this(PresenterFactories.buildLayersPresenter());
+	}
+
+	LayerPanel(BuildLayersPresenter presenter) {
+		this.presenter = presenter;
+	}
 
 	public void render(ImBoolean pOpen) {
 		if (!pOpen.get()) {
@@ -273,89 +279,59 @@ public class LayerPanel {
 	}
 
 	private void commitLayerRename(BuildLayer layer, BuildLayerManager manager, String rawName) {
-		if (BeatBlock.timelineEditor == null || layer == null || manager == null) return;
-		String trimmed = rawName != null ? rawName.trim() : "";
-		if (trimmed.isEmpty()) {
-			nameBufferFor(layer).set(layer.getName());
-			statusMessage = "图层名称不能为空。";
+		if (layer == null || manager == null) {
 			return;
 		}
-		if (trimmed.equals(layer.getName())) {
-			nameCommitted.put(layer.getId(), trimmed);
-			return;
+		var outcome = presenter.renameLayer(layer.getId(), rawName);
+		if (outcome.committedName() != null) {
+			nameBufferFor(layer).set(outcome.committedName());
+			nameCommitted.put(layer.getId(), outcome.committedName());
 		}
-		if (manager.isNameTaken(trimmed, layer.getId())) {
-			nameBufferFor(layer).set(layer.getName());
-			statusMessage = "名称已被其他图层使用：" + trimmed;
-			return;
-		}
-		var cmd = new RenameLayerCommand(manager, layer.getId(), trimmed);
-		BeatBlock.timelineEditor.getCommandManager().execute(cmd);
-		nameCommitted.put(layer.getId(), trimmed);
-		statusMessage = "已重命名为：" + trimmed;
+		statusMessage = outcome.result().messageOrEmpty();
 	}
 
 	private void createLayerFromSelection() {
-		if (BeatBlock.blockAnimationEngine == null || BeatBlock.timelineEditor == null) {
-			statusMessage = "引擎或时间线编辑器不可用。";
-			return;
-		}
 		var selMgr = BeatBlockSelectionManager.get();
-		List<BlockPos> blocks = new ArrayList<>(selMgr.getSelectedBlocks());
-		if (blocks.isEmpty()) {
-			statusMessage = "请先建立方块选区。";
-			return;
-		}
-		var manager = BeatBlock.blockAnimationEngine.getBuildLayerManager();
-		int claimed = manager.countClaimedBlocks(blocks);
-		if (claimed >= blocks.size()) {
-			statusMessage = "选区内方块均已属于其他图层，无法创建新图层。";
-			return;
-		}
-		String name = newLayerNameBuffer.get() != null ? newLayerNameBuffer.get().trim() : "";
-		var cmd = new CreateLayerCommand(manager, name.isEmpty() ? "layer" : name, blocks);
-		BeatBlock.timelineEditor.getCommandManager().execute(cmd);
-		if (cmd.getCreatedLayer() != null) {
-			BuildLayer created = cmd.getCreatedLayer();
-			selectedLayerId = created.getId();
-			nameCommitted.put(created.getId(), created.getName());
-			statusMessage = "已创建图层：" + created.getName();
-			if (claimed > 0) {
-				statusMessage += String.format(Locale.ROOT, "（已跳过 %d 个已属于其他图层的方块）", claimed);
+		var outcome = presenter.createLayerFromSelection(
+			newLayerNameBuffer.get(),
+			new ArrayList<>(selMgr.getSelectedBlocks())
+		);
+		statusMessage = outcome.result().messageOrEmpty();
+		if (outcome.createdLayerId() != null) {
+			selectedLayerId = outcome.createdLayerId();
+			BuildLayer created = BeatBlock.blockAnimationEngine != null
+				? BeatBlock.blockAnimationEngine.getBuildLayerManager().get(outcome.createdLayerId())
+				: null;
+			if (created != null) {
+				nameCommitted.put(created.getId(), created.getName());
 			}
-			selMgr.removeBlocks(created.getStageObject().getBlocks());
-		} else {
-			statusMessage = "创建图层失败。";
+			if (!outcome.blocksToRemoveFromSelection().isEmpty()) {
+				selMgr.removeBlocks(outcome.blocksToRemoveFromSelection());
+			}
 		}
 	}
 
 	private void toggleVisibility(BuildLayer layer) {
-		if (BeatBlock.timelineEditor == null || BeatBlock.blockAnimationEngine == null) return;
-		World world = BuildLayerManager.currentWorld();
-		if (world == null) {
-			statusMessage = "当前无世界上下文，无法切换可见性。";
+		if (layer == null) {
 			return;
 		}
-		boolean wasVisible = layer.getState() == LayerVisibilityState.FREE_VISIBLE;
-		var cmd = new ToggleLayerVisibilityCommand(
-			BeatBlock.blockAnimationEngine.getBuildLayerManager(),
-			layer.getId()
-		);
-		BeatBlock.timelineEditor.getCommandManager().execute(cmd);
-		statusMessage = wasVisible ? "已隐藏图层（世界方块已清除）" : "已显示图层（方块已恢复）";
+		var outcome = presenter.toggleVisibility(layer.getId());
+		statusMessage = outcome.result().messageOrEmpty();
 	}
 
 	private void deleteLayer(BuildLayer layer) {
-		if (BeatBlock.timelineEditor == null || BeatBlock.blockAnimationEngine == null) return;
-		var cmd = new DeleteLayerCommand(
-			BeatBlock.blockAnimationEngine.getBuildLayerManager(),
-			layer.getId()
-		);
-		BeatBlock.timelineEditor.getCommandManager().execute(cmd);
-		nameEditBuffers.remove(layer.getId());
-		nameCommitted.remove(layer.getId());
-		if (layer.getId().equals(selectedLayerId)) selectedLayerId = null;
-		statusMessage = "已删除图层：" + layer.getName();
+		if (layer == null) {
+			return;
+		}
+		var outcome = presenter.deleteLayer(layer.getId());
+		statusMessage = outcome.result().messageOrEmpty();
+		if (outcome.result().ok()) {
+			nameEditBuffers.remove(layer.getId());
+			nameCommitted.remove(layer.getId());
+			if (layer.getId().equals(selectedLayerId)) {
+				selectedLayerId = null;
+			}
+		}
 	}
 
 	private void pruneNameBuffers(List<BuildLayer> layers) {
