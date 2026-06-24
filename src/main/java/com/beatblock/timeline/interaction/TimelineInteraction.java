@@ -4,12 +4,9 @@ import com.beatblock.BeatBlockClient;
 import com.beatblock.audio.MusicPlayer;
 import com.beatblock.timeline.camera.CameraPathMetadata;
 import com.beatblock.timeline.Clip;
-import com.beatblock.timeline.FeatureEvent;
-import com.beatblock.timeline.FeatureTrack;
 import com.beatblock.timeline.IAudioPlayer;
 import com.beatblock.timeline.Timeline;
 import com.beatblock.timeline.TimelineEditor;
-import com.beatblock.timeline.TimelineEvent;
 import com.beatblock.timeline.TimelineMarker;
 import com.beatblock.timeline.Track;
 import com.beatblock.timeline.editing.ClipDragStateSnapshot;
@@ -21,9 +18,7 @@ import imgui.flag.ImGuiKey;
 import imgui.flag.ImGuiMouseCursor;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 import static com.beatblock.timeline.interaction.TimelineInteractionConstants.CAMERA_EDGE_HIT_PX;
 import static com.beatblock.timeline.interaction.TimelineInteractionConstants.DRAG_THRESHOLD_PX;
@@ -45,23 +40,9 @@ public final class TimelineInteraction implements TimelineInteractionPopupHost {
 	private final List<TimelineInteractionClipboard.ClipboardEvent> clipboardEvents = new ArrayList<>();
 	private final TimelineInteractionPopupState popupState = new TimelineInteractionPopupState();
 
-	// ── 音频片段拖拽快照（DRAG_CLIP 模式使用） ────────────────────────────────
-	/** 拖拽开始时片段的 startTimeSeconds */
-	private double dragClipInitialStart;
-	/** 拖拽开始时片段的 endTimeSeconds */
-	private double dragClipInitialEnd;
-	/** 拖拽开始时鼠标对应的时间轴时间 */
-	private double dragClipInitialMouseTime;
-	/** 其他轨道上需要联动的事件：eventId → 拖拽开始时的 timeSeconds */
-	private final Map<String, Double> dragLinkedEventOriginalTimes = new HashMap<>();
-	/** 拖拽开始时特征轨道快照：key → [{timeSeconds, energy}, ...] */
-	private final Map<String, List<double[]>> dragFeatureEventSnapshot = new HashMap<>();
-	/** 摄像机片段整体拖动：片内事件的原始时间 */
-	private final Map<String, Double> dragCameraClipEventOriginalTimes = new HashMap<>();
 	/** 事件拖动开始时的 timeSeconds */
 	private double dragEventInitialTimeSeconds;
-	/** 片段拖动开始时的快照（用于 Undo） */
-	private ClipDragStateSnapshot dragClipBeforeSnapshot;
+	private TimelineClipDragSession clipDragSession;
 	/** 摄像机片段缩放开始时的快照（用于 Undo） */
 	private ClipDragStateSnapshot resizeClipBeforeSnapshot;
 
@@ -191,20 +172,9 @@ public final class TimelineInteraction implements TimelineInteractionPopupHost {
 				);
 			}
 			if (interactionState.getMode() == InteractionMode.DRAG_CLIP && interactionState.getActiveClipId() != null) {
-				float dx = mx - interactionState.getMouseStartX();
-				float dy = my - interactionState.getMouseStartY();
-				boolean belowThreshold = dx * dx + dy * dy < DRAG_THRESHOLD_PX * DRAG_THRESHOLD_PX;
-				if (belowThreshold) {
-					selectionState.clearClips();
-					selectionState.selectClip(interactionState.getActiveClipId());
-					revertClipDrag(timeline, dragClipBeforeSnapshot);
-				} else {
-					commitClipDrag(timeline, dragClipBeforeSnapshot);
-				}
-				dragLinkedEventOriginalTimes.clear();
-				dragFeatureEventSnapshot.clear();
-				dragCameraClipEventOriginalTimes.clear();
-				dragClipBeforeSnapshot = null;
+				TimelineClipDragCoordinator.finishOnMouseRelease(
+					timeline, timelineEditor, clipDragSession, interactionState, selectionState, mx, my);
+				clipDragSession = null;
 			}
 			if (interactionState.getMode() == InteractionMode.DRAG_EVENT && interactionState.getActiveEventId() != null) {
 				float dx = mx - interactionState.getMouseStartX();
@@ -221,27 +191,7 @@ public final class TimelineInteraction implements TimelineInteractionPopupHost {
 			}
 			if (interactionState.getMode() == InteractionMode.BOX_SELECT
 					&& selectionBox != null && selectionBox.isActive()) {
-				float boxMinX = selectionBox.getMinX();
-				float boxMaxX = selectionBox.getMaxX();
-				float boxMinY = selectionBox.getMinY();
-				float boxMaxY = selectionBox.getMaxY();
-				for (InteractiveTrackSlot slot : build(timeline)) {
-					int logicalRow = slot.rowIndex();
-					if (!layout.isRowVisible(logicalRow)) continue;
-					float rowTopY = layout.getRowScreenY(logicalRow);
-					float rowBotY = rowTopY + layout.getRowHeight(logicalRow);
-					if (rowBotY < boxMinY || rowTopY > boxMaxY) continue;
-					Track track = timeline.getTrack(slot.trackId());
-					if (track == null) continue;
-					for (Clip clip : track.getClips()) {
-						for (TimelineEvent e : clip.getEvents()) {
-							float screenX = layout.contentLeft + viewState.timeToScreen(e.getTimeSeconds());
-							if (screenX >= boxMinX && screenX <= boxMaxX) {
-								selectionState.selectEvent(e.getId());
-							}
-						}
-					}
-				}
+				TimelineBoxSelectHandler.applySelection(timeline, layout, viewState, selectionBox, selectionState);
 			}
 			interactionState.setMode(InteractionMode.NONE);
 			interactionState.clearActive();
@@ -422,69 +372,18 @@ public final class TimelineInteraction implements TimelineInteractionPopupHost {
 			}
 			if (interactionState.getMode() == InteractionMode.DRAG_CLIP
 					&& interactionState.getActiveClipId() != null && interactionState.getActiveTrackId() != null) {
-				if (TimelineInteractiveTrackSlots.isTrackLocked(timeline, trackListState, interactionState.getActiveTrackId())) return;
-				double mouseTime = viewState.screenToTime(mx - layout.contentLeft);
-				double clipDuration = dragClipInitialEnd - dragClipInitialStart;
-				double newStart = DragController.dragClip(timeline, interactionState.getActiveTrackId(),
-					interactionState.getActiveClipId(), mouseTime, dragClipInitialMouseTime,
-					dragClipInitialStart, clipDuration, duration, toolbarState, viewState, interactionState);
-				double actualDelta = newStart - dragClipInitialStart;
-				// 允许片段右移时自动扩展时间线总时长。
-				timeline.setDurationSeconds(Math.max(timeline.getDurationSeconds(), newStart + clipDuration));
-				if (Timeline.TRACK_ID_CAMERA.equals(interactionState.getActiveTrackId())) {
-					Track ct = timeline.getTrack(Timeline.TRACK_ID_CAMERA);
-					Clip cc = ct != null ? ct.getClip(interactionState.getActiveClipId()) : null;
-					if (cc != null) {
-						for (TimelineEvent se : cc.getEvents()) {
-							Double orig = dragCameraClipEventOriginalTimes.get(se.getId());
-							if (orig != null) {
-								se.setTimeSeconds(Math.max(0.0, orig + actualDelta));
-							}
-						}
-					}
-					if (clock != null) {
-						seekClockAndMusic(clock, clock.getCurrentTimeSeconds());
-					}
-					return;
-				}
-				// 联动：将其他轨道上快照的事件按同样 delta 移动
-				for (Track st : timeline.getTracks()) {
-					if (Timeline.TRACK_ID_AUDIO.equals(st.getId())) continue;
-                    boolean dirtied = false;
-					for (Clip sc : st.getClips()) {
-						for (TimelineEvent se : sc.getEvents()) {
-							Double orig = dragLinkedEventOriginalTimes.get(se.getId());
-							if (orig != null) {
-								se.setTimeSeconds(Math.max(0.0, orig + actualDelta));
-								dirtied = true;
-							}
-						}
-					}
-					if (dirtied) timeline.markAnimationEventsDirty(st.getId());
-				}
-				// 联动：特征轨道事件跟随片段移动
-				if (!dragFeatureEventSnapshot.isEmpty()) {
-					double featureMoveStart = dragClipInitialStart;
-					double featureMoveEnd = dragClipInitialEnd;
-					for (Map.Entry<String, FeatureTrack> entry : timeline.getFeatureTracks().entrySet()) {
-						List<double[]> snap = dragFeatureEventSnapshot.get(entry.getKey());
-						if (snap == null) continue;
-						FeatureTrack ft = entry.getValue();
-						ft.clear();
-						for (double[] pair : snap) {
-							double originalTime = pair[0];
-							double shiftedTime = originalTime;
-							if (originalTime >= featureMoveStart && originalTime <= featureMoveEnd) {
-								shiftedTime = Math.max(0.0, originalTime + actualDelta);
-							}
-							ft.addEvent(new FeatureEvent(shiftedTime, (float) pair[1]));
-						}
-					}
-				}
-				// 拖拽期间同步一次音频定位：若播放头已不在任何音频片段内，会在 seek 逻辑中静音/暂停。
-				if (clock != null) {
-					seekClockAndMusic(clock, clock.getCurrentTimeSeconds());
-				}
+				TimelineClipDragCoordinator.applyDuringDrag(
+					timeline,
+					clipDragSession,
+					interactionState,
+					viewState,
+					layout,
+					toolbarState,
+					trackListState,
+					duration,
+					mx,
+					clock != null ? () -> seekClockAndMusic(clock, clock.getCurrentTimeSeconds()) : null
+				);
 				return;
 			}
 			if (interactionState.getMode() == InteractionMode.DRAG_EVENT && interactionState.getActiveEventId() != null
@@ -497,7 +396,7 @@ public final class TimelineInteraction implements TimelineInteractionPopupHost {
 				return;
 			}
 			if (interactionState.getMode() == InteractionMode.BOX_SELECT && selectionBox != null) {
-				selectionBox.setEnd(mx, my);
+				TimelineBoxSelectHandler.updateEnd(selectionBox, mx, my);
 				return;
 			}
 			return;
@@ -564,82 +463,19 @@ public final class TimelineInteraction implements TimelineInteractionPopupHost {
 				HitResult hit = HitTestSystem.hitTestTrackContent(timeline, slot.trackId(), mx, my,
 					layout.contentLeft, rowScreenY, rowH, layout.contentWidth, viewState);
 				if (hit.isEmpty()) continue;
-				// 音频轨上的纯片段命中 → 进入 DRAG_CLIP 模式（可左右拖动片段并联动其他轨道事件）
+				// 音频/摄像机轨上的纯片段命中 → DRAG_CLIP
 				if (hit.getHitType() == HitType.CLIP && hit.getEventId() == null
-						&& Timeline.TRACK_ID_AUDIO.equals(hit.getTrackId())) {
-					Track audioTrack = timeline.getTrack(Timeline.TRACK_ID_AUDIO);
-					Clip hitClip = audioTrack != null ? audioTrack.getClip(hit.getClipId()) : null;
+						&& (Timeline.TRACK_ID_AUDIO.equals(hit.getTrackId())
+						|| Timeline.TRACK_ID_CAMERA.equals(hit.getTrackId()))) {
+					Track hitTrack = timeline.getTrack(hit.getTrackId());
+					Clip hitClip = hitTrack != null ? hitTrack.getClip(hit.getClipId()) : null;
 					if (hitClip != null) {
-						interactionState.setMode(InteractionMode.DRAG_CLIP);
-						interactionState.setMouseStart(mx, my);
-						interactionState.setActiveClipId(hit.getClipId());
-						interactionState.setActiveTrackId(hit.getTrackId());
-						dragClipInitialStart = hitClip.getStartTimeSeconds();
-						dragClipInitialEnd = hitClip.getEndTimeSeconds();
-						dragClipInitialMouseTime = viewState.screenToTime(mx - layout.contentLeft);
-						// 快照其他轨道上位于该片段时间范围内的所有事件的原始时间
-						dragLinkedEventOriginalTimes.clear();
-						dragFeatureEventSnapshot.clear();
-						dragCameraClipEventOriginalTimes.clear();
-						double cs = dragClipInitialStart;
-						double ce = dragClipInitialEnd;
-						for (Track st : timeline.getTracks()) {
-							if (Timeline.TRACK_ID_AUDIO.equals(st.getId())) continue;
-                            for (Clip sc : st.getClips()) {
-								for (TimelineEvent se : sc.getEvents()) {
-									double et = se.getTimeSeconds();
-									if (et >= cs && et <= ce) {
-										dragLinkedEventOriginalTimes.put(se.getId(), et);
-									}
-								}
-							}
+						clipDragSession = TimelineClipDragCoordinator.tryBeginFromClipHit(
+							timeline, hit, hitClip, interactionState, viewState, layout, mx, my);
+						if (clipDragSession != null) {
+							if (!ctrl) selectionState.clearClips();
+							selectionState.selectClip(hit.getClipId());
 						}
-						// 快照特征轨道事件（第一次拖拽时登记）
-						for (Map.Entry<String, FeatureTrack> entry : timeline.getFeatureTracks().entrySet()) {
-							List<FeatureEvent> evts = entry.getValue().getEvents();
-							List<double[]> snap = new ArrayList<>(evts.size());
-							for (FeatureEvent fe : evts) snap.add(new double[]{fe.getTimeSeconds(), fe.getEnergy()});
-							dragFeatureEventSnapshot.put(entry.getKey(), snap);
-						}
-						dragClipBeforeSnapshot = ClipDragStateSnapshot.capture(
-							timeline,
-							hit.getTrackId(),
-							hit.getClipId(),
-							dragLinkedEventOriginalTimes,
-							dragFeatureEventSnapshot
-						);
-						if (!ctrl) selectionState.clearClips();
-						selectionState.selectClip(hit.getClipId());
-					}
-					return;
-				}
-				if (hit.getHitType() == HitType.CLIP && hit.getEventId() == null
-						&& Timeline.TRACK_ID_CAMERA.equals(hit.getTrackId())) {
-					Track cameraTrack = timeline.getTrack(Timeline.TRACK_ID_CAMERA);
-					Clip hitClip = cameraTrack != null ? cameraTrack.getClip(hit.getClipId()) : null;
-					if (hitClip != null) {
-						interactionState.setMode(InteractionMode.DRAG_CLIP);
-						interactionState.setMouseStart(mx, my);
-						interactionState.setActiveClipId(hit.getClipId());
-						interactionState.setActiveTrackId(hit.getTrackId());
-						dragClipInitialStart = hitClip.getStartTimeSeconds();
-						dragClipInitialEnd = hitClip.getEndTimeSeconds();
-						dragClipInitialMouseTime = viewState.screenToTime(mx - layout.contentLeft);
-						dragLinkedEventOriginalTimes.clear();
-						dragFeatureEventSnapshot.clear();
-						dragCameraClipEventOriginalTimes.clear();
-						for (TimelineEvent se : hitClip.getEvents()) {
-							dragCameraClipEventOriginalTimes.put(se.getId(), se.getTimeSeconds());
-						}
-						dragClipBeforeSnapshot = ClipDragStateSnapshot.capture(
-							timeline,
-							hit.getTrackId(),
-							hit.getClipId(),
-							dragCameraClipEventOriginalTimes,
-							Map.of()
-						);
-						if (!ctrl) selectionState.clearClips();
-						selectionState.selectClip(hit.getClipId());
 					}
 					return;
 				}
@@ -674,18 +510,10 @@ public final class TimelineInteraction implements TimelineInteractionPopupHost {
 			if (!layout.contentContains(mx, my)) {
 				return;
 			}
-			selectionState.clearEvents();
-			selectionState.clearClips();
-			if (selectionBox != null) {
-				selectionBox.setStart(mx, my);
-				selectionBox.setEnd(mx, my);
-				selectionBox.setActive(true);
-			}
-			interactionState.setMode(InteractionMode.BOX_SELECT);
-			interactionState.setMouseStart(mx, my);
+			TimelineBoxSelectHandler.begin(selectionState, selectionBox, interactionState, mx, my);
 		}
 		if (interactionState.getMode() == InteractionMode.BOX_SELECT && ImGui.isMouseDown(0) && selectionBox != null) {
-			selectionBox.setEnd(mx, my);
+			TimelineBoxSelectHandler.updateEnd(selectionBox, mx, my);
 		}
 	}
 
@@ -936,13 +764,5 @@ public final class TimelineInteraction implements TimelineInteractionPopupHost {
 
 	private void revertEventDrag(Timeline timeline, InteractionState interactionState) {
 		TimelineDragCommitSupport.revertEventDrag(timeline, interactionState, dragEventInitialTimeSeconds);
-	}
-
-	private void commitClipDrag(Timeline timeline, ClipDragStateSnapshot before) {
-		TimelineDragCommitSupport.commitClipDrag(timeline, timelineEditor, before);
-	}
-
-	private void revertClipDrag(Timeline timeline, ClipDragStateSnapshot before) {
-		TimelineDragCommitSupport.revertClipDrag(timeline, before);
 	}
 }

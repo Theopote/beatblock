@@ -416,7 +416,7 @@ void testTick() {
 | 类名 | 当前行数 | 状态 | 优化建议 |
 |------|----------|------|----------|
 | `BeatBlockSelectionManager` | ~720 → ~568 | ✅ Phase 3 | `SelectionToolRegistry` + `tools/*` 点击分发；`collect/*` + `SelectionFeedback`；门面 `get()` 不变 |
-| `TimelineInteraction` | ~1816 → ~952 | 🔄 Phase 2 | Phase 1 helper 拆出 + Phase 2：`TimelineInteractionPopups`/`PopupState`/`PopupHost`、摄像机片段缩放 `TimelineCameraClipResizeHandler`；主类保留 update 状态机 |
+| `TimelineInteraction` | ~1816 → ~759 | 🔄 Phase 3 | Phase 1–2 helper + Phase 3：`TimelineClipDragCoordinator`/`TimelineClipDragSession`、`TimelineBoxSelectHandler`；主类保留 update 状态机 |
 | `TimelineRenderer` | ~1707 | ⏸ 待拆 | 按 ruler / track / clip / drag-drop 拆 renderer |
 | `MusicPlayer` | ~787 → ~470 | ✅ 已拆 | `playback/StreamMusicBackend`、`OpenAlMusicBackend`、`JavaSoundMixerSupport`；Clip 仍留门面 |
 | `BlockAnimationEngine` | ~397 | ✅ 已门面化 | 子系统已抽出（`BuildSequencer`、`AnimationPlayer` 等），暂无需再拆 |
