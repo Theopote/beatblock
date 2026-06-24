@@ -5,7 +5,6 @@ import com.beatblock.runtime.BeatBlockContext;
 import com.beatblock.audio.assets.AudioAsset;
 import com.beatblock.audio.assets.AudioAssetManager;
 import com.beatblock.timeline.*;
-import com.beatblock.timeline.generation.TimelineDraftWriter;
 import com.beatblock.timeline.editor.SelectionBox;
 import com.beatblock.timeline.editor.InteractionState;
 import com.beatblock.timeline.editor.SelectionState;
@@ -15,14 +14,11 @@ import imgui.ImGui;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Supplier;
@@ -36,11 +32,6 @@ public final class TimelineRenderer implements TimelineAudioDropHost {
 	public static final int PLAYHEAD_COLOR = 0xFF_FF_66_66;
 	private static final int SELECTED_BORDER_COLOR = 0xFF_FF_FF_00;
 	private static final int ALIGNMENT_GUIDE_COLOR = 0xAA_FF_CC_44;
-	private static final int FREQ_MID_COLOR = 0xFF_57_C4_A0;
-	private static final int FREQ_HIGH_COLOR = 0xFF_27_A0_EF;
-	private static final int ANIMATION_CLIP_DEFAULT_COLOR = 0xFF_FF_CC_66;
-	private static final int AUDIO_CLIP_FILL_COLOR = 0xAA_57_C4_A0;
-	private static final int AUDIO_CLIP_BORDER_COLOR = 0xFF_7F_D9_BB;
 	/** 轨道槽交替背景（深色），使轨道行更明显 */
 	private static final int ROW_BG_EVEN = 0xFF_28_28_2A;
 	private static final int ROW_BG_ODD = 0xFF_1E_1E_20;
@@ -60,6 +51,8 @@ public final class TimelineRenderer implements TimelineAudioDropHost {
 	private final EventRenderer eventRenderer = new EventRenderer();
 	private final WaveformRenderer waveformRenderer = new WaveformRenderer();
 	private final TimelineDenseFeatureApplier denseFeatureApplier = new TimelineDenseFeatureApplier();
+	private final TimelineRowContentRenderer rowContentRenderer =
+		new TimelineRowContentRenderer(eventRenderer, waveformRenderer);
 
 	/**
 	 * 本帧计算出的音频子轨定义列表（由 TrackRegistry.buildAudioSubTracks 生成）。
@@ -212,7 +205,9 @@ public final class TimelineRenderer implements TimelineAudioDropHost {
 			trackRenderer.drawTrackLabel(rowY, rowHeight, i, displayName, isGroup, trackListState,
 				layout.trackHeaderLeft, layout.trackHeaderWidth, canControlPlayback, rowTypeLabel,
 				timeline, clock);
-			drawRowContent(i, rowY, timeline, viewState, selectionState, layout, trackListState);
+			rowContentRenderer.drawRowContent(
+				this, i, rowY, timeline, viewState, selectionState, layout, trackListState,
+				currentAudioSubTracks, currentAnimationSubTracks);
 		}
 
 		// 音频组拖放高亮（在所有行内容绘制后叠加边框）
@@ -363,243 +358,6 @@ public final class TimelineRenderer implements TimelineAudioDropHost {
 		}
 	}
 
-	private void drawRowContent(int rowIndex, float rowY, Timeline timeline, TimelineViewState viewState,
-	                             SelectionState selectionState, TimelineLayout layout,
-	                             TimelineTrackListState trackListState) {
-		float rowHeight = layout.getRowHeight(rowIndex);
-		float rowScreenY = layout.getRowScreenY(rowIndex);
-
-		// 可见性只控制内容区（波形/事件），不隐藏左侧轨道头，便于再次点击恢复显示。
-		if (trackListState != null && !trackListState.isVisible(rowIndex)) {
-			return;
-		}
-
-		// ── 音频组标题行 ──────────────────────────────────────────────────────
-		if (rowIndex == TimelineTrackMeta.ROW_AUDIO_GROUP) {
-			TimelineAudioDropHandler.renderAudioGroupDropTarget(this, rowIndex, rowHeight, timeline, layout, trackListState);
-			ImGui.pushClipRect(layout.contentLeft, rowScreenY, layout.contentLeft + layout.contentWidth,
-				rowScreenY + rowHeight, true);
-			renderAudioRootTrackClips(rowY, rowHeight, timeline, layout, viewState, selectionState);
-			ImGui.popClipRect();
-			return;
-		}
-
-		// ── 动态音频子轨（TrackRegistry 驱动） ───────────────────────────────
-		if (TimelineTrackMeta.isAudioSubRow(rowIndex)) {
-			int slot = TimelineTrackMeta.audioSubRowSlot(rowIndex);
-			if (slot < 0 || slot >= currentAudioSubTracks.size()) return;
-			TrackDefinition td = currentAudioSubTracks.get(slot);
-			TimelineAudioDropHandler.renderAudioGroupDropTarget(this, rowIndex, rowHeight, timeline, layout, trackListState);
-			ImGui.pushClipRect(layout.contentLeft, rowScreenY, layout.contentLeft + layout.contentWidth,
-				rowScreenY + rowHeight, true);
-			renderAudioSubTrack(td, rowY, rowHeight, timeline, layout, viewState);
-			ImGui.popClipRect();
-			return;
-		}
-		if (TimelineTrackMeta.isAnimationFeatureSubRow(rowIndex)) {
-			int slot = TimelineTrackMeta.animationFeatureSubRowSlot(rowIndex);
-			if (slot < 0 || slot >= currentAnimationSubTracks.size()) {
-				return;
-			}
-			ImGui.pushClipRect(layout.contentLeft, rowScreenY, layout.contentLeft + layout.contentWidth,
-				rowScreenY + rowHeight, true);
-			TrackDefinition td = currentAnimationSubTracks.get(slot);
-			eventRenderer.renderAnimationEventBlocks(
-				rowY,
-				timeline.getAnimationEvents(td.getKey()),
-				layout,
-				viewState,
-				selectionState,
-				td.hasCustomColor() ? td.getColor() : ANIMATION_CLIP_DEFAULT_COLOR
-			);
-			ImGui.popClipRect();
-			return;
-		}
-
-		// ── 固定非音频轨道 ────────────────────────────────────────────────────
-		ImGui.pushClipRect(layout.contentLeft, rowScreenY, layout.contentLeft + layout.contentWidth,
-			rowScreenY + rowHeight, true);
-		if (rowIndex == TimelineTrackMeta.ROW_ANIM_BLOCK) {
-			TimelineAudioDropHandler.renderAnimationTrackDropTarget(this, rowIndex, rowHeight, timeline, layout);
-			eventRenderer.renderAnimationEventBlocks(rowY, timeline.getBlockAnimationEvents(), layout, viewState, selectionState);
-		} else if (rowIndex == TimelineTrackMeta.ROW_ANIM_AUTO) {
-			TimelineAudioDropHandler.renderAnimationTrackDropTarget(this, rowIndex, rowHeight, timeline, layout);
-			eventRenderer.renderAnimationEventBlocks(rowY, timeline.getAutoAnimationEvents(), layout, viewState, selectionState);
-		} else if (rowIndex == TimelineTrackMeta.ROW_BUILD_REVERSE) {
-			renderBuildReverseTrackDropTarget(rowY, rowHeight, timeline, layout, viewState);
-			eventRenderer.renderAnimationEventBlocks(
-				rowY,
-				timeline.getBuildReverseEvents(),
-				layout,
-				viewState,
-				selectionState,
-				0xFF_66_CC_88
-			);
-		} else if (rowIndex == TimelineTrackMeta.ROW_CAMERA) {
-			eventRenderer.renderCameraTrackRow(rowY, timeline, layout, viewState, selectionState);
-		} else if (rowIndex == TimelineTrackMeta.ROW_GLOBAL_EVENT) {
-			eventRenderer.renderGlobalEventRow(rowY, timeline.getGlobalEvents(), layout, viewState);
-		}
-		ImGui.popClipRect();
-	}
-
-	/**
-	 * 根据 {@link TrackDefinition} 渲染单条音频子轨内容（波形 / 冲击柱）。
-	 */
-	private void renderAudioSubTrack(TrackDefinition td, float rowY, float rowHeight,
-	                                 Timeline timeline, TimelineLayout layout, TimelineViewState viewState) {
-		switch (td.getVisualType()) {
-			case WAVEFORM -> {
-				String key = td.getKey();
-				String stemKey = key != null && key.startsWith("stem_wf_")
-					? key.substring("stem_wf_".length())
-					: null;
-				int color = td.hasCustomColor() ? td.getColor() : 0xFF_66_AA_FF;
-				Track audioTrack = timeline.getTrack(Timeline.TRACK_ID_AUDIO);
-				boolean renderedSegment = false;
-				if (audioTrack != null && !audioTrack.getClips().isEmpty()) {
-					for (Clip clip : audioTrack.getClips()) {
-						if (clip == null) continue;
-						WaveformData clipWaveform = resolveClipWaveformData(timeline, clip, stemKey);
-						if (clipWaveform == null) continue;
-						waveformRenderer.renderWaveformSegment(
-							rowY,
-							rowHeight,
-							clipWaveform,
-							color,
-							timeline,
-							layout,
-							viewState,
-							clip.getStartTimeSeconds(),
-							clip.getEndTimeSeconds()
-						);
-						renderedSegment = true;
-					}
-				}
-				if (!renderedSegment) {
-					if (stemKey != null) {
-						WaveformData stemWf = timeline.getStemWaveform(stemKey);
-						waveformRenderer.renderStemWaveform(rowY, rowHeight, stemWf, color, timeline, layout, viewState);
-					} else {
-						waveformRenderer.render(rowY, rowHeight, timeline, layout, viewState);
-					}
-				} else {
-					ImGui.setCursorPosY(rowY + rowHeight);
-				}
-			}
-			case IMPULSE -> {
-				int color = td.hasCustomColor() ? td.getColor() : FREQ_MID_COLOR;
-				List<FeatureEvent> events = timeline.getFeatureEvents(td.getKey());
-				eventRenderer.renderFeatureBars(rowY, rowHeight, events, layout, viewState, color,
-					timeline.getBpm(), 0.20f, 0.9f);
-			}
-		}
-	}
-
-	private WaveformData resolveClipWaveformData(Timeline timeline, Clip clip, String stemKey) {
-		if (timeline == null || clip == null) return null;
-		Object clipPathObj = timeline.getMetadata("clipAudioPath_" + clip.getId());
-		if (clipPathObj == null) return null;
-		String clipAudioKey = TimelineAudioFeatureFillSupport.normalizeAudioPath(clipPathObj.toString());
-		if (clipAudioKey == null) return null;
-
-		AudioAsset asset = TimelineAudioFeatureFillSupport.findAssetByAudioKey(clipAudioKey);
-		if (asset == null || asset.getBeatmap() == null) return null;
-		com.beatblock.audio.beatmap.Beatmap beatmap = asset.getBeatmap();
-		com.beatblock.audio.beatmap.WaveformPreview preview;
-		if (stemKey == null) {
-			preview = beatmap.waveformPreview;
-		} else {
-			preview = beatmap.stemWaveforms.get(stemKey);
-		}
-		if (preview == null || preview.data() == null || preview.data().length == 0) return null;
-
-		float[] peaks = preview.data().clone();
-		float max = 0f;
-		for (float p : peaks) if (p > max) max = p;
-		if (max > 1e-6f && max != 1f) {
-			for (int i = 0; i < peaks.length; i++) peaks[i] /= max;
-		}
-		double duration = TimelineAudioDropHandler.resolveAssetDurationSeconds(asset, timeline);
-		int sampleRate = beatmap.meta != null ? beatmap.meta.sampleRate() : 44100;
-		return new WaveformData(peaks, duration, sampleRate);
-	}
-
-	/**
-	 * 在顶部音频组轨道渲染可交互的音频片段条（来自 Timeline.TRACK_ID_AUDIO 的 Clip）。
-	 */
-	private void renderAudioRootTrackClips(
-		float rowY,
-		float rowHeight,
-		Timeline timeline,
-		TimelineLayout layout,
-		TimelineViewState viewState,
-		SelectionState selectionState
-	) {
-		if (timeline == null || layout == null || viewState == null) return;
-		Track audioTrack = timeline.getTrack(Timeline.TRACK_ID_AUDIO);
-		if (audioTrack == null || audioTrack.getClips().isEmpty()) return;
-
-		ImGui.setCursorPosY(rowY);
-		float baseX = layout.contentLeft;
-		float baseY = ImGui.getCursorScreenPosY();
-		double vs = viewState.getViewStartTimeSeconds();
-		double ve = viewState.getViewEndTimeSeconds();
-
-		for (Clip clip : audioTrack.getClips()) {
-			if (clip == null) continue;
-			double start = clip.getStartTimeSeconds();
-			double end = clip.getEndTimeSeconds();
-			if (end < vs || start > ve) continue;
-
-			float x0 = baseX + viewState.timeToScreen(start);
-			float x1 = baseX + viewState.timeToScreen(end);
-			if (x1 < layout.contentLeft || x0 > layout.contentLeft + layout.contentWidth) continue;
-			x0 = Math.max(x0, layout.contentLeft);
-			x1 = Math.min(x1, layout.contentLeft + layout.contentWidth);
-			if (x1 <= x0) continue;
-
-			float y0 = baseY + 2f;
-			float y1 = baseY + Math.max(6f, rowHeight - 2f);
-			ImGui.getWindowDrawList().addRectFilled(x0, y0, x1, y1, AUDIO_CLIP_FILL_COLOR, 3f);
-			ImGui.getWindowDrawList().addRect(x0, y0, x1, y1, AUDIO_CLIP_BORDER_COLOR, 3f, 0, 1.2f);
-
-			if (selectionState != null && selectionState.isClipSelected(clip.getId())) {
-				ImGui.getWindowDrawList().addRect(x0 - 1f, y0 - 1f, x1 + 1f, y1 + 1f, SELECTED_BORDER_COLOR, 3f, 0, 2f);
-			}
-
-			// 在片段条上显示音频文件名（仅当宽度足够时）
-			Object labelObj = timeline.getMetadata("clipLabel_" + clip.getId());
-			if (labelObj != null && x1 - x0 > 16f) {
-				float textY = y0 + Math.max(2f, (y1 - y0 - 13f) / 2f);
-				float maxTextWidth = Math.max(0f, x1 - x0 - 10f);
-				String label = fitLabelWithEllipsis(labelObj.toString(), maxTextWidth);
-				if (!label.isEmpty()) {
-					ImGui.getWindowDrawList().addText(x0 + 5f, textY, 0xFF_FF_FF_BB, label);
-				}
-			}
-		}
-
-
-		ImGui.setCursorPosY(rowY + rowHeight);
-	}
-
-	/** 将文本裁剪到指定宽度，超出时追加省略号。 */
-	private static String fitLabelWithEllipsis(String raw, float maxWidth) {
-		if (raw == null || raw.isBlank() || maxWidth <= 4f) return "";
-		if (ImGui.calcTextSize(raw).x <= maxWidth) return raw;
-		final String ellipsis = "...";
-		float ellipsisW = ImGui.calcTextSize(ellipsis).x;
-		if (ellipsisW >= maxWidth) return "";
-		int keep = raw.length();
-		while (keep > 0) {
-			String candidate = raw.substring(0, keep) + ellipsis;
-			if (ImGui.calcTextSize(candidate).x <= maxWidth) return candidate;
-			keep--;
-		}
-		return "";
-	}
-
 	/**
 	 * 解析行的显示名称：音频子轨优先使用 TrackDefinition.displayName，
 	 * 其次是用户自定义名，最后是 TimelineTrackMeta 默认名。
@@ -720,37 +478,6 @@ public final class TimelineRenderer implements TimelineAudioDropHost {
 	 */
 	private boolean isPlaybackControlRow(int rowIndex) {
 		return TimelineStemMuteSync.isPlayableAudioControlRow(rowIndex, currentAudioSubTracks);
-	}
-
-	private void renderBuildReverseTrackDropTarget(
-		float rowY,
-		float rowHeight,
-		Timeline timeline,
-		TimelineLayout layout,
-		TimelineViewState viewState
-	) {
-		float screenY = layout.getRowScreenY(TimelineTrackMeta.ROW_BUILD_REVERSE);
-		if (screenY < 0) return;
-		ImGui.setCursorScreenPos(layout.contentLeft, screenY);
-		ImGui.invisibleButton("##BuildReverseDropTarget", layout.contentWidth, rowHeight);
-		if (ImGui.beginDragDropTarget()) {
-			byte[] payload = ImGui.acceptDragDropPayload("BB_BUILD_LAYER_ID");
-			if (payload != null && ctx().blockAnimationEngine() != null && ctx().timelineEditor() != null) {
-				String layerId = new String(payload, StandardCharsets.UTF_8).trim();
-				double dropTime = viewState.screenToTime(ImGui.getMousePosX() - layout.contentLeft);
-				dropTime = Math.max(0, dropTime);
-				var cmd = new com.beatblock.timeline.command.layer.BindLayerToTrackCommand(
-					timeline,
-					ctx().blockAnimationEngine().getBuildLayerManager(),
-					ctx().timelineEditor().getCommandManager(),
-					layerId,
-					dropTime,
-					com.beatblock.timeline.command.layer.BindLayerToTrackCommand.DEFAULT_CLIP_DURATION_SECONDS
-				);
-				ctx().timelineEditor().getCommandManager().execute(cmd);
-			}
-			ImGui.endDragDropTarget();
-		}
 	}
 
 	@Override

@@ -417,7 +417,7 @@ void testTick() {
 |------|----------|------|----------|
 | `BeatBlockSelectionManager` | ~720 → ~568 | ✅ Phase 3 | `SelectionToolRegistry` + `tools/*` 点击分发；`collect/*` + `SelectionFeedback`；门面 `get()` 不变 |
 | `TimelineInteraction` | ~1816 → ~724 | ✅ Phase 4 | Phase 1–4 helper 拆出；主类保留 update 状态机 |
-| `TimelineRenderer` | ~1897 → ~848 | 🔄 R4 | R1–R4 helper 拆出；待拆行内容渲染 R5 |
+| `TimelineRenderer` | ~1897 → ~605 | ✅ R5 | R1–R5 全部拆出；门面保留 renderTrackArea/renderRulerRow 编排 |
 | `MusicPlayer` | ~787 → ~470 | ✅ 已拆 | `playback/StreamMusicBackend`、`OpenAlMusicBackend`、`JavaSoundMixerSupport`；Clip 仍留门面 |
 | `BlockAnimationEngine` | ~397 | ✅ 已门面化 | 子系统已抽出（`BuildSequencer`、`AnimationPlayer` 等），暂无需再拆 |
 | `TimelineEditor` | ~384 | ✅ 已协调层 | 交互/渲染已委托 `TimelineInteraction` / `TimelineRenderer`，本身不必再动 |
