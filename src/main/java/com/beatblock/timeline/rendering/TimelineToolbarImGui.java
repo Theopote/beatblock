@@ -5,6 +5,9 @@ import imgui.ImGui;
 
 final class TimelineToolbarImGui {
 
+	static final float ITEM_SPACING = 4f;
+	static final float GROUP_SPACING = 8f;
+
 	private TimelineToolbarImGui() {}
 
 	static float comboWidthForLabels(String[] labels) {
@@ -23,5 +26,28 @@ final class TimelineToolbarImGui {
 		} else {
 			ImGui.textColored(0.95f, 0.80f, 0.42f, state.alpha(), state.message());
 		}
+	}
+
+	static void nextItemInGroup() {
+		ImGui.sameLine(0f, ITEM_SPACING);
+	}
+
+	static void nextGroup() {
+		ImGui.sameLine(0f, GROUP_SPACING);
+	}
+
+	static void nextGroupOrWrap(float estimatedNextGroupWidth) {
+		float threshold = estimatedNextGroupWidth > 0 ? estimatedNextGroupWidth : 80f;
+		ImGui.sameLine(0f, GROUP_SPACING);
+		if (ImGui.getContentRegionAvailX() < threshold) {
+			ImGui.newLine();
+		}
+	}
+
+	static String hoveredTooltip(String current, String text) {
+		if (current == null && ImGui.isItemHovered()) {
+			return text;
+		}
+		return current;
 	}
 }
