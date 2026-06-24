@@ -1,11 +1,14 @@
 package com.beatblock.ui.presenter;
 
 import com.beatblock.BeatBlock;
+import com.beatblock.client.BeatBlockClientDriver;
 import com.beatblock.engine.layer.BuildLayerManager;
 import com.beatblock.selection.BeatBlockSelectionManager;
 import com.beatblock.timeline.Timeline;
 import com.beatblock.timeline.TimelineEditor;
 import com.beatblock.timeline.command.CommandManager;
+import net.minecraft.client.MinecraftClient;
+import net.minecraft.util.math.Vec3d;
 
 import java.util.function.Supplier;
 
@@ -65,5 +68,46 @@ public final class PresenterFactories {
 				: null,
 			() -> BeatBlock.audioLoader
 		);
+	}
+
+	public static TimelineTransportPresenter timelineTransportPresenter() {
+		return new TimelineTransportPresenter(
+			() -> BeatBlock.timelineEditor,
+			() -> BeatBlock.timeline,
+			() -> BeatBlock.musicPlayer,
+			BeatBlock::getActiveAudioPlayer,
+			new TimelineTransportPresenter.TimelineDriveControl() {
+				@Override
+				public boolean isDriving() {
+					return BeatBlockClientDriver.isDriving();
+				}
+
+				@Override
+				public void startDriving() {
+					BeatBlockClientDriver.startDriving();
+				}
+
+				@Override
+				public void stopDriving() {
+					BeatBlockClientDriver.stopDriving();
+				}
+			}
+		);
+	}
+
+	public static TimelineToolbarActionsPresenter timelineToolbarActionsPresenter() {
+		return new TimelineToolbarActionsPresenter(
+			() -> BeatBlock.timeline,
+			() -> BeatBlock.timelineEditor,
+			PresenterFactories::currentCameraPositionOrZero
+		);
+	}
+
+	private static Vec3d currentCameraPositionOrZero() {
+		MinecraftClient client = MinecraftClient.getInstance();
+		if (client != null && client.gameRenderer != null && client.gameRenderer.getCamera() != null) {
+			return client.gameRenderer.getCamera().getCameraPos();
+		}
+		return Vec3d.ZERO;
 	}
 }

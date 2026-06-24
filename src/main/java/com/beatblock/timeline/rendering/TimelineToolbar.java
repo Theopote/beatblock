@@ -1,9 +1,6 @@
 package com.beatblock.timeline.rendering;
 
 import com.beatblock.BeatBlock;
-import com.beatblock.automap.AutoMapConfig;
-import com.beatblock.automap.AutoMapGenerator;
-import com.beatblock.client.BeatBlockClientDriver;
 import com.beatblock.timeline.binding.AnimationBindingEngine;
 import com.beatblock.timeline.binding.AnimationBindingRule;
 import com.beatblock.timeline.binding.SpatialDispatchMode;
@@ -15,8 +12,6 @@ import com.beatblock.timeline.TimelineEditor;
 import com.beatblock.timeline.TimelineEvent;
 import com.beatblock.timeline.TimelineMarker;
 import com.beatblock.timeline.Track;
-import com.beatblock.timeline.generation.StepSequenceBaker;
-import com.beatblock.timeline.util.MusicTimeFormatter;
 import com.beatblock.engine.AnimationDefinition;
 import com.beatblock.engine.StageObject;
 import com.google.gson.Gson;
@@ -25,12 +20,14 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.beatblock.ui.icons.Icons;
 import com.beatblock.ui.imgui.IconButtonStyle;
+import com.beatblock.ui.presenter.PresenterFactories;
+import com.beatblock.ui.presenter.TimelineToolbarActionsPresenter;
+import com.beatblock.ui.presenter.TimelineToolbarViewPresenter;
+import com.beatblock.ui.presenter.TimelineTransportPresenter;
 import imgui.ImGui;
 import imgui.type.ImInt;
 import imgui.type.ImString;
 import net.fabricmc.loader.api.FabricLoader;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.util.math.Vec3d;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -87,12 +84,6 @@ public final class TimelineToolbar {
 	private static final String TOOLTIP_BINDING_EDITOR = "编辑特征绑定规则：来源特征、动作、目标对象、阈值和冷却";
 	private static final String TOOLTIP_BINDING_TEMPLATE = "规则模板：可覆盖（Replace）或合并（Append）到当前规则集";
 
-	/** Zoom 预设：显示名与对应的缩放倍数（相对基准 1x） */
-	private static final String[] ZOOM_PRESET_LABELS = { "0.25x", "0.5x", "1x", "2x", "3x", "4x" };
-	private static final float ZOOM_BASE = 10f; // 1x 对应的像素/秒
-	private static final float[] ZOOM_PRESET_VALUES = { 0.25f * ZOOM_BASE, 0.5f * ZOOM_BASE, ZOOM_BASE, 2f * ZOOM_BASE, 3f * ZOOM_BASE, 4f * ZOOM_BASE };
-	private static final String[] SPEED_LABELS = { "0.5x", "0.75x", "1x", "1.25x", "1.5x", "2x" };
-	private static final double[] SPEED_VALUES = { 0.5, 0.75, 1.0, 1.25, 1.5, 2.0 };
 	private static final String[] DEMUCS_PRESET_LABELS = { "Drive", "Balanced", "Detail" };
 	private static final String[] DEMUCS_PRESET_VALUES = { "drive", "balanced", "detail" };
 	private static final String[] CLIP_GENERATION_MODE_LABELS = { "Mixed", "Trigger", "Sustain" };
@@ -132,6 +123,8 @@ public final class TimelineToolbar {
 	/** Zoom 下拉当前选中索引（由 Combo 更新） */
 	private final ImInt zoomComboIndex = new ImInt(2); // 默认 1x
 	private final ImInt speedComboIndex = new ImInt(2); // 默认 1x
+	private final TimelineTransportPresenter transport;
+	private final TimelineToolbarActionsPresenter actions;
 	private final ImInt demucsPresetComboIndex = new ImInt(1); // 默认 balanced
 	private final ImInt clipGenerationModeComboIndex = new ImInt(0); // 默认 mixed
 	private final ImInt actionRollbackComboIndex = new ImInt(0); // 默认 preview
@@ -145,111 +138,78 @@ public final class TimelineToolbar {
 	private boolean demucsMappingConfigLoaded;
 	private boolean actionExecutionConfigLoaded;
 
+	public TimelineToolbar() {
+		this(PresenterFactories.timelineTransportPresenter(), PresenterFactories.timelineToolbarActionsPresenter());
+	}
+
+	TimelineToolbar(TimelineTransportPresenter transport, TimelineToolbarActionsPresenter actions) {
+		this.transport = transport;
+		this.actions = actions;
+	}
+
 	public void render(TimelineEditor editor, TimelineToolbarState toolbarState) {
 		if (editor == null) return;
 
 		// ----- 1. 播放控制 -----
-		boolean hasMusic = BeatBlock.musicPlayer != null && BeatBlock.timeline != null && BeatBlock.timeline.getDurationSeconds() > 0;
-		boolean playing = hasMusic && BeatBlock.musicPlayer.isPlaying();
-		double bpm = BeatBlock.timeline != null ? BeatBlock.timeline.getBpm() : 0;
-		double seekStep = bpm > 0 ? 60.0 / bpm : 1.0;
-		double stepSeek = ImGui.getIO().getKeyShift() ? 5.0 : seekStep;
+		boolean shiftHeld = ImGui.getIO().getKeyShift();
+		var transportState = transport.viewState(editor, shiftHeld);
+		double seekStep = transportState.seekStep();
+		double stepSeek = transportState.stepSeek();
+		boolean playing = transportState.playing();
 
 		// 图标按钮：与轨道行同高、零内边距，字形尽量铺满并居中
 		final float tBtn = TimelineLayout.ROW_HEIGHT;
 		String transportTooltip;
 		IconButtonStyle.pushBeatBlockIconButton();
 		if (ImGui.button(Icons.Play.REWIND_START + "##tlToStart", tBtn, tBtn)) {
-			seekTo(editor, 0);
+			transport.seekTo(editor, 0);
 		}
 		transportTooltip = hoveredTooltip(null, TOOLTIP_TO_START);
 		nextItemInGroup();
 		if (ImGui.button(Icons.Play.REWIND + "##tlBackBeat", tBtn, tBtn)) {
-			seekBy(editor, -stepSeek);
+			transport.seekBy(editor, -stepSeek);
 		}
 		transportTooltip = hoveredTooltip(transportTooltip, TOOLTIP_BACK_BEAT);
 		nextItemInGroup();
-		// 使用 BeatBlock.ttf（Icons），避免 ▶⏸■ 等未进 ImGui 图集显示为 ?
 		if (playing) {
 			if (ImGui.button(Icons.Play.PAUSE + "##tlPause", tBtn, tBtn)) {
-				// 暂停主音乐播放器
-				if (BeatBlock.musicPlayer != null) {
-					BeatBlock.musicPlayer.pause();
-				}
-				// 同时暂停任何其他活跃播放器
-				com.beatblock.timeline.IAudioPlayer ap = BeatBlock.getActiveAudioPlayer();
-				if (ap != null && ap != BeatBlock.musicPlayer) {
-					ap.pause();
-				}
-				// 同时暂停时间线时钟
-				if (BeatBlock.timelineEditor != null) {
-					BeatBlock.timelineEditor.getClock().pause();
-				}
+				transport.pause();
 			}
 			transportTooltip = hoveredTooltip(transportTooltip, TOOLTIP_PAUSE);
 		} else {
 			if (ImGui.button(Icons.Play.PLAY + "##tlPlay", tBtn, tBtn)) {
-				ensureMusicDurationForPlayback(editor);
-				// 始终启动主音楽播放器（作为同步时钟源）
-				if (BeatBlock.musicPlayer != null) {
-					BeatBlock.musicPlayer.play();
-				}
-				// 同时启动任何活跃的音频播放器（如果有茎混音，也会由 BeatBlockClientDriver 同步）
-				com.beatblock.timeline.IAudioPlayer ap = BeatBlock.getActiveAudioPlayer();
-				if (ap != null && ap != BeatBlock.musicPlayer) {
-					ap.play();
-				}
-				// 启动驱动以便每帧推进时间，播放头随音乐移动
-				if (!BeatBlockClientDriver.isDriving()) BeatBlockClientDriver.startDriving();
-				// 同时启动时间线时钟
-				if (BeatBlock.timelineEditor != null) {
-					BeatBlock.timelineEditor.getClock().play();
-				}
+				transport.play(editor);
 			}
 			transportTooltip = hoveredTooltip(transportTooltip, TOOLTIP_PLAY);
 		}
 		nextItemInGroup();
 		if (ImGui.button(Icons.Play.STOP + "##tlStop", tBtn, tBtn)) {
-			// 停止主音乐播放器
-			if (BeatBlock.musicPlayer != null) {
-				BeatBlock.musicPlayer.stop();
-			}
-			// 同时停止任何其他活跃播放器
-			com.beatblock.timeline.IAudioPlayer ap = BeatBlock.getActiveAudioPlayer();
-			if (ap != null && ap != BeatBlock.musicPlayer) {
-				ap.stop();
-			}
-			// 同时暂停和重置时间线时钟
-			if (BeatBlock.timelineEditor != null) {
-				BeatBlock.timelineEditor.getClock().pause();
-			}
-			BeatBlockClientDriver.stopDriving();
-			seekTo(editor, 0);
+			transport.stop(editor);
 		}
 		transportTooltip = hoveredTooltip(transportTooltip, TOOLTIP_STOP);
 		nextItemInGroup();
 		if (ImGui.button(Icons.Play.FORWARD + "##tlFwdBeat", tBtn, tBtn)) {
-			seekBy(editor, stepSeek);
+			transport.seekBy(editor, stepSeek);
 		}
 		transportTooltip = hoveredTooltip(transportTooltip, TOOLTIP_FWD_BEAT);
 		nextItemInGroup();
 		if (ImGui.button(Icons.Play.FORWARD_END + "##tlToEnd", tBtn, tBtn)) {
-			seekTo(editor, getDuration(editor));
+			transport.seekTo(editor, transportState.durationSeconds());
 		}
 		transportTooltip = hoveredTooltip(transportTooltip, TOOLTIP_TO_END);
 		nextGroup();
 		if (ImGui.button(Icons.Action.ARROW_LEFT + "##tlPrevEvt", tBtn, tBtn)) {
-			jumpToNearbyEvent(editor, false);
+			transport.jumpToNearbyEvent(editor, false);
 		}
 		transportTooltip = hoveredTooltip(transportTooltip, TOOLTIP_PREV_EVENT);
 		nextItemInGroup();
 		if (ImGui.button(Icons.Action.ARROW_RIGHT + "##tlNextEvt", tBtn, tBtn)) {
-			jumpToNearbyEvent(editor, true);
+			transport.jumpToNearbyEvent(editor, true);
 		}
 		transportTooltip = hoveredTooltip(transportTooltip, TOOLTIP_NEXT_EVENT);
 		nextItemInGroup();
 		if (ImGui.button(Icons.Timeline.MARKER + "##tlAddMarker", tBtn, tBtn)) {
-			addMarkerAtCurrentTime(editor);
+			transport.addMarkerAtCurrentTime(editor);
 		}
 		transportTooltip = hoveredTooltip(transportTooltip, TOOLTIP_ADD_MARKER);
 		IconButtonStyle.popBeatBlockIconButton();
@@ -259,49 +219,34 @@ public final class TimelineToolbar {
 
 		// ----- 时间显示（始终可见）-----
 		{
-			double posTime = editor.getClock().getCurrentTimeSeconds();
-			double posDur = getDuration(editor);
-			double posBpm = BeatBlock.timeline != null ? BeatBlock.timeline.getBpm() : 0;
 			nextGroup();
-			ImGui.textDisabled(MusicTimeFormatter.formatPositionDisplay(posTime, posDur, posBpm));
+			ImGui.textDisabled(transportState.positionDisplay());
 		}
 
 		nextGroupOrWrap(0);
 
 		// ----- 1.5 循环区（In/Out）与速度 -----
-		double now = editor.getClock().getCurrentTimeSeconds();
+		double now = transportState.currentTimeSeconds();
 		if (ImGui.button("In")) {
-			toolbarState.setLoopInSeconds(now);
-			if (toolbarState.getLoopOutSeconds() > 0 && toolbarState.getLoopOutSeconds() <= now) {
-				toolbarState.setLoopOutSeconds(now + Math.max(0.1, seekStep));
-			}
+			transport.setLoopInAt(toolbarState, now, seekStep);
 		}
 		if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_LOOP_IN);
 		nextItemInGroup();
 		if (ImGui.button("Out")) {
-			double loopIn = toolbarState.getLoopInSeconds();
-			toolbarState.setLoopOutSeconds(Math.max(now, loopIn + Math.max(0.1, seekStep)));
+			transport.setLoopOutAt(toolbarState, now, seekStep);
 		}
 		if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_LOOP_OUT);
 		nextItemInGroup();
 		if (ImGui.button("Clr")) {
-			toolbarState.clearLoopRange();
+			transport.clearLoopRange(toolbarState);
 		}
 		if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_LOOP_CLEAR);
 		nextItemInGroup();
 
-		double currentSpeed = BeatBlock.musicPlayer != null ? BeatBlock.musicPlayer.getPlaybackSpeed() : editor.getClock().getPlaybackSpeed();
-		speedComboIndex.set(indexOfClosestSpeed(currentSpeed));
-		ImGui.setNextItemWidth(comboWidthForLabels(SPEED_LABELS));
-		if (ImGui.combo("Speed", speedComboIndex, SPEED_LABELS)) {
-			int sIdx = speedComboIndex.get();
-			if (sIdx >= 0 && sIdx < SPEED_VALUES.length) {
-				double speed = SPEED_VALUES[sIdx];
-				editor.getClock().setPlaybackSpeed(speed);
-				if (BeatBlock.musicPlayer != null) {
-					BeatBlock.musicPlayer.setPlaybackSpeed(speed);
-				}
-			}
+		speedComboIndex.set(TimelineToolbarViewPresenter.indexOfClosestSpeed(transport.currentPlaybackSpeed(editor)));
+		ImGui.setNextItemWidth(comboWidthForLabels(TimelineToolbarViewPresenter.SPEED_LABELS));
+		if (ImGui.combo("Speed", speedComboIndex, TimelineToolbarViewPresenter.SPEED_LABELS)) {
+			TimelineToolbarViewPresenter.applySpeedPreset(editor, transport, speedComboIndex.get());
 		}
 		if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_SPEED);
 		nextItemInGroup();
@@ -347,20 +292,16 @@ public final class TimelineToolbar {
 		}
 
 		// ----- 3. 视图：Zoom 下拉 + Fit -----
-		zoomComboIndex.set(indexOfClosestZoom(editor.getViewState().getZoom()));
-		ImGui.setNextItemWidth(comboWidthForLabels(ZOOM_PRESET_LABELS));
-		if (ImGui.combo("Zoom", zoomComboIndex, ZOOM_PRESET_LABELS)) {
-			int idx = zoomComboIndex.get();
-			if (idx >= 0 && idx < ZOOM_PRESET_VALUES.length) {
-				editor.getViewState().setZoom(ZOOM_PRESET_VALUES[idx]);
-			}
+		zoomComboIndex.set(TimelineToolbarViewPresenter.indexOfClosestZoom(editor.getViewState().getZoom()));
+		ImGui.setNextItemWidth(comboWidthForLabels(TimelineToolbarViewPresenter.ZOOM_PRESET_LABELS));
+		if (ImGui.combo("Zoom", zoomComboIndex, TimelineToolbarViewPresenter.ZOOM_PRESET_LABELS)) {
+			TimelineToolbarViewPresenter.applyZoomPreset(editor, zoomComboIndex.get());
 		}
 		if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_ZOOM);
 		nextItemInGroup();
 		if (ImGui.button("Fit")) {
-			double dur = BeatBlock.timeline != null ? BeatBlock.timeline.getDurationSeconds() : 60;
-			float w = ImGui.getContentRegionAvailX() - 130f;
-			if (dur > 0 && w > 0) editor.getViewState().fitToDuration(dur, w);
+			TimelineToolbarViewPresenter.fitToDuration(
+				editor, BeatBlock.timeline, ImGui.getContentRegionAvailX() - 130f);
 		}
 		if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_FIT);
 		nextItemInGroup();
@@ -378,14 +319,9 @@ public final class TimelineToolbar {
 			}
 		}
 		if (ImGui.button("Binding Map")) {
-			if (BeatBlock.timeline != null) {
-				lastBindingMapCount = AnimationBindingEngine.applyRules(BeatBlock.timeline, TimelineTrackMeta.ROW_ANIM_BLOCK, true);
-				editor.syncClockDuration();
-				setToolActionFeedback("Binding Map generated " + lastBindingMapCount + " events", lastBindingMapCount > 0);
-			} else {
-				lastBindingMapCount = -1;
-				setToolActionFeedback("Binding Map skipped: timeline unavailable", false);
-			}
+			var outcome = actions.runBindingMap();
+			lastBindingMapCount = outcome.count();
+			setToolActionFeedback(outcome.message(), outcome.success());
 		}
 		if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_BINDING_MAP);
 		nextItemInGroup();
@@ -396,20 +332,15 @@ public final class TimelineToolbar {
 		renderBindingEditorPopup();
 		nextItemInGroup();
 		if (ImGui.button("Auto Map")) {
-			if (BeatBlock.timeline != null) {
-				AutoMapConfig config = AutoMapConfig.createDefault();
-				lastAutoMapCount = AutoMapGenerator.generate(BeatBlock.timeline, config, true);
-				editor.syncClockDuration();
-				setToolActionFeedback("Auto Map generated " + lastAutoMapCount + " events", lastAutoMapCount > 0);
-			} else {
-				lastAutoMapCount = -1;
-				setToolActionFeedback("Auto Map skipped: timeline unavailable", false);
-			}
+			var outcome = actions.runAutoMap();
+			lastAutoMapCount = outcome.count();
+			setToolActionFeedback(outcome.message(), outcome.success());
 		}
 		if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_AUTO_MAP);
 		nextItemInGroup();
 		if (ImGui.button("烘焙 STEP##tlBakeStep")) {
-			runBakeStepSequences(editor);
+			var outcome = actions.runBakeStepSequences();
+			setToolActionFeedback(outcome.message(), outcome.success());
 		}
 		if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_BAKE_STEP);
 		nextItemInGroup();
@@ -429,36 +360,24 @@ public final class TimelineToolbar {
 		double now = editor.getClock().getCurrentTimeSeconds();
 		ImGui.textDisabled("Loop & Speed");
 		if (ImGui.button("In##tlMoreIn")) {
-			toolbarState.setLoopInSeconds(now);
-			if (toolbarState.getLoopOutSeconds() > 0 && toolbarState.getLoopOutSeconds() <= now) {
-				toolbarState.setLoopOutSeconds(now + Math.max(0.1, seekStep));
-			}
+			transport.setLoopInAt(toolbarState, now, seekStep);
 		}
 		if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_LOOP_IN);
 		ImGui.sameLine();
 		if (ImGui.button("Out##tlMoreOut")) {
-			double loopIn = toolbarState.getLoopInSeconds();
-			toolbarState.setLoopOutSeconds(Math.max(now, loopIn + Math.max(0.1, seekStep)));
+			transport.setLoopOutAt(toolbarState, now, seekStep);
 		}
 		if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_LOOP_OUT);
 		ImGui.sameLine();
 		if (ImGui.button("Clr##tlMoreClr")) {
-			toolbarState.clearLoopRange();
+			transport.clearLoopRange(toolbarState);
 		}
 		if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_LOOP_CLEAR);
 
-		double currentSpeed = BeatBlock.musicPlayer != null ? BeatBlock.musicPlayer.getPlaybackSpeed() : editor.getClock().getPlaybackSpeed();
-		speedComboIndex.set(indexOfClosestSpeed(currentSpeed));
-		ImGui.setNextItemWidth(comboWidthForLabels(SPEED_LABELS));
-		if (ImGui.combo("Speed##tlMoreSpeed", speedComboIndex, SPEED_LABELS)) {
-			int sIdx = speedComboIndex.get();
-			if (sIdx >= 0 && sIdx < SPEED_VALUES.length) {
-				double speed = SPEED_VALUES[sIdx];
-				editor.getClock().setPlaybackSpeed(speed);
-				if (BeatBlock.musicPlayer != null) {
-					BeatBlock.musicPlayer.setPlaybackSpeed(speed);
-				}
-			}
+		speedComboIndex.set(TimelineToolbarViewPresenter.indexOfClosestSpeed(transport.currentPlaybackSpeed(editor)));
+		ImGui.setNextItemWidth(comboWidthForLabels(TimelineToolbarViewPresenter.SPEED_LABELS));
+		if (ImGui.combo("Speed##tlMoreSpeed", speedComboIndex, TimelineToolbarViewPresenter.SPEED_LABELS)) {
+			TimelineToolbarViewPresenter.applySpeedPreset(editor, transport, speedComboIndex.get());
 		}
 		if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_SPEED);
 		renderActionRollbackControl(true);
@@ -497,19 +416,15 @@ public final class TimelineToolbar {
 
 		ImGui.separator();
 		ImGui.textDisabled("View");
-		zoomComboIndex.set(indexOfClosestZoom(editor.getViewState().getZoom()));
-		ImGui.setNextItemWidth(comboWidthForLabels(ZOOM_PRESET_LABELS));
-		if (ImGui.combo("Zoom##tlMoreZoom", zoomComboIndex, ZOOM_PRESET_LABELS)) {
-			int idx = zoomComboIndex.get();
-			if (idx >= 0 && idx < ZOOM_PRESET_VALUES.length) {
-				editor.getViewState().setZoom(ZOOM_PRESET_VALUES[idx]);
-			}
+		zoomComboIndex.set(TimelineToolbarViewPresenter.indexOfClosestZoom(editor.getViewState().getZoom()));
+		ImGui.setNextItemWidth(comboWidthForLabels(TimelineToolbarViewPresenter.ZOOM_PRESET_LABELS));
+		if (ImGui.combo("Zoom##tlMoreZoom", zoomComboIndex, TimelineToolbarViewPresenter.ZOOM_PRESET_LABELS)) {
+			TimelineToolbarViewPresenter.applyZoomPreset(editor, zoomComboIndex.get());
 		}
 		if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_ZOOM);
 		if (ImGui.button("Fit##tlMoreFit")) {
-			double dur = BeatBlock.timeline != null ? BeatBlock.timeline.getDurationSeconds() : 60;
-			float w = ImGui.getContentRegionAvailX() - 16f;
-			if (dur > 0 && w > 0) editor.getViewState().fitToDuration(dur, w);
+			TimelineToolbarViewPresenter.fitToDuration(
+				editor, BeatBlock.timeline, ImGui.getContentRegionAvailX() - 16f);
 		}
 		if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_FIT);
 		renderTrackHeightControl(editor, true);
@@ -517,14 +432,9 @@ public final class TimelineToolbar {
 		ImGui.separator();
 		ImGui.textDisabled("Tools");
 		if (ImGui.button("Binding Map##tlMoreBindingMap")) {
-			if (BeatBlock.timeline != null) {
-				lastBindingMapCount = AnimationBindingEngine.applyRules(BeatBlock.timeline, TimelineTrackMeta.ROW_ANIM_BLOCK, true);
-				editor.syncClockDuration();
-				setToolActionFeedback("Binding Map generated " + lastBindingMapCount + " events", lastBindingMapCount > 0);
-			} else {
-				lastBindingMapCount = -1;
-				setToolActionFeedback("Binding Map skipped: timeline unavailable", false);
-			}
+			var outcome = actions.runBindingMap();
+			lastBindingMapCount = outcome.count();
+			setToolActionFeedback(outcome.message(), outcome.success());
 		}
 		if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_BINDING_MAP);
 		ImGui.sameLine();
@@ -534,19 +444,14 @@ public final class TimelineToolbar {
 		if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_BINDING_EDITOR);
 		renderBindingEditorPopup();
 		if (ImGui.button("Auto Map##tlMoreAutoMap")) {
-			if (BeatBlock.timeline != null) {
-				AutoMapConfig config = AutoMapConfig.createDefault();
-				lastAutoMapCount = AutoMapGenerator.generate(BeatBlock.timeline, config, true);
-				editor.syncClockDuration();
-				setToolActionFeedback("Auto Map generated " + lastAutoMapCount + " events", lastAutoMapCount > 0);
-			} else {
-				lastAutoMapCount = -1;
-				setToolActionFeedback("Auto Map skipped: timeline unavailable", false);
-			}
+			var outcome = actions.runAutoMap();
+			lastAutoMapCount = outcome.count();
+			setToolActionFeedback(outcome.message(), outcome.success());
 		}
 		if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_AUTO_MAP);
 		if (ImGui.button("烘焙 STEP##tlMoreBakeStep")) {
-			runBakeStepSequences(editor);
+			var outcome = actions.runBakeStepSequences();
+			setToolActionFeedback(outcome.message(), outcome.success());
 		}
 		if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_BAKE_STEP);
 		renderToolActionFeedback();
@@ -1135,41 +1040,6 @@ public final class TimelineToolbar {
 		lastTemplateApplyFeedbackAtMs = System.currentTimeMillis();
 	}
 
-	private void runBakeStepSequences(TimelineEditor editor) {
-		if (BeatBlock.timeline == null) {
-			setToolActionFeedback("Bake STEP skipped: timeline unavailable", false);
-			return;
-		}
-		StepSequenceBaker.BakeResult result = StepSequenceBaker.bake(
-			BeatBlock.timeline,
-			editor != null ? editor.getCommandManager() : null,
-			currentCameraPositionOrZero()
-		);
-		if (editor != null) {
-			editor.syncClockDuration();
-		}
-		if (result.stepEventsBaked() <= 0) {
-			String detail = result.stepEventsSkipped() > 0
-				? " (" + result.stepEventsSkipped() + " STEP events skipped; check StageObject)"
-				: " (no STEP events on timeline)";
-			setToolActionFeedback("Bake STEP: nothing baked" + detail, false);
-			return;
-		}
-		setToolActionFeedback(
-			"Bake STEP: " + result.stepEventsBaked() + " STEP -> "
-				+ result.burstEventsCreated() + " burst events",
-			true
-		);
-	}
-
-	private static Vec3d currentCameraPositionOrZero() {
-		MinecraftClient client = MinecraftClient.getInstance();
-		if (client != null && client.gameRenderer != null && client.gameRenderer.getCamera() != null) {
-			return client.gameRenderer.getCamera().getCameraPos();
-		}
-		return Vec3d.ZERO;
-	}
-
 	private void setToolActionFeedback(String message, boolean success) {
 		lastToolActionFeedback = message != null ? message : "";
 		lastToolActionFeedbackSuccess = success;
@@ -1589,32 +1459,6 @@ public final class TimelineToolbar {
 		return current;
 	}
 
-	private static int indexOfClosestZoom(float zoom) {
-		int best = 0;
-		float bestDiff = Math.abs(zoom - ZOOM_PRESET_VALUES[0]);
-		for (int i = 1; i < ZOOM_PRESET_VALUES.length; i++) {
-			float d = Math.abs(zoom - ZOOM_PRESET_VALUES[i]);
-			if (d < bestDiff) {
-				bestDiff = d;
-				best = i;
-			}
-		}
-		return best;
-	}
-
-	private static int indexOfClosestSpeed(double speed) {
-		int best = 0;
-		double bestDiff = Math.abs(speed - SPEED_VALUES[0]);
-		for (int i = 1; i < SPEED_VALUES.length; i++) {
-			double d = Math.abs(speed - SPEED_VALUES[i]);
-			if (d < bestDiff) {
-				bestDiff = d;
-				best = i;
-			}
-		}
-		return best;
-	}
-
 	private static int indexOfActionRollbackValue(String value) {
 		if (value == null || value.isBlank()) return 0;
 		for (int i = 0; i < ACTION_ROLLBACK_VALUES.length; i++) {
@@ -1629,120 +1473,5 @@ public final class TimelineToolbar {
 			if (CLIP_GENERATION_MODE_VALUES[i].equalsIgnoreCase(value)) return i;
 		}
 		return 0;
-	}
-
-	private static void seekBy(TimelineEditor editor, double deltaSeconds) {
-		if (editor == null) return;
-		double current = editor.getClock().getCurrentTimeSeconds();
-		seekTo(editor, current + deltaSeconds);
-	}
-
-	private static void seekTo(TimelineEditor editor, double targetSeconds) {
-		if (editor == null) return;
-		double duration = getDuration(editor);
-		double t = Math.max(0, Math.min(targetSeconds, duration));
-		editor.getClock().seek(t);
-		if (BeatBlock.musicPlayer != null) {
-			ensureMusicDurationForPlayback(editor);
-			BeatBlock.musicPlayer.setCurrentTimeSeconds(t);
-		}
-	}
-
-	private static void ensureMusicDurationForPlayback(TimelineEditor editor) {
-		if (BeatBlock.musicPlayer == null || editor == null) return;
-		if (BeatBlock.timeline != null) {
-			Object audioPath = BeatBlock.timeline.getMetadata("audioPath");
-			if (audioPath instanceof String path && !path.isBlank()) {
-				String loadedPath = BeatBlock.musicPlayer.getLoadedAudioPath();
-				if (!path.equals(loadedPath)) {
-					boolean loaded = BeatBlock.musicPlayer.loadAudio(path);
-					if (loaded) {
-						LOGGER.info("BeatBlock TimelineToolbar: auto-bound timeline audioPath={} before transport action", path);
-					} else {
-						LOGGER.warn("BeatBlock TimelineToolbar: failed to auto-bind timeline audioPath={} reason={}", path, BeatBlock.musicPlayer.getLastLoadError());
-					}
-				}
-			}
-		}
-		if (BeatBlock.musicPlayer.getDurationSeconds() > 0) return;
-		double duration = getDuration(editor);
-		if (duration > 0) {
-			BeatBlock.musicPlayer.setDurationSeconds(duration);
-		}
-	}
-
-
-	private static double getDuration(TimelineEditor editor) {
-		double timelineDur = BeatBlock.timeline != null ? BeatBlock.timeline.getDurationSeconds() : 0;
-		if (timelineDur > 0) return timelineDur;
-		double playerDur = BeatBlock.musicPlayer != null ? BeatBlock.musicPlayer.getDurationSeconds() : 0;
-		if (playerDur > 0) return playerDur;
-		double clockDur = editor.getClock().getDurationSeconds();
-		if (clockDur > 0) return clockDur;
-		return 60.0;
-	}
-
-	private static void jumpToNearbyEvent(TimelineEditor editor, boolean forward) {
-		if (editor == null || BeatBlock.timeline == null) return;
-		List<Double> marks = collectNavigationTimes(BeatBlock.timeline);
-		if (marks.isEmpty()) return;
-
-		double current = editor.getClock().getCurrentTimeSeconds();
-		double eps = 1e-6;
-		double target = current;
-		if (forward) {
-			for (double t : marks) {
-				if (t > current + eps) {
-					target = t;
-					break;
-				}
-			}
-		} else {
-			for (int i = marks.size() - 1; i >= 0; i--) {
-				double t = marks.get(i);
-				if (t < current - eps) {
-					target = t;
-					break;
-				}
-			}
-		}
-		seekTo(editor, target);
-	}
-
-	private static void addMarkerAtCurrentTime(TimelineEditor editor) {
-		if (editor == null || BeatBlock.timeline == null) return;
-		double t = editor.getClock().getCurrentTimeSeconds();
-		int markerIndex = BeatBlock.timeline.getMarkers().size() + 1;
-		BeatBlock.timeline.addMarker(new TimelineMarker(t, "Marker " + markerIndex));
-	}
-
-	private static List<Double> collectNavigationTimes(Timeline timeline) {
-		if (timeline == null) return List.of();
-		if (!timeline.getMarkers().isEmpty()) {
-			List<Double> out = new ArrayList<>();
-			for (TimelineMarker marker : timeline.getMarkers()) {
-				if (marker != null) out.add(marker.getTimeSeconds());
-			}
-			Collections.sort(out);
-			return out;
-		}
-		return collectEventTimes(timeline);
-	}
-
-	private static List<Double> collectEventTimes(Timeline timeline) {
-		if (timeline == null) return List.of();
-		List<Double> out = new ArrayList<>();
-		for (Track track : timeline.getTracks()) {
-			if (track == null) continue;
-			for (Clip clip : track.getClips()) {
-				if (clip == null) continue;
-				for (TimelineEvent e : clip.getEvents()) {
-					if (e == null) continue;
-					out.add(e.getTimeSeconds());
-				}
-			}
-		}
-		Collections.sort(out);
-		return out;
 	}
 }
