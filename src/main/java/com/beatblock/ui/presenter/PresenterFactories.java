@@ -120,6 +120,10 @@ public final class PresenterFactories {
 		);
 	}
 
+	public static TimelineToolbarFeedbackPresenter timelineToolbarFeedbackPresenter() {
+		return new TimelineToolbarFeedbackPresenter();
+	}
+
 	private static Vec3d currentCameraPositionOrZero() {
 		MinecraftClient client = MinecraftClient.getInstance();
 		if (client != null && client.gameRenderer != null && client.gameRenderer.getCamera() != null) {

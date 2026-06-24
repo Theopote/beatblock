@@ -57,4 +57,26 @@ class TimelineToolbarViewPresenterTest {
 	void applyZoomPresetRejectsInvalidIndex() {
 		assertFalse(TimelineToolbarViewPresenter.applyZoomPreset(editor, -1));
 	}
+
+	@Test
+	void trackHeightViewStateReflectsEditorTrackList() {
+		var state = TimelineToolbarViewPresenter.trackHeightViewState(editor);
+		assertEquals(editor.getTrackListState().getAudioRowHeightMin(), state.min(), 1e-6f);
+		assertEquals(editor.getTrackListState().getAudioRowHeightMax(), state.max(), 1e-6f);
+		assertEquals(editor.getTrackListState().getAudioRowHeight(), state.current(), 1e-6f);
+	}
+
+	@Test
+	void setTrackHeightClampsToRange() {
+		float max = editor.getTrackListState().getAudioRowHeightMax();
+		assertTrue(TimelineToolbarViewPresenter.setTrackHeight(editor, max + 100f));
+		assertEquals(max, editor.getTrackListState().getAudioRowHeight(), 1e-6f);
+	}
+
+	@Test
+	void resetTrackHeightRestoresDefault() {
+		assertTrue(TimelineToolbarViewPresenter.setTrackHeight(editor, 48f));
+		assertTrue(TimelineToolbarViewPresenter.resetTrackHeight(editor));
+		assertTrue(editor.getTrackListState().isAudioRowHeightDefault());
+	}
 }

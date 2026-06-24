@@ -2,6 +2,7 @@ package com.beatblock.ui.presenter;
 
 import com.beatblock.timeline.Timeline;
 import com.beatblock.timeline.TimelineEditor;
+import com.beatblock.timeline.rendering.TimelineTrackListState;
 
 /**
  * 时间线工具栏视图状态：Zoom/Speed 预设与 Fit 缩放。
@@ -15,6 +16,8 @@ public final class TimelineToolbarViewPresenter {
 	};
 	public static final String[] SPEED_LABELS = { "0.5x", "0.75x", "1x", "1.25x", "1.5x", "2x" };
 	public static final double[] SPEED_VALUES = { 0.5, 0.75, 1.0, 1.25, 1.5, 2.0 };
+
+	public record TrackHeightViewState(float min, float max, float current) {}
 
 	private TimelineToolbarViewPresenter() {}
 
@@ -77,6 +80,34 @@ public final class TimelineToolbarViewPresenter {
 			duration = 60;
 		}
 		editor.getViewState().fitToDuration(duration, availableWidth);
+		return true;
+	}
+
+	public static TrackHeightViewState trackHeightViewState(TimelineEditor editor) {
+		if (editor == null) {
+			return new TrackHeightViewState(0f, 0f, 0f);
+		}
+		TimelineTrackListState trackState = editor.getTrackListState();
+		return new TrackHeightViewState(
+			trackState.getAudioRowHeightMin(),
+			trackState.getAudioRowHeightMax(),
+			trackState.getAudioRowHeight()
+		);
+	}
+
+	public static boolean setTrackHeight(TimelineEditor editor, float height) {
+		if (editor == null) {
+			return false;
+		}
+		editor.getTrackListState().setAudioRowHeight(height);
+		return true;
+	}
+
+	public static boolean resetTrackHeight(TimelineEditor editor) {
+		if (editor == null) {
+			return false;
+		}
+		editor.getTrackListState().resetAudioRowHeight();
 		return true;
 	}
 }
