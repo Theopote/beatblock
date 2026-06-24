@@ -476,7 +476,10 @@ public final class TimelineToolbarConfigPresenter {
 	}
 
 	private static void writeConfigRoot(Path configPath, JsonObject root) throws Exception {
-		Files.createDirectories(configPath.getParent());
+		Path parent = configPath.getParent();
+		if (parent != null) {
+			Files.createDirectories(parent);
+		}
 		Files.writeString(configPath, UI_CONFIG_GSON.toJson(root), StandardCharsets.UTF_8);
 	}
 

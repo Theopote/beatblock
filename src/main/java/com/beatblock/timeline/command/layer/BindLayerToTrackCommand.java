@@ -64,7 +64,6 @@ public final class BindLayerToTrackCommand implements com.beatblock.timeline.com
 				Timeline.TRACK_ID_BUILD_REVERSE, "建造还原", com.beatblock.timeline.TrackType.ANIMATION);
 			timeline.addTrack(track);
 		}
-		if (track == null) return;
 
 		Clip clip = new Clip(createdClipId, clipStartSeconds, clipEnd);
 		track.addClip(clip);

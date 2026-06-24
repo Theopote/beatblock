@@ -12,7 +12,11 @@
 		<Class name="com.beatblock.BeatBlockMod" />
 	</Match>
 	<Match>
-		<Class name="com.beatblock.client.BeatBlockClient" />
+		<Class name="com.beatblock.BeatBlock" />
+		<Bug pattern="PA_PUBLIC_PRIMITIVE_ATTRIBUTE,MS_CANNOT_BE_FINAL,ST_WRITE_TO_STATIC_FROM_INSTANCE_METHOD" />
+	</Match>
+	<Match>
+		<Class name="com.beatblock.BeatBlockClient" />
 	</Match>
 
 	<!-- ImGui immediate-mode UI: fields mutated across render frames -->
@@ -21,9 +25,27 @@
 		<Bug pattern="EI_EXPOSE_REP,EI_EXPOSE_REP2,MS_EXPOSE_REP,MS_PKGPROTECT" />
 	</Match>
 
+	<!-- Timeline layout constants shared with render helpers -->
+	<Match>
+		<Package name="~com\.beatblock\.timeline\.rendering.*" />
+		<Bug pattern="MS_PKGPROTECT,URF_UNREAD_PUBLIC_OR_PROTECTED_FIELD" />
+	</Match>
+
+	<!-- Client singletons / frame state (Minecraft client thread) -->
+	<Match>
+		<Package name="~com\.beatblock\.client\..*" />
+		<Bug pattern="MS_EXPOSE_REP,AT_NONATOMIC_OPERATIONS_ON_SHARED_VARIABLE,AT_OPERATION_NOT_ON_VOLATILE_FIELD" />
+	</Match>
+
 	<!-- Gson / DTO models intentionally expose mutable collections -->
 	<Match>
 		<Package name="~com\.beatblock\.(model|data|io)\..*" />
 		<Bug pattern="EI_EXPOSE_REP,EI_EXPOSE_REP2" />
+	</Match>
+
+	<!-- Beatmap DTO public fields -->
+	<Match>
+		<Package name="~com\.beatblock\.audio\.beatmap.*" />
+		<Bug pattern="EI_EXPOSE_REP,EI_EXPOSE_REP2,MS_PKGPROTECT" />
 	</Match>
 </FindBugsFilter>

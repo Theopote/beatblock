@@ -161,7 +161,7 @@ public final class OscProjectStore {
 		Object v = timeline.getMetadata(key);
 		if (v == null) return "";
 		String s = String.valueOf(v);
-		return s == null ? "" : s.trim();
+		return s.trim();
 	}
 
 	public static final class LoadedProject {

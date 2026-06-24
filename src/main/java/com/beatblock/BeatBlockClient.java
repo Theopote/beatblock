@@ -35,6 +35,12 @@ public class BeatBlockClient implements ClientModInitializer {
 
 	@Override
 	public void onInitializeClient() {
+		initializeClient();
+		registerClientEvents();
+		LOGGER.info("BeatBlock 客户端已初始化 — 按 B 键切换时间轴播放");
+	}
+
+	private static void initializeClient() {
 		BeatBlockClientDriver.install(BeatBlock::getContext);
 		com.beatblock.client.camera.TimelineCameraController.getInstance().bindContext(BeatBlock::getContext);
 
@@ -43,7 +49,9 @@ public class BeatBlockClient implements ClientModInitializer {
 		importScreen = new ImportScreen();
 
 		BeatBlock.openUICallback = () -> MinecraftClient.getInstance().setScreen(new BeatBlockUIScreen());
+	}
 
+	private static void registerClientEvents() {
 		WorldRenderEvents.END_MAIN.register(context -> {
 			var consumers = context.consumers();
 			var matrices = context.matrices();
@@ -86,7 +94,5 @@ public class BeatBlockClient implements ClientModInitializer {
 			}
 			LOGGER.info("BeatBlock client stopping: background resource cleanup complete");
 		});
-
-		LOGGER.info("BeatBlock 客户端已初始化 — 按 B 键切换时间轴播放");
 	}
 }

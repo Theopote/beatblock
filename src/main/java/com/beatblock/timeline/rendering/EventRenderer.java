@@ -244,7 +244,7 @@ public final class EventRenderer {
 		ImGui.getWindowDrawList().addText(bx0 + 2f, by0 - 1f, 0xFF_11_11_11, "E");
 
 		if (ImGui.isMouseHoveringRect(bx0, by0, bx1, by1)) {
-			ImGui.setTooltip(String.format("Edge Priority: %.0f%%\nPrioritizes silhouette blocks early in progression.", edgePriority * 100.0));
+			ImGui.setTooltip(String.format("Edge Priority: %.0f%%%nPrioritizes silhouette blocks early in progression.", edgePriority * 100.0));
 		}
 	}
 

@@ -283,6 +283,21 @@ public final class BlockAnimationEngine {
 				// Higher camera visibility = higher priority (among same face count)
 				return Double.compare(other.cameraVisibility, this.cameraVisibility);
 			}
+
+			@Override
+			public boolean equals(Object obj) {
+				if (!(obj instanceof EdgeBlockScore other)) {
+					return false;
+				}
+				return exposedFaces == other.exposedFaces
+					&& Double.compare(cameraVisibility, other.cameraVisibility) == 0
+					&& pos.equals(other.pos);
+			}
+
+			@Override
+			public int hashCode() {
+				return java.util.Objects.hash(pos, exposedFaces, cameraVisibility);
+			}
 		}
 		
 		java.util.List<EdgeBlockScore> scores = new java.util.ArrayList<>();
@@ -349,7 +364,8 @@ public final class BlockAnimationEngine {
 				.comparingDouble((BlockPos p) -> angleAroundCenter(p, center))
 				.thenComparingDouble(p -> distanceSqToCenter(p, center)));
 			case RANDOM -> blocks.sort(Comparator.comparingLong(p -> mixedHash(seed, p)));
-        }
+			default -> { }
+		}
 		return blocks;
 	}
 

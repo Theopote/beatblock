@@ -76,7 +76,7 @@ public final class FfmpegLocator {
 				.start();
 			boolean finished = process.waitFor(VERSION_PROBE_TIMEOUT_SEC, TimeUnit.SECONDS);
 			return finished && process.exitValue() == 0;
-		} catch (Exception e) {
+		} catch (IOException | InterruptedException e) {
 			return false;
 		}
 	}

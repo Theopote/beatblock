@@ -208,6 +208,7 @@ public final class TimelineRowContentRenderer {
 				eventRenderer.renderFeatureBars(rowY, rowHeight, events, layout, viewState, color,
 					timeline.getBpm(), 0.20f, 0.9f);
 			}
+			default -> { }
 		}
 	}
 

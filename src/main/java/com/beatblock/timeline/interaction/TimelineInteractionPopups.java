@@ -397,7 +397,7 @@ public final class TimelineInteractionPopups {
 						state.propertiesError = null;
 					}
 				}
-			} catch (Exception ex) {
+			} catch (NumberFormatException ex) {
 				state.propertiesError = "Invalid number in time/parameter";
 			}
 		}

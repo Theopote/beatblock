@@ -61,5 +61,18 @@ public final class BeatEvent implements Comparable<BeatEvent> {
 	public int compareTo(BeatEvent other) {
 		return Long.compare(this.timeMs, other.timeMs);
 	}
+
+	@Override
+	public boolean equals(Object obj) {
+		if (!(obj instanceof BeatEvent other)) {
+			return false;
+		}
+		return timeMs == other.timeMs;
+	}
+
+	@Override
+	public int hashCode() {
+		return Long.hashCode(timeMs);
+	}
 }
 
