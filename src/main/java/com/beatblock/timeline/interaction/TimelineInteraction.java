@@ -355,8 +355,8 @@ public final class TimelineInteraction implements TimelineInteractionPopupHost {
 					layout,
 					mx
 				);
-				if (clock != null) {
-					seekClockAndMusic(clock, clock.getCurrentTimeSeconds());
+					if (clock != null) {
+						seekClockAndMusic(clock, clock.getCurrentTimeSeconds());
 				}
 				return;
 			}
@@ -374,8 +374,8 @@ public final class TimelineInteraction implements TimelineInteractionPopupHost {
 					mx,
 					clock != null ? () -> seekClockAndMusic(clock, clock.getCurrentTimeSeconds()) : null
 				);
-				return;
-			}
+					return;
+				}
 			if (interactionState.getMode() == InteractionMode.DRAG_EVENT) {
 				TimelineEventDragHandler.applyDuringDrag(
 					timeline, interactionState, trackListState, viewState, layout, toolbarState, duration, mx);
@@ -437,9 +437,9 @@ public final class TimelineInteraction implements TimelineInteractionPopupHost {
 				if (session != null) {
 					cameraResizeSession = session;
 					resizeClipBeforeSnapshot = session.undoSnapshot();
-					return;
-				}
-			}
+							return;
+						}
+					}
 			for (InteractiveTrackSlot slot : build(timeline)) {
 				int logicalRow = slot.rowIndex();
 				if (!layout.isRowVisible(logicalRow)) continue;
@@ -459,9 +459,9 @@ public final class TimelineInteraction implements TimelineInteractionPopupHost {
 						clipDragSession = TimelineClipDragCoordinator.tryBeginFromClipHit(
 							timeline, hit, hitClip, interactionState, viewState, layout, mx, my);
 						if (clipDragSession != null) {
-							if (!ctrl) selectionState.clearClips();
-							selectionState.selectClip(hit.getClipId());
-						}
+						if (!ctrl) selectionState.clearClips();
+						selectionState.selectClip(hit.getClipId());
+					}
 					}
 					return;
 				}
@@ -672,7 +672,7 @@ public final class TimelineInteraction implements TimelineInteractionPopupHost {
 	@Override
 	public TimelineEventRef resolvePropertiesEventRef(Timeline timeline, SelectionState selectionState) {
 		return TimelineEventRefs.resolveForProperties(
-			timeline,
+						timeline,
 			selectionState,
 			popupState.propertiesEventId,
 			id -> popupState.propertiesEventId = id
@@ -694,10 +694,10 @@ public final class TimelineInteraction implements TimelineInteractionPopupHost {
 	public void pasteClipboardEvents(Timeline timeline, SelectionState selectionState, double anchorTimeSeconds,
 			TimelineTrackListState trackListState) {
 		TimelineInteractionClipboard.paste(new TimelineInteractionClipboard.PasteRequest(
-			timeline,
+				timeline,
 			selectionState,
 			clipboardEvents,
-			anchorTimeSeconds,
+				anchorTimeSeconds,
 			popupState.contextTrackId,
 			popupState.contextClipId,
 			trackListState

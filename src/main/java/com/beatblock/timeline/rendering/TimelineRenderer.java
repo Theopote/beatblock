@@ -2,7 +2,6 @@ package com.beatblock.timeline.rendering;
 
 import com.beatblock.BeatBlock;
 import com.beatblock.runtime.BeatBlockContext;
-import com.beatblock.audio.analysis.AudioFeatureTimeline;
 import com.beatblock.audio.assets.AudioAsset;
 import com.beatblock.audio.assets.AudioAssetManager;
 import com.beatblock.timeline.*;
@@ -17,7 +16,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Path;
 import java.util.Collections;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -26,12 +24,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.function.Supplier;
 
 /**
@@ -39,8 +32,6 @@ import java.util.function.Supplier;
  */
 public final class TimelineRenderer implements TimelineAudioDropHost {
 	private static final Logger LOGGER = LoggerFactory.getLogger(TimelineRenderer.class);
-	private static final long DENSE_FAILURE_COOLDOWN_MS = 30_000L;
-	private static final long PENDING_DENSE_PAYLOAD_TTL_MS = 120_000L;
 
 	public static final int PLAYHEAD_COLOR = 0xFF_FF_66_66;
 	private static final int SELECTED_BORDER_COLOR = 0xFF_FF_FF_00;
@@ -68,16 +59,7 @@ public final class TimelineRenderer implements TimelineAudioDropHost {
 	private final TrackRenderer trackRenderer = new TrackRenderer();
 	private final EventRenderer eventRenderer = new EventRenderer();
 	private final WaveformRenderer waveformRenderer = new WaveformRenderer();
-	private final ExecutorService denseFeatureExecutor = Executors.newSingleThreadExecutor(r -> {
-		Thread t = new Thread(r, "beatblock-dense-feature");
-		t.setDaemon(true);
-		return t;
-	});
-	private volatile boolean denseFeatureExecutorShutdown;
-	private final ConcurrentMap<String, DenseApplyPayload> pendingDenseApplies = new ConcurrentHashMap<>();
-	private final ConcurrentMap<String, Boolean> denseAnalysisInFlight = new ConcurrentHashMap<>();
-	private final ConcurrentMap<String, Long> denseAnalysisFailureUntilMs = new ConcurrentHashMap<>();
-	private String lastAutoAppliedBeatmapSignature;
+	private final TimelineDenseFeatureApplier denseFeatureApplier = new TimelineDenseFeatureApplier();
 
 	/**
 	 * 本帧计算出的音频子轨定义列表（由 TrackRegistry.buildAudioSubTracks 生成）。
@@ -155,8 +137,8 @@ public final class TimelineRenderer implements TimelineAudioDropHost {
 			trackListState.setMuteChangeListener(() -> syncStemMuteState(trackListState));
 		}
 
-		applyPendingDenseUpdates(timeline);
-		tryAutoApplyAnalyzedBeatmap(timeline);
+		denseFeatureApplier.applyPendingUpdates(ctx(), timeline);
+		denseFeatureApplier.tryAutoApplyAnalyzedBeatmap(this, timeline);
 
 		// ── 音频子轨定义列表：仅在 featureTracks keySet 变化时重建 ─────────────
 		// TrackRegistry.buildAudioSubTracks 内部每次都分配新 ArrayList + TrackDefinition 对象，
@@ -520,7 +502,7 @@ public final class TimelineRenderer implements TimelineAudioDropHost {
 		String clipAudioKey = TimelineAudioFeatureFillSupport.normalizeAudioPath(clipPathObj.toString());
 		if (clipAudioKey == null) return null;
 
-		AudioAsset asset = findAssetByAudioKey(clipAudioKey);
+		AudioAsset asset = TimelineAudioFeatureFillSupport.findAssetByAudioKey(clipAudioKey);
 		if (asset == null || asset.getBeatmap() == null) return null;
 		com.beatblock.audio.beatmap.Beatmap beatmap = asset.getBeatmap();
 		com.beatblock.audio.beatmap.WaveformPreview preview;
@@ -787,12 +769,12 @@ public final class TimelineRenderer implements TimelineAudioDropHost {
 
 	@Override
 	public void resetBeatmapAutoApplySignature() {
-		lastAutoAppliedBeatmapSignature = null;
+		denseFeatureApplier.resetAutoApplySignature();
 	}
 
 	@Override
 	public void requestDenseFeatureEnrichment(Timeline timeline, AudioAsset asset) {
-		requestDenseFeatureEnrichmentInternal(timeline, asset);
+		denseFeatureApplier.requestEnrichment(ctx(), timeline, asset);
 	}
 
 	@Override
@@ -819,162 +801,10 @@ public final class TimelineRenderer implements TimelineAudioDropHost {
 		}
 	}
 
-	/**
-	 * 触发高分辨率频段数据补全：已有特征时立即应用；否则在后台分析，主线程按当前时间线音频路径安全回填。
-	 */
-	private void requestDenseFeatureEnrichmentInternal(Timeline timeline, AudioAsset asset) {
-		if (timeline == null || asset == null || ctx().audioAnalysisEngine() == null) return;
-		if (denseFeatureExecutorShutdown) return;
-
-		String audioKey = TimelineAudioFeatureFillSupport.buildAudioAssetKey(asset);
-		if (audioKey == null) return;
-		long now = System.currentTimeMillis();
-		Long failureUntil = denseAnalysisFailureUntilMs.get(audioKey);
-		if (failureUntil != null && failureUntil > now) return;
-
-		AudioFeatureTimeline cachedFeature = asset.getFeatureTimeline();
-		if (cachedFeature != null) {
-			denseAnalysisFailureUntilMs.remove(audioKey);
-			applyDenseFeatureData(timeline, asset, cachedFeature, audioKey);
-			return;
-		}
-
-		Path audioPath = asset.getPath();
-		if (audioPath == null) return;
-		if (denseAnalysisInFlight.putIfAbsent(audioKey, Boolean.TRUE) != null) return;
-
-		denseFeatureExecutor.submit(() -> {
-			try {
-				AudioFeatureTimeline analyzed = ctx().audioAnalysisEngine().analyze(audioPath);
-				if (analyzed == null) {
-					denseAnalysisFailureUntilMs.put(audioKey, System.currentTimeMillis() + DENSE_FAILURE_COOLDOWN_MS);
-					LOGGER.warn("BeatBlock Timeline: dense feature enrichment returned null path={} (cooldown={}ms)",
-						audioPath, DENSE_FAILURE_COOLDOWN_MS);
-					return;
-				}
-				asset.setFeatureTimeline(analyzed);
-				denseAnalysisFailureUntilMs.remove(audioKey);
-				pendingDenseApplies.put(audioKey, new DenseApplyPayload(asset, analyzed, System.currentTimeMillis()));
-			} catch (Exception e) {
-				denseAnalysisFailureUntilMs.put(audioKey, System.currentTimeMillis() + DENSE_FAILURE_COOLDOWN_MS);
-				LOGGER.warn("BeatBlock Timeline: dense feature enrichment failed path={} reason={}", audioPath, e.toString());
-			} finally {
-				denseAnalysisInFlight.remove(audioKey);
-			}
-		});
-	}
-
-	/**
-	 * 释放后台资源，避免客户端退出后残留分析线程。
-	 */
+	/** 释放后台 dense 特征分析线程。 */
 	public void shutdown() {
-		if (denseFeatureExecutorShutdown) {
-			LOGGER.debug("BeatBlock Timeline: dense feature executor already shut down");
-			return;
-		}
-		int pendingCount = pendingDenseApplies.size();
-		int inflightCount = denseAnalysisInFlight.size();
-		int cooldownCount = denseAnalysisFailureUntilMs.size();
-		denseFeatureExecutorShutdown = true;
-		pendingDenseApplies.clear();
-		denseAnalysisInFlight.clear();
-		denseAnalysisFailureUntilMs.clear();
-		denseFeatureExecutor.shutdownNow();
-		LOGGER.info(
-			"BeatBlock Timeline: dense feature executor shutdown (pending={}, inflight={}, cooldown={})",
-			pendingCount,
-			inflightCount,
-			cooldownCount
-		);
+		denseFeatureApplier.shutdown();
 	}
-
-	private void applyPendingDenseUpdates(Timeline timeline) {
-		if (pendingDenseApplies.isEmpty()) return;
-		pruneStalePendingDenseApplies();
-		if (timeline == null || pendingDenseApplies.isEmpty()) return;
-		String timelineAudioKey = TimelineAudioFeatureFillSupport.getTimelineAudioPathKey(timeline);
-		if (timelineAudioKey == null) return;
-		DenseApplyPayload payload = pendingDenseApplies.remove(timelineAudioKey);
-		if (payload != null) {
-			applyDenseFeatureData(timeline, payload.asset(), payload.feature(), timelineAudioKey);
-		}
-	}
-
-	private void pruneStalePendingDenseApplies() {
-		long now = System.currentTimeMillis();
-		pendingDenseApplies.entrySet().removeIf(e -> now - e.getValue().createdAtMs() > PENDING_DENSE_PAYLOAD_TTL_MS);
-	}
-
-	private void applyDenseFeatureData(Timeline timeline, AudioAsset asset, AudioFeatureTimeline feature, String expectedAudioKey) {
-		if (timeline == null || asset == null || feature == null || ctx().audioAnalysisEngine() == null) return;
-		String timelineAudioKey = TimelineAudioFeatureFillSupport.getTimelineAudioPathKey(timeline);
-		if (!Objects.equals(timelineAudioKey, expectedAudioKey)) return;
-
-		double startOffset = TimelineAudioFeatureFillSupport.readClipOffset(timeline, expectedAudioKey);
-		double prevDuration = timeline.getDurationSeconds();
-		ctx().audioAnalysisEngine().fillTimelineFromFeature(timeline, feature, asset.getSampleRate());
-		TimelineAudioFeatureFillSupport.shiftFeatureEventsByOffset(timeline, startOffset);
-		timeline.setDurationSeconds(prevDuration);
-		if (asset.getBeatmap() != null && asset.getBeatmap().meta != null) {
-			timeline.setMetadata("bpm", asset.getBeatmap().meta.bpm());
-			timeline.setMetadata("beatCount", asset.getBeatmap().beats.size());
-		}
-		if (ctx().timelineEditor() != null) {
-			ctx().timelineEditor().syncClockDuration();
-		}
-	}
-
-	private void tryAutoApplyAnalyzedBeatmap(Timeline timeline) {
-		if (timeline == null || ctx().audioAnalysisEngine() == null) return;
-		String timelineAudioKey = TimelineAudioFeatureFillSupport.getTimelineAudioPathKey(timeline);
-		if (timelineAudioKey == null) return;
-
-		Object awaitingRaw = timeline.getMetadata("awaitingAnalyzedBeatmap");
-		String awaitingKey = awaitingRaw != null ? TimelineAudioFeatureFillSupport.normalizeAudioPath(awaitingRaw.toString()) : null;
-		if (!Objects.equals(awaitingKey, timelineAudioKey)) return;
-
-		AudioAsset matched = findAssetByAudioKey(timelineAudioKey);
-		if (matched == null || matched.getBeatmap() == null) return;
-
-		String signature = buildBeatmapApplySignature(timelineAudioKey, matched.getBeatmap());
-		if (Objects.equals(signature, lastAutoAppliedBeatmapSignature)) return;
-
-		double startOffset = TimelineAudioFeatureFillSupport.readClipOffset(timeline, timelineAudioKey);
-		double prevDuration = timeline.getDurationSeconds();
-		Map<String, TimelineAudioFeatureFillSupport.SavedFeatureTrack> savedFeatureEvents = TimelineAudioFeatureFillSupport.saveFeatureEvents(timeline);
-		ctx().audioAnalysisEngine().fillTimelineFromBeatmap(timeline, matched.getBeatmap());
-		TimelineAudioFeatureFillSupport.shiftFeatureEventsByOffset(timeline, startOffset);
-		TimelineAudioFeatureFillSupport.restoreFeatureEvents(timeline, savedFeatureEvents);
-		timeline.setDurationSeconds(prevDuration);
-		requestDenseFeatureEnrichmentInternal(timeline, matched);
-		bindStemAudioIfDemucsInternal(matched.getBeatmap());
-		timeline.setMetadata("awaitingAnalyzedBeatmap", null);
-		lastAutoAppliedBeatmapSignature = signature;
-		if (ctx().timelineEditor() != null) {
-			ctx().timelineEditor().syncClockDuration();
-		}
-		LOGGER.info("BeatBlock Timeline: auto-applied analyzed beatmap path={}", matched.getPath());
-	}
-
-	private AudioAsset findAssetByAudioKey(String audioKey) {
-		if (audioKey == null) return null;
-		for (AudioAsset asset : AudioAssetManager.getInstance().getAssets()) {
-			String key = TimelineAudioFeatureFillSupport.buildAudioAssetKey(asset);
-			if (Objects.equals(key, audioKey)) {
-				return asset;
-			}
-		}
-		return null;
-	}
-
-	private String buildBeatmapApplySignature(String audioKey, com.beatblock.audio.beatmap.Beatmap beatmap) {
-		if (beatmap == null) return audioKey + "|none";
-		String beatmapPath = beatmap.beatmapFilePath != null ? beatmap.beatmapFilePath.toString() : "";
-		String generatedAt = (beatmap.meta != null && beatmap.meta.generatedAt() != null) ? beatmap.meta.generatedAt() : "";
-		return audioKey + "|" + beatmapPath + "|" + generatedAt;
-	}
-
-	private record DenseApplyPayload(AudioAsset asset, AudioFeatureTimeline feature, long createdAtMs) {}
 
 	/**
 	 * 将 trackListState 的茎轨道静音/独奏状态同步到 {@link BeatBlock#stemMixer}。

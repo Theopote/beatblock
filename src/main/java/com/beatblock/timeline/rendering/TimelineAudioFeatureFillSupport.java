@@ -3,6 +3,8 @@ package com.beatblock.timeline.rendering;
 import com.beatblock.timeline.FeatureEvent;
 import com.beatblock.timeline.FeatureTrack;
 import com.beatblock.timeline.Timeline;
+import com.beatblock.audio.assets.AudioAsset;
+import com.beatblock.audio.assets.AudioAssetManager;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -82,5 +84,24 @@ public final class TimelineAudioFeatureFillSupport {
 		Object raw = timeline.getMetadata("audioClipOffset_" + audioKey);
 		if (raw instanceof Number n) return n.doubleValue();
 		return 0.0;
+	}
+
+	public static AudioAsset findAssetByAudioKey(String audioKey) {
+		if (audioKey == null) return null;
+		for (AudioAsset asset : AudioAssetManager.getInstance().getAssets()) {
+			String key = buildAudioAssetKey(asset);
+			if (java.util.Objects.equals(key, audioKey)) {
+				return asset;
+			}
+		}
+		return null;
+	}
+
+	public static String buildBeatmapApplySignature(String audioKey, com.beatblock.audio.beatmap.Beatmap beatmap) {
+		if (beatmap == null) return audioKey + "|none";
+		String beatmapPath = beatmap.beatmapFilePath != null ? beatmap.beatmapFilePath.toString() : "";
+		String generatedAt = (beatmap.meta != null && beatmap.meta.generatedAt() != null)
+			? beatmap.meta.generatedAt() : "";
+		return audioKey + "|" + beatmapPath + "|" + generatedAt;
 	}
 }
