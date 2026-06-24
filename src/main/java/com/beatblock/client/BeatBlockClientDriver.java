@@ -44,15 +44,15 @@ public final class BeatBlockClientDriver {
 
 	private final Supplier<BeatBlockContext> contextSource;
 
-	private long lastTickNanos;
-	private boolean driving;
+	private volatile long lastTickNanos;
+	private volatile boolean driving;
 	private final Set<String> scheduledTimelineAnimationIds = new HashSet<>();
 	private final Set<String> scheduledAutoAnimationIds = new HashSet<>();
 	private final Set<String> scheduledBuildReverseIds = new HashSet<>();
 	private static final double TIMELINE_EVENT_EPSILON = 1e-4;
-	private double lastTimelineAnimationTime;
-	private double lastAutoAnimationTime;
-	private double lastBuildReverseTime;
+	private volatile double lastTimelineAnimationTime;
+	private volatile double lastAutoAnimationTime;
+	private volatile double lastBuildReverseTime;
 	private final Map<BlockPos, BlockState> timelineMutationSnapshot = new HashMap<>();
 	private RegistryKey<World> timelineMutationWorldKey;
 	private volatile TimelineActionExecutionReport lastTimelineActionExecutionReport;

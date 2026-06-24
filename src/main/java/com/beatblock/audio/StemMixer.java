@@ -48,9 +48,9 @@ public final class StemMixer implements IAudioPlayer {
 
 	private final Map<String, StemTrack> stems = new LinkedHashMap<>();
 	private volatile boolean playing = false;
-	private double durationSeconds   = 0.0;
-	private double lastKnownTimeSeconds = 0.0;
-	private boolean recoveringOpenAl = false;
+	private volatile double durationSeconds   = 0.0;
+	private volatile double lastKnownTimeSeconds = 0.0;
+	private volatile boolean recoveringOpenAl = false;
 
 	// ── 公共 API ─────────────────────────────────────────────────────────────
 
@@ -158,7 +158,7 @@ public final class StemMixer implements IAudioPlayer {
 	}
 
 	@Override
-	public double getCurrentTimeSeconds() {
+	public synchronized double getCurrentTimeSeconds() {
 		if (!ensureOpenAlBackendReady()) return lastKnownTimeSeconds;
 		for (StemTrack t : stems.values()) {
 			try {

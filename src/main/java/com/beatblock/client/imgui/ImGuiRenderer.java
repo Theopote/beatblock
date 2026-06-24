@@ -37,10 +37,10 @@ public class ImGuiRenderer {
 
 	private ImGuiImplGlfw imGuiGlfw;
 	private ImGuiImplGl3 imGuiGl3;
-	private long windowHandle;
-	private boolean initialized;
-	private boolean frameInProgress;
-	private boolean drawDataReady;
+	private volatile long windowHandle;
+	private volatile boolean initialized;
+	private volatile boolean frameInProgress;
+	private volatile boolean drawDataReady;
 	private GLFWDropCallbackI chainedDropCallback;
 	private GLFWDropCallbackI beatblockDropCallback;
 	private final Queue<String> droppedFileQueue = new ConcurrentLinkedQueue<>();

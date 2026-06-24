@@ -29,17 +29,17 @@ import java.nio.file.Path;
 public class MusicPlayer implements IAudioPlayer {
 	private static final Logger LOGGER = LoggerFactory.getLogger(MusicPlayer.class);
 
-	private boolean playing;
+	private volatile boolean playing;
 	private volatile double currentTimeSeconds;
 	private volatile double durationSeconds;
-	private double playbackSpeed = 1.0;
+	private volatile double playbackSpeed = 1.0;
 	private Clip audioClip;
 	private final StreamMusicBackend streamBackend = new StreamMusicBackend();
 	private final OpenAlMusicBackend openAlBackend;
 	private String loadedAudioPath;
 	private String lastLoadError;
 	private volatile boolean muted;
-	private boolean recoveringOpenAl;
+	private volatile boolean recoveringOpenAl;
 
 	public MusicPlayer() {
 		this.playing = false;
@@ -257,7 +257,7 @@ public class MusicPlayer implements IAudioPlayer {
 		return lastLoadError;
 	}
 
-	public void tick(double deltaSeconds) {
+	public synchronized void tick(double deltaSeconds) {
 		if (audioClip != null || streamBackend.isActive() || openAlBackend.isActive()) {
 			syncClipState();
 			return;

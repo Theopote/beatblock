@@ -13,9 +13,9 @@ public final class StreamMusicBackend {
 	private AudioFormat format;
 	private SourceDataLine line;
 	private Thread thread;
-	private int bytePosition;
-	private int startBytePosition;
-	private double durationSeconds;
+	private volatile int bytePosition;
+	private volatile int startBytePosition;
+	private volatile double durationSeconds;
 	private volatile boolean streamRunning;
 
 	public boolean isActive() {
