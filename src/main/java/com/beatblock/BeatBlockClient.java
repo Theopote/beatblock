@@ -74,14 +74,15 @@ public class BeatBlockClient implements ClientModInitializer {
 		
 		ClientLifecycleEvents.CLIENT_STOPPING.register(client -> {
 			LOGGER.info("BeatBlock client stopping: releasing timeline and audio background resources");
-			if (BeatBlock.timelineEditor != null) {
-				BeatBlock.timelineEditor.shutdown();
+			var ctx = BeatBlock.getContext();
+			if (ctx.timelineEditor() != null) {
+				ctx.timelineEditor().shutdown();
 			}
-			if (BeatBlock.externalAudioAnalyzer != null) {
-				BeatBlock.externalAudioAnalyzer.shutdown();
+			if (ctx.externalAudioAnalyzer() != null) {
+				ctx.externalAudioAnalyzer().shutdown();
 			}
-			if (BeatBlock.audioConversionService != null) {
-				BeatBlock.audioConversionService.shutdown();
+			if (ctx.audioConversionService() != null) {
+				ctx.audioConversionService().shutdown();
 			}
 			LOGGER.info("BeatBlock client stopping: background resource cleanup complete");
 		});

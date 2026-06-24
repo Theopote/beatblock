@@ -398,6 +398,7 @@ void testTick() {
 | UI Panel 去静态化（第二批） | ✅ 已落地 | `AudioAnalysisPanel` + `AudioAnalysisPanelPresenter`；`AutoMapSettingsPanel` + `AutoMapSettingsPanelPresenter` |
 | 引擎 / 客户端驱动去静态化 | ✅ 已落地 | `BeatBlockClientDriver`、`TimelineCameraController`、`TimelineInteraction` 已注入；`TimelineRenderer`、`AudioLoader`、`TrackRenderer`、世界渲染器已改；`TimelineEditor` 音乐播放逻辑已本地化 |
 | SelectionManager / 代码生成路径 | ✅ 已落地 | `BeatBlockSelectionManager.bindContext`；`TimelineDraftWriter`、`StepSequenceBaker`、`AnimationBindingEngine`、`TimelineBuilder`、`AutoMapGenerator` 经 `BeatBlockContext` 解析引擎/命令依赖 |
+| 音频资产 / 客户端生命周期 | ✅ 已落地 | `AudioAssetManager.bindContext` 解析 `externalAudioAnalyzer`；`BeatBlockClient` shutdown 经 `getContext()`；`TimelineEditor` 音乐/分段播放同步已构造器注入（无 `BeatBlock.*` 静态访问） |
 | 全局 DI 容器 | ⏸ 暂缓 | 手动构造器注入已够用；暂不引入 Guice / Spring |
 
 **新代码约定**: 业务逻辑优先通过 `BeatBlockContext` 或 Presenter 注入；Panel 避免新增 `BeatBlock.*` 静态访问。
@@ -410,88 +411,75 @@ void testTick() {
 
 #### 3.1.1 大型类拆分
 
-**识别的大型类**:
+**识别的大型类（2026-06 复核）**:
 
-| 类名 | 当前行数（估算） | 职责数量 | 优化建议 |
-|------|------------------|----------|----------|
-| `BeatBlockSelectionManager` | 800+ | 8+ | 拆分为多个 Tool 类 |
-| `BlockAnimationEngine` | 600+ | 5+ | 提取调度器和规划器 |
-| `TimelineEditor` | 500+ | 6+ | 分离布局计算和交互处理 |
-| `MusicPlayer` | 800+ | 7+ | 分离播放后端（Clip/OpenAL/Stream） |
+| 类名 | 当前行数 | 状态 | 优化建议 |
+|------|----------|------|----------|
+| `BeatBlockSelectionManager` | ~720 | 🔄 进行中 | 已拆 helper（`SelectionMerge`、`ConnectedSelectionFloodFill` 等）；Phase 1 `SelectionFeedback` ✅；Phase 2 `collect/*` 收集器进行中 |
+| `TimelineInteraction` | ~1816 | ⏸ 待拆 | 按 ruler / drag / popup / hit-test 拆 handler（**比 TimelineEditor 优先级更高**） |
+| `TimelineRenderer` | ~1707 | ⏸ 待拆 | 按 ruler / track / clip / drag-drop 拆 renderer |
+| `MusicPlayer` | ~787 | ⏸ 待拆 | 分离 Clip / SourceDataLine / OpenAL 播放后端 |
+| `BlockAnimationEngine` | ~397 | ✅ 已门面化 | 子系统已抽出（`BuildSequencer`、`AnimationPlayer` 等），暂无需再拆 |
+| `TimelineEditor` | ~384 | ✅ 已协调层 | 交互/渲染已委托 `TimelineInteraction` / `TimelineRenderer`，本身不必再动 |
 
-**重构示例：BeatBlockSelectionManager**
+**已拆出的选区 helper（`com.beatblock.selection`）**:
+
+- `SelectionMerge`、`SelectionRegions`、`SelectionBrushRegions`、`BlockSelectionLine`
+- `ConnectedSelectionFloodFill`、`SelectionReach`、`SelectionBounds`、`SelectionLayerBlocks`
+- `PlaneSliceBounds`
+- `SelectionFeedback`（合并操作反馈文案）
+- `collect/ColumnSelectionCollector`（整列收集，Phase 2 POC）
+
+**BeatBlockSelectionManager 渐进式重构**
 
 ```
 优先级: 🟡 中
-工作量: 大（1-2周）
+工作量: 增量 3–5 天（全量 Tool 化仍约 1–2 周）
 
-当前问题:
-- 单个类处理8种选区模式（CLICK, BOX, LINE, BRUSH等）
-- 混合了工具逻辑、选区存储、消息反馈
+Phase 1 ✅  SelectionFeedback — 合并/图层跳过反馈文案
+Phase 2 🔄  selection/collect/* — 各模式 BlockCollector（返回 SelectionCollectResult）
+Phase 3 ⏸  SelectionToolRegistry — 模式分发；保留 BeatBlockSelectionManager.get() 门面
+Phase 4 ⏸  （可选）重命名 SelectionManager，旧类作 alias
 
-重构方案:
-src/main/java/com/beatblock/selection/
-  ├── SelectionManager.java           (核心存储+操作合并)
-  ├── SelectionFeedback.java          (消息与UI反馈)
-  └── tools/
-      ├── ISelectionTool.java         (工具接口)
-      ├── ClickTool.java
-      ├── BoxTool.java
-      ├── BrushTool.java
-      ├── LassoTool.java
-      ├── MagicWandTool.java
-      └── PlaneSliceTool.java
+注意:
+- 配置 UI 留在 ToolPanelPresenter / SelectionPropertiesPresenter，不放 Tool 接口
+- Lasso / Brush 有独立生命周期（commitLasso、stampBrush、finishBrushStroke），非纯 handleClick
+- Box / Line 为两步角点状态机，需 resetTransientState()
+- 共享参数经 SelectionCollectContext 注入（距离、图层、maxBlocks 等）
 ```
 
-**代码示例**:
+**目标结构**:
+
+```
+src/main/java/com/beatblock/selection/
+  ├── BeatBlockSelectionManager.java   (门面 + 选区存储 + 模式分发)
+  ├── SelectionFeedback.java           ✅
+  ├── SelectionCollectResult.java      ✅
+  └── collect/
+      ├── ColumnSelectionCollector.java ✅
+      ├── BoxSelectionCollector.java    (待拆)
+      └── ...
+```
+
+**收集器接口（Phase 2，替代文档旧版 ISelectionTool.renderConfigUI）**:
+
 ```java
-// 统一的工具接口
-public interface ISelectionTool {
-    String getName();
-    SelectionMode getMode();
-    
-    // 处理点击事件
-    SelectionResult handleClick(World world, BlockPos pos, boolean shiftDown);
-    
-    // 工具特定的配置UI（可选）
-    void renderConfigUI();
-    
-    // 取消当前操作（如取消box第一个角点）
-    void cancel();
+public record SelectionCollectResult(List<BlockPos> blocks, String errorMessage) {
+    public static SelectionCollectResult success(List<BlockPos> blocks) { ... }
+    public static SelectionCollectResult failure(String message) { ... }
+    public boolean failed() { return errorMessage != null; }
 }
 
-// 工具管理器
-public class SelectionToolRegistry {
-    private Map<SelectionMode, ISelectionTool> tools = new LinkedHashMap<>();
-    private ISelectionTool currentTool;
-    
-    public void register(ISelectionTool tool) {
-        tools.put(tool.getMode(), tool);
-    }
-    
-    public void setActiveMode(SelectionMode mode) {
-        this.currentTool = tools.get(mode);
-    }
-    
-    public SelectionResult handleWorldClick(World world, BlockPos pos, boolean shift) {
-        if (currentTool == null) return SelectionResult.empty();
-        return currentTool.handleClick(world, pos, shift);
-    }
-}
+// 示例：整列收集器（已落地）
+ColumnSelectionCollector.collect(world, pos, includeAir, maxBlocks, withinReach);
+```
 
-// 简化后的 SelectionManager
-public class SelectionManager {
-    private final Set<BlockPos> selectedBlocks = new HashSet<>();
-    private final SelectionToolRegistry toolRegistry;
-    private final SelectionFeedback feedback;
-    
-    public void mergeBlocks(List<BlockPos> blocks, SelectionOperation op) {
-        // 纯粹的集合操作逻辑
-    }
-    
-    public Set<BlockPos> getSelectedBlocks() {
-        return Collections.unmodifiableSet(selectedBlocks);
-    }
+**简化后的 Manager 职责（Phase 3 目标）**:
+
+```java
+public final class BeatBlockSelectionManager {
+    private final LinkedHashSet<BlockPos> selected = new LinkedHashSet<>();
+    // 模式分发 → collect/* → SelectionMerge.apply → SelectionFeedback
 }
 ```
 

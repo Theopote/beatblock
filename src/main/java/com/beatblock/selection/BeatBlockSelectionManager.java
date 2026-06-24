@@ -4,6 +4,7 @@ import com.beatblock.BeatBlock;
 import com.beatblock.engine.layer.BuildLayer;
 import com.beatblock.engine.layer.BuildLayerManager;
 import com.beatblock.runtime.BeatBlockContext;
+import com.beatblock.selection.collect.ColumnSelectionCollector;
 import net.minecraft.block.BlockState;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.math.BlockPos;
@@ -636,23 +637,13 @@ public final class BeatBlockSelectionManager {
 	}
 
 	private List<BlockPos> collectColumn(World world, BlockPos pos) {
-		int x = pos.getX();
-		int z = pos.getZ();
-		int minY = world.getBottomY();
-		int maxY = minY + world.getHeight() - 1;
-		int span = maxY - minY + 1;
-		if (span > maxBlocks) {
-			lastMessage = String.format("整列高度 %d 超过上限 %d。", span, maxBlocks);
+		SelectionCollectResult result = ColumnSelectionCollector.collect(
+			world, pos, includeAir, maxBlocks, this::isWithinCameraReach);
+		if (result.failed()) {
+			lastMessage = result.errorMessage();
 			return null;
 		}
-		List<BlockPos> out = new ArrayList<>(Math.min(span, 4096));
-		for (int y = minY; y <= maxY; y++) {
-			BlockPos p = new BlockPos(x, y, z);
-			if (!isWithinCameraReach(p)) continue;
-			if (!includeAir && world.getBlockState(p).isAir()) continue;
-			out.add(p.toImmutable());
-		}
-		return out;
+		return result.blocks();
 	}
 
 	private List<BlockPos> collectConnected(World world, BlockPos start) {
@@ -689,9 +680,7 @@ public final class BeatBlockSelectionManager {
 		blocks = excludeLayerClaimed(blocks);
 		if (blocks.isEmpty()) {
 			if (!quiet) {
-				lastMessage = skippedLayer > 0
-					? "选区内方块均已属于某图层，无法加入选区。"
-					: mergeMessageNew(0);
+				lastMessage = SelectionFeedback.emptyMergeMessage(mode, brushShape, skippedLayer);
 			}
 			return;
 		}
@@ -699,83 +688,12 @@ public final class BeatBlockSelectionManager {
 		selected.clear();
 		selected.addAll(merged);
 		if (!quiet) {
-			lastMessage = switch (op) {
-				case NEW -> mergeMessageNew(blocks.size());
-				case ADD -> mergeMessageAfterAdd();
-				case SUBTRACT -> mergeMessageAfterSubtract();
-				case INTERSECT -> mergeMessageAfterIntersect();
-			};
+			lastMessage = SelectionFeedback.mergeAfterOperation(mode, brushShape, op, blocks.size(), selected.size());
 		}
 		if (!quiet && skippedLayer > 0) {
-			lastMessage = lastMessage + String.format("（已跳过 %d 个已属于图层的方块）", skippedLayer);
+			lastMessage = SelectionFeedback.appendSkippedLayerNotice(lastMessage, skippedLayer);
 		}
 		LOGGER.debug("[BeatBlockSelection] merge op={} size={}", op, selected.size());
-	}
-
-	private String brushShapeLabel() {
-		return switch (brushShape) {
-			case SPHERE -> "球体";
-			case CUBE -> "立方";
-		};
-	}
-
-	private String mergeMessageNew(int count) {
-		return switch (mode) {
-			case BOX -> "新建框选：" + count + " 个方块";
-			case LINE -> "新建线选：" + count + " 个方块";
-			case CONNECTED -> "新建连通选区：" + count + " 个方块";
-			case COLUMN -> "新建整列：" + count + " 个方块";
-			case PLANE_SLICE -> "新建平面切片：" + count + " 个方块";
-			case SELECTION_WAND -> "新建选区魔棒：" + count + " 个方块";
-			case BRUSH -> "新建笔刷（" + brushShapeLabel() + "）：" + count + " 个方块";
-			case LASSO -> "新建套索：" + count + " 个方块";
-			default -> "新建选区：" + count + " 个方块";
-		};
-	}
-
-	private String mergeMessageAfterAdd() {
-		int n = selected.size();
-		return switch (mode) {
-			case BOX -> "加选框后共 " + n + " 个方块";
-			case LINE -> "加选线后共 " + n + " 个方块";
-			case CONNECTED -> "加选连通区域后共 " + n + " 个方块";
-			case COLUMN -> "加选整列后共 " + n + " 个方块";
-			case PLANE_SLICE -> "加选切片后共 " + n + " 个方块";
-			case SELECTION_WAND -> "加选选区魔棒后共 " + n + " 个方块";
-			case BRUSH -> "加选笔刷后共 " + n + " 个方块";
-			case LASSO -> "加选套索后共 " + n + " 个方块";
-			default -> "加选后共 " + n + " 个方块";
-		};
-	}
-
-	private String mergeMessageAfterSubtract() {
-		int n = selected.size();
-		return switch (mode) {
-			case BOX -> "减选框后共 " + n + " 个方块";
-			case LINE -> "减选线后共 " + n + " 个方块";
-			case CONNECTED -> "减选连通区域后共 " + n + " 个方块";
-			case COLUMN -> "减选整列后共 " + n + " 个方块";
-			case PLANE_SLICE -> "减选切片后共 " + n + " 个方块";
-			case SELECTION_WAND -> "减选选区魔棒后共 " + n + " 个方块";
-			case BRUSH -> "减选笔刷后共 " + n + " 个方块";
-			case LASSO -> "减选套索后共 " + n + " 个方块";
-			default -> "减选后共 " + n + " 个方块";
-		};
-	}
-
-	private String mergeMessageAfterIntersect() {
-		int n = selected.size();
-		return switch (mode) {
-			case BOX -> "与框求交后共 " + n + " 个方块";
-			case LINE -> "与线求交后共 " + n + " 个方块";
-			case CONNECTED -> "与连通区域求交后共 " + n + " 个方块";
-			case COLUMN -> "与整列求交后共 " + n + " 个方块";
-			case PLANE_SLICE -> "与切片求交后共 " + n + " 个方块";
-			case SELECTION_WAND -> "与选区魔棒结果求交后共 " + n + " 个方块";
-			case BRUSH -> "与笔刷求交后共 " + n + " 个方块";
-			case LASSO -> "与套索求交后共 " + n + " 个方块";
-			default -> "求交后共 " + n + " 个方块";
-		};
 	}
 
 	public BlockPos getBoundingMin() {

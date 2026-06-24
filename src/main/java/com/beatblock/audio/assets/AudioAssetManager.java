@@ -2,6 +2,7 @@ package com.beatblock.audio.assets;
 
 import com.beatblock.BeatBlock;
 import com.beatblock.audio.AudioAnalysisService;
+import com.beatblock.runtime.BeatBlockContext;
 import com.beatblock.audio.beatmap.Beatmap;
 import com.beatblock.audio.beatmap.BeatEvent;
 import com.beatblock.audio.beatmap.BeatmapMeta;
@@ -23,6 +24,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Future;
+import java.util.function.Supplier;
 
 /**
  * 音频资产管理器：维护「音频解析」面板的数据源，并串联 AudioAnalysisEngine。
@@ -43,9 +45,26 @@ public final class AudioAssetManager {
 	private AudioAsset currentDragAsset;
 	private ConversionRequestHandler conversionRequestHandler;
 	private long nextQueueTicket = 1L;
+	private Supplier<BeatBlockContext> contextSource = BeatBlock::getContext;
 	private static final String[] SUPPORTED_AUDIO_EXTENSIONS = {"mp3", "wav", "ogg", "flac"};
 
 	private AudioAssetManager() {
+	}
+
+	public void bindContext(Supplier<BeatBlockContext> source) {
+		this.contextSource = source != null ? source : BeatBlock::getContext;
+	}
+
+	static void resetContextBindingForTests() {
+		INSTANCE.bindContext(BeatBlock::getContext);
+	}
+
+	private BeatBlockContext ctx() {
+		return contextSource.get();
+	}
+
+	private AudioAnalysisService externalAnalyzer() {
+		return ctx().externalAudioAnalyzer();
 	}
 
 	public List<AudioAsset> getAssets() {
@@ -157,8 +176,9 @@ public final class AudioAssetManager {
 
 	public void remove(String id) {
 		if (id == null) return;
-		if (BeatBlock.externalAudioAnalyzer != null) {
-			BeatBlock.externalAudioAnalyzer.cancelAnalysis(id);
+		AudioAnalysisService service = externalAnalyzer();
+		if (service != null) {
+			service.cancelAnalysis(id);
 		}
 		analysisTasks.remove(id);
 		assets.removeIf(a -> id.equals(a.getId()));
@@ -170,7 +190,8 @@ public final class AudioAssetManager {
 	 * @return 用户可读结果信息
 	 */
 	public String clearCacheAndReanalyze(AudioAsset asset) {
-		AudioAnalysisMode mode = BeatBlock.externalAudioAnalyzer != null && BeatBlock.externalAudioAnalyzer.isUseDemucs()
+		AudioAnalysisService analyzer = externalAnalyzer();
+		AudioAnalysisMode mode = analyzer != null && analyzer.isUseDemucs()
 			? AudioAnalysisMode.DEMUCS
 			: AudioAnalysisMode.BASIC;
 		return clearCacheAndReanalyze(asset, mode);
@@ -178,7 +199,7 @@ public final class AudioAssetManager {
 
 	public String clearCacheAndReanalyze(AudioAsset asset, AudioAnalysisMode mode) {
 		if (asset == null || asset.getPath() == null) return "无效音频资产";
-		AudioAnalysisService service = BeatBlock.externalAudioAnalyzer;
+		AudioAnalysisService service = externalAnalyzer();
 		if (service == null) return "外部音频分析器未初始化";
 
 		AudioAnalysisMode resolvedMode = mode != null ? mode : AudioAnalysisMode.BASIC;
@@ -306,7 +327,8 @@ public final class AudioAssetManager {
 	 * 异步执行完整音频解析（Python + librosa），更新 asset 状态与统计信息。
 	 */
 	public void startAnalysis(AudioAsset asset) {
-		AudioAnalysisMode mode = BeatBlock.externalAudioAnalyzer != null && BeatBlock.externalAudioAnalyzer.isUseDemucs()
+		AudioAnalysisService analyzer = externalAnalyzer();
+		AudioAnalysisMode mode = analyzer != null && analyzer.isUseDemucs()
 			? AudioAnalysisMode.DEMUCS
 			: AudioAnalysisMode.BASIC;
 		startAnalysis(asset, mode);
@@ -332,7 +354,7 @@ public final class AudioAssetManager {
 		asset.setResolvedAnalysisMode(null);
 		asset.setCacheSource("");
 
-		AudioAnalysisService service = BeatBlock.externalAudioAnalyzer;
+		AudioAnalysisService service = externalAnalyzer();
 		if (service == null) {
 			asset.setStatus(AudioAssetStatus.FAILED);
 			asset.setAnalysisPhase(AudioAnalysisPhase.FAILED);
