@@ -1,5 +1,6 @@
 package com.beatblock.timeline.interaction;
 
+import com.beatblock.timeline.Timeline;
 import com.beatblock.timeline.TimelineEditor;
 import com.beatblock.timeline.editor.SelectionState;
 import com.beatblock.timeline.editor.TimelineClock;
@@ -18,13 +19,22 @@ public interface TimelineInteractionPopupHost {
 
 	void seekClockAndMusic(TimelineClock clock, double timeSeconds);
 
-	void copySelectedEvents(SelectionState selectionState);
+	void copySelectedEvents(Timeline timeline, SelectionState selectionState);
 
-	void pasteClipboardEvents(SelectionState selectionState, double anchorTimeSeconds, TimelineTrackListState trackListState);
+	void pasteClipboardEvents(
+		Timeline timeline,
+		SelectionState selectionState,
+		double anchorTimeSeconds,
+		TimelineTrackListState trackListState
+	);
 
-	void deleteSelectedEntries(SelectionState selectionState, TimelineTrackListState trackListState);
+	void deleteSelectedEntries(
+		Timeline timeline,
+		SelectionState selectionState,
+		TimelineTrackListState trackListState
+	);
 
-	TimelineEventRef resolvePropertiesEventRef(SelectionState selectionState);
+	TimelineEventRef resolvePropertiesEventRef(Timeline timeline, SelectionState selectionState);
 
-	boolean canDeleteContextClip(TimelineTrackListState trackListState);
+	boolean canDeleteContextClip(Timeline timeline, TimelineTrackListState trackListState);
 }

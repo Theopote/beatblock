@@ -39,6 +39,14 @@ public final class TimelineInteractionPopups {
 
 	private TimelineInteractionPopups() {}
 
+	public static void renderMarkerOnly(
+		Timeline timeline,
+		TimelineClock clock,
+		TimelineInteractionPopupHost host
+	) {
+		renderMarkerContextPopup(timeline, clock, host);
+	}
+
 	public static void renderAll(
 		Timeline timeline,
 		SelectionState selectionState,
@@ -58,7 +66,7 @@ public final class TimelineInteractionPopups {
 		TimelineTrackListState trackListState,
 		TimelineInteractionPopupHost host
 	) {
-		TimelineEventRef ref = host.resolvePropertiesEventRef(selectionState);
+		TimelineEventRef ref = host.resolvePropertiesEventRef(timeline, selectionState);
 		if (ref == null || ref.event() == null) return;
 		if (TimelineInteractiveTrackSlots.isTrackLocked(timeline, trackListState, ref.track().getId())) return;
 		TimelineInteractionPopupState state = host.popupState();
@@ -81,21 +89,21 @@ public final class TimelineInteractionPopups {
 		boolean hasSelection = selectionState != null
 			&& (!selectionState.getSelectedEvents().isEmpty() || !selectionState.getSelectedClips().isEmpty());
 		boolean canDeleteSelection = TimelineInteractionDeleteSupport.hasDeletableSelection(timeline, selectionState, trackListState);
-		boolean canDeleteContextClip = host.canDeleteContextClip(trackListState);
+		boolean canDeleteContextClip = host.canDeleteContextClip(timeline, trackListState);
 		BeatBlockClient.LOGGER.info(String.format(
 			"[TimelineInteraction.renderContextMenu] Menu opened: contextClipId=%s, contextTrackId=%s, canDeleteSelection=%s, canDeleteContextClip=%s",
 			state.contextClipId, state.contextTrackId, canDeleteSelection, canDeleteContextClip
 		));
 		boolean canDeleteAny = canDeleteSelection || canDeleteContextClip;
 		boolean hasClipboard = !host.clipboardEvents().isEmpty();
-		TimelineEventRef propertiesRef = host.resolvePropertiesEventRef(selectionState);
+		TimelineEventRef propertiesRef = host.resolvePropertiesEventRef(timeline, selectionState);
 		boolean canOpenProperties = propertiesRef != null
 			&& !TimelineInteractiveTrackSlots.isTrackLocked(timeline, trackListState, propertiesRef.track().getId());
 		if (ImGui.menuItem("Copy", "Ctrl+C", false, hasSelection)) {
-			host.copySelectedEvents(selectionState);
+			host.copySelectedEvents(timeline, selectionState);
 		}
 		if (ImGui.menuItem("Paste", "Ctrl+V", false, hasClipboard)) {
-			host.pasteClipboardEvents(selectionState, state.contextTimeSeconds, trackListState);
+			host.pasteClipboardEvents(timeline, selectionState, state.contextTimeSeconds, trackListState);
 		}
 		if (timeline != null && Timeline.TRACK_ID_CAMERA.equals(state.contextTrackId)
 				&& !TimelineInteractiveTrackSlots.isTrackLocked(timeline, trackListState, state.contextTrackId)) {
@@ -189,7 +197,7 @@ public final class TimelineInteractionPopups {
 		int selectedEventCount = selectionState != null ? selectionState.getSelectedEvents().size() : 0;
 		int selectedClipCount = selectionState != null ? selectionState.getSelectedClips().size() : 0;
 		boolean hasDeletable = TimelineInteractionDeleteSupport.hasDeletableSelection(timeline, selectionState, trackListState);
-		boolean canDeleteCtxClip = host.canDeleteContextClip(trackListState);
+		boolean canDeleteCtxClip = host.canDeleteContextClip(timeline, trackListState);
 		boolean canDelete = hasDeletable || canDeleteCtxClip;
 
 		ImGui.text("Delete Confirmation");
@@ -208,7 +216,7 @@ public final class TimelineInteractionPopups {
 		ImGui.spacing();
 		if (ImGui.button("Confirm Delete##timelineDeleteConfirm", 150f, 0f)) {
 			if (canDelete) {
-				host.deleteSelectedEntries(selectionState, trackListState);
+				host.deleteSelectedEntries(timeline, selectionState, trackListState);
 			}
 			ImGui.closeCurrentPopup();
 		}

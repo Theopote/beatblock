@@ -2,11 +2,7 @@ package com.beatblock.timeline.interaction;
 
 import com.beatblock.BeatBlockClient;
 import com.beatblock.audio.MusicPlayer;
-import com.beatblock.client.camera.CameraKeyframeActions;
-import com.beatblock.timeline.EventType;
 import com.beatblock.timeline.camera.CameraPathMetadata;
-import com.beatblock.timeline.camera.CameraSegmentKind;
-import com.beatblock.timeline.camera.CameraTrackFactory;
 import com.beatblock.timeline.Clip;
 import com.beatblock.timeline.FeatureEvent;
 import com.beatblock.timeline.FeatureTrack;
@@ -15,39 +11,25 @@ import com.beatblock.timeline.Timeline;
 import com.beatblock.timeline.TimelineEditor;
 import com.beatblock.timeline.TimelineEvent;
 import com.beatblock.timeline.TimelineMarker;
-import com.beatblock.timeline.TimelineOperations;
 import com.beatblock.timeline.Track;
-import com.beatblock.timeline.editing.AnimationEventSnapshot;
 import com.beatblock.timeline.editing.ClipDragStateSnapshot;
-import com.beatblock.timeline.editing.GenericEventPropertiesEditor;
-import com.beatblock.timeline.editing.TimelineEventEditActions;
 import com.beatblock.timeline.editor.*;
 import com.beatblock.timeline.rendering.*;
 import imgui.ImGui;
 import imgui.flag.ImGuiHoveredFlags;
 import imgui.flag.ImGuiKey;
 import imgui.flag.ImGuiMouseCursor;
-import imgui.type.ImBoolean;
-import imgui.type.ImString;
 
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 import static com.beatblock.timeline.interaction.TimelineInteractionConstants.CAMERA_EDGE_HIT_PX;
-import static com.beatblock.timeline.interaction.TimelineInteractionConstants.CAMERA_MIN_CLIP_DURATION;
 import static com.beatblock.timeline.interaction.TimelineInteractionConstants.DRAG_THRESHOLD_PX;
-import static com.beatblock.timeline.interaction.TimelineInteractionConstants.MARKER_NAME_BUFFER_SIZE;
-import static com.beatblock.timeline.interaction.TimelineInteractionConstants.PARAM_INPUT_BUFFER_SIZE;
 import static com.beatblock.timeline.interaction.TimelineInteractionConstants.POPUP_DELETE_CONFIRM;
 import static com.beatblock.timeline.interaction.TimelineInteractionConstants.POPUP_EVENT_CONTEXT;
-import static com.beatblock.timeline.interaction.TimelineInteractionConstants.POPUP_EVENT_PROPERTIES;
 import static com.beatblock.timeline.interaction.TimelineInteractionConstants.POPUP_MARKER_CONTEXT;
-import static com.beatblock.timeline.interaction.TimelineInteractionConstants.TIME_INPUT_BUFFER_SIZE;
 import static com.beatblock.timeline.interaction.TimelineInteractiveTrackSlots.InteractiveTrackSlot;
 import static com.beatblock.timeline.interaction.TimelineInteractiveTrackSlots.build;
 
@@ -191,15 +173,22 @@ public final class TimelineInteraction implements TimelineInteractionPopupHost {
 
 		// 右键菜单等 popup 必须在 isWindowHovered 检查之前每帧调用，
 		// 否则鼠标移入弹出窗口时 isWindowHovered 返回 false 导致 beginPopup 未被调用，ImGui 会关闭弹窗。
-		renderContextMenu(timeline, selectionState, trackListState);
-		renderPropertiesPopup(timeline, trackListState);
-		renderMarkerContextPopup(timeline, clock);
-		renderDeleteConfirmPopup(timeline, selectionState, trackListState);
+		TimelineInteractionPopups.renderAll(timeline, selectionState, trackListState, clock, this);
 
 		if (ImGui.isMouseReleased(0)) {
 			if (interactionState.getMode() == InteractionMode.RESIZE_CLIP) {
-				finishResizeClipDrag(timeline, interactionState, mx, my);
-				cameraResizeEventOrigTimes.clear();
+				TimelineDragCommitSupport.finishResizeClipDrag(
+					timeline,
+					timelineEditor,
+					interactionState,
+					mx,
+					my,
+					cameraResizeSession != null ? cameraResizeSession.undoSnapshot() : null,
+					() -> {
+						resizeClipBeforeSnapshot = null;
+						cameraResizeSession = null;
+					}
+				);
 			}
 			if (interactionState.getMode() == InteractionMode.DRAG_CLIP && interactionState.getActiveClipId() != null) {
 				float dx = mx - interactionState.getMouseStartX();
@@ -271,7 +260,7 @@ public final class TimelineInteraction implements TimelineInteractionPopupHost {
 			copySelectedEvents(timeline, selectionState);
 		}
 		if (ImGui.getIO().getKeyCtrl() && ImGui.isKeyPressed(ImGuiKey.V)) {
-			double anchor = contextTimeSeconds;
+			double anchor = popupState.contextTimeSeconds;
 			if (layout.contentContains(mx, my)) {
 				float localX = Math.max(0, Math.min(mx - layout.contentLeft, layout.contentWidth));
 				anchor = viewState.screenToTime(localX);
@@ -343,9 +332,9 @@ public final class TimelineInteraction implements TimelineInteractionPopupHost {
 		if (!alt && layout.rulerContains(mx, my) && ImGui.isMouseClicked(1)) {
 			int markerIndex = TimelineRulerHitTest.findMarkerIndexAtMouse(timeline, viewState, layout, mx, my);
 			if (markerIndex >= 0) {
-				contextMarkerId = timeline.getMarkers().get(markerIndex).getId();
+				popupState.contextMarkerId = timeline.getMarkers().get(markerIndex).getId();
 				TimelineMarker marker = timeline.getMarkers().get(markerIndex);
-				markerNameBuffer.set(marker.getName());
+				popupState.markerNameBuffer.set(marker.getName());
 				ImGui.openPopup(POPUP_MARKER_CONTEXT);
 			}
 		}
@@ -364,20 +353,20 @@ public final class TimelineInteraction implements TimelineInteractionPopupHost {
 		}
 
 		if (ImGui.isMouseClicked(1) && layout.contentContains(mx, my)) {
-			contextTimeSeconds = viewState.screenToTime(Math.max(0, Math.min(mx - layout.contentLeft, layout.contentWidth)));
+			popupState.contextTimeSeconds = viewState.screenToTime(Math.max(0, Math.min(mx - layout.contentLeft, layout.contentWidth)));
 			HitResult hit = TimelineContentHitTest.hitContentAtMouse(timeline, viewState, layout, mx, my);
-			contextTrackId = hit.getTrackId();
-			contextClipId = hit.getClipId();
+			popupState.contextTrackId = hit.getTrackId();
+			popupState.contextClipId = hit.getClipId();
 			BeatBlockClient.LOGGER.info(String.format(
-				"[TimelineInteraction.handleMouse] Right-click detected: contextTrackId=%s, contextClipId=%s, hitTrackId=%s, hitClipId=%s, hitEventId=%s",
-				contextTrackId, contextClipId, hit.getTrackId(), hit.getClipId(), hit.getEventId()
+				"[TimelineInteraction.handleMouse] Right-click detected: popupState.contextTrackId=%s, popupState.contextClipId=%s, hitTrackId=%s, hitClipId=%s, hitEventId=%s",
+				popupState.contextTrackId, popupState.contextClipId, hit.getTrackId(), hit.getClipId(), hit.getEventId()
 			));
 			if (Timeline.TRACK_ID_CAMERA.equals(hit.getTrackId())) {
 				if (hit.getClipId() != null) {
-					contextCameraShowPath.set(CameraPathMetadata.isPathVisible(timeline, hit.getClipId()));
+					popupState.contextCameraShowPath.set(CameraPathMetadata.isPathVisible(timeline, hit.getClipId()));
 				}
 				if (hit.getEventId() != null) {
-					propertiesEventId = hit.getEventId();
+					popupState.propertiesEventId = hit.getEventId();
 					selectionState.clearEvents();
 					selectionState.selectEvent(hit.getEventId());
 					if (hit.getClipId() != null) {
@@ -400,7 +389,7 @@ public final class TimelineInteraction implements TimelineInteractionPopupHost {
 					selectionState.selectClip(hit.getClipId());
 				}
 				if (hit.getEventId() != null) {
-					propertiesEventId = hit.getEventId();
+					popupState.propertiesEventId = hit.getEventId();
 				}
 			}
 			ImGui.openPopup(POPUP_EVENT_CONTEXT);
@@ -414,36 +403,20 @@ public final class TimelineInteraction implements TimelineInteractionPopupHost {
 			}
 			if (interactionState.getMode() == InteractionMode.RESIZE_CLIP
 					&& Timeline.TRACK_ID_CAMERA.equals(interactionState.getActiveTrackId())
-					&& interactionState.getActiveClipId() != null) {
+					&& interactionState.getActiveClipId() != null
+					&& cameraResizeSession != null) {
 				if (TimelineInteractiveTrackSlots.isTrackLocked(timeline, trackListState, Timeline.TRACK_ID_CAMERA)) return;
-				Track ct = timeline.getTrack(Timeline.TRACK_ID_CAMERA);
-				Clip c = ct != null ? ct.getClip(interactionState.getActiveClipId()) : null;
-				if (c != null) {
-					double mouseT = viewState.screenToTime(mx - layout.contentLeft);
-					double snapped = DragController.snapTime(mouseT, null, timeline, toolbarState, viewState, interactionState);
-					if (interactionState.isResizeLeft()) {
-						double newStart = Math.max(0.0, Math.min(snapped, cameraResizeInitialEnd - CAMERA_MIN_CLIP_DURATION));
-						double delta = newStart - cameraResizeInitialStart;
-						c.setStartTimeSeconds(newStart);
-						for (TimelineEvent se : c.getEvents()) {
-							Double o = cameraResizeEventOrigTimes.get(se.getId());
-							if (o != null) {
-								se.setTimeSeconds(o + delta);
-							}
-						}
-					} else {
-						double newEnd = Math.max(cameraResizeInitialStart + CAMERA_MIN_CLIP_DURATION, snapped);
-						c.setEndTimeSeconds(newEnd);
-						for (TimelineEvent se : c.getEvents()) {
-							if (se.getTimeSeconds() > newEnd) {
-								se.setTimeSeconds(newEnd);
-							}
-						}
-					}
-					timeline.setDurationSeconds(Math.max(timeline.getDurationSeconds(), c.getEndTimeSeconds()));
-					if (clock != null) {
-						seekClockAndMusic(clock, clock.getCurrentTimeSeconds());
-					}
+				TimelineCameraClipResizeHandler.applyDuringDrag(
+					timeline,
+					cameraResizeSession,
+					interactionState,
+					viewState,
+					toolbarState,
+					layout,
+					mx
+				);
+				if (clock != null) {
+					seekClockAndMusic(clock, clock.getCurrentTimeSeconds());
 				}
 				return;
 			}
@@ -574,37 +547,12 @@ public final class TimelineInteraction implements TimelineInteractionPopupHost {
 			}
 			if (layout.contentContains(mx, my) && trackListState != null
 					&& !TimelineInteractiveTrackSlots.isTrackLocked(timeline, trackListState, Timeline.TRACK_ID_CAMERA)) {
-				int camRow = layout.findRowAtScreenY(my);
-				if (camRow == TimelineTrackMeta.ROW_CAMERA && layout.isRowVisible(camRow)) {
-					float rowSy = layout.getRowScreenY(camRow);
-					float rowH = layout.getRowHeight(camRow);
-					CameraTrackHitTest.EdgeHit edge = CameraTrackHitTest.hitClipEdge(timeline, mx, my,
-						rowSy, rowH, layout.contentLeft, layout.contentWidth, viewState, CAMERA_EDGE_HIT_PX);
-					if (edge != null) {
-						Track ct = timeline.getTrack(Timeline.TRACK_ID_CAMERA);
-						Clip c = ct != null ? ct.getClip(edge.clipId()) : null;
-						if (c != null) {
-							interactionState.setMode(InteractionMode.RESIZE_CLIP);
-							interactionState.setMouseStart(mx, my);
-							interactionState.setActiveClipId(edge.clipId());
-							interactionState.setActiveTrackId(Timeline.TRACK_ID_CAMERA);
-							interactionState.setResizeLeft(edge.leftEdge());
-							cameraResizeInitialStart = c.getStartTimeSeconds();
-							cameraResizeInitialEnd = c.getEndTimeSeconds();
-							cameraResizeEventOrigTimes.clear();
-							for (TimelineEvent se : c.getEvents()) {
-								cameraResizeEventOrigTimes.put(se.getId(), se.getTimeSeconds());
-							}
-							resizeClipBeforeSnapshot = ClipDragStateSnapshot.capture(
-								timeline,
-								Timeline.TRACK_ID_CAMERA,
-								edge.clipId(),
-								cameraResizeEventOrigTimes,
-								Map.of()
-							);
-							return;
-						}
-					}
+				TimelineCameraClipResizeHandler.Session session = TimelineCameraClipResizeHandler.tryBeginOnMouseClick(
+					timeline, interactionState, layout, viewState, trackListState, mx, my);
+				if (session != null) {
+					cameraResizeSession = session;
+					resizeClipBeforeSnapshot = session.undoSnapshot();
+					return;
 				}
 			}
 			for (InteractiveTrackSlot slot : build(timeline)) {
@@ -842,9 +790,9 @@ public final class TimelineInteraction implements TimelineInteractionPopupHost {
 		if (!alt && layout.rulerContains(mx, my) && ImGui.isMouseClicked(1)) {
 			int markerIndex = TimelineRulerHitTest.findMarkerIndexAtMouse(timeline, viewState, layout, mx, my);
 			if (markerIndex >= 0) {
-				contextMarkerId = timeline.getMarkers().get(markerIndex).getId();
+				popupState.contextMarkerId = timeline.getMarkers().get(markerIndex).getId();
 				TimelineMarker marker = timeline.getMarkers().get(markerIndex);
-				markerNameBuffer.set(marker.getName());
+				popupState.markerNameBuffer.set(marker.getName());
 				ImGui.openPopup(POPUP_MARKER_CONTEXT);
 			}
 		}
@@ -862,7 +810,7 @@ public final class TimelineInteraction implements TimelineInteractionPopupHost {
 			}
 		}
 
-		renderMarkerContextPopup(timeline, clock);
+		TimelineInteractionPopups.renderMarkerOnly(timeline, clock, this);
 
 		if (ImGui.isMouseDown(0) && interactionState.getMode() == InteractionMode.SCRUB_TIME) {
 			if (clock != null) {
@@ -909,7 +857,8 @@ public final class TimelineInteraction implements TimelineInteractionPopupHost {
 	}
 
 	/** 拖动/点击标尺或播放头时，同时更新时钟和音乐进度 */
-	private void seekClockAndMusic(TimelineClock clock, double timeSeconds) {
+	@Override
+	public void seekClockAndMusic(TimelineClock clock, double timeSeconds) {
 		TimelinePlaybackSeeker.seek(
 			clock,
 			timeSeconds,
@@ -919,448 +868,43 @@ public final class TimelineInteraction implements TimelineInteractionPopupHost {
 		);
 	}
 
-	private void renderContextMenu(Timeline timeline, SelectionState selectionState,
-			TimelineTrackListState trackListState) {
-		if (!ImGui.beginPopup(POPUP_EVENT_CONTEXT)) return;
-		boolean requestDeleteConfirmPopup = false;
-		boolean hasSelection = selectionState != null
-			&& (!selectionState.getSelectedEvents().isEmpty() || !selectionState.getSelectedClips().isEmpty());
-		boolean canDeleteSelection = TimelineInteractionDeleteSupport.hasDeletableSelection(timeline, selectionState, trackListState);
-		boolean canDeleteContextClip = canDeleteContextClip(timeline, trackListState);
-		BeatBlockClient.LOGGER.info(String.format(
-			"[TimelineInteraction.renderContextMenu] Menu opened: contextClipId=%s, contextTrackId=%s, canDeleteSelection=%s, canDeleteContextClip=%s",
-			contextClipId, contextTrackId, canDeleteSelection, canDeleteContextClip
-		));
-		boolean canDeleteAny = canDeleteSelection || canDeleteContextClip;
-		boolean hasClipboard = !clipboardEvents.isEmpty();
-		TimelineEventRef propertiesRef = resolvePropertiesEventRef(timeline, selectionState);
-		boolean canOpenProperties = propertiesRef != null && !TimelineInteractiveTrackSlots.isTrackLocked(timeline, trackListState, propertiesRef.track().getId());
-		BeatBlockClient.LOGGER.info(String.format(
-			"[TimelineInteraction.renderContextMenu] About to render menu items: hasSelection=%s, hasClipboard=%s, canDeleteAny=%s",
-			hasSelection, hasClipboard, canDeleteAny
-		));
-		if (ImGui.menuItem("Copy", "Ctrl+C", false, hasSelection)) {
-			BeatBlockClient.LOGGER.info("[TimelineInteraction] Copy clicked");
-			copySelectedEvents(timeline, selectionState);
-		}
-		if (ImGui.menuItem("Paste", "Ctrl+V", false, hasClipboard)) {
-			BeatBlockClient.LOGGER.info("[TimelineInteraction] Paste clicked");
-			pasteClipboardEvents(timeline, selectionState, contextTimeSeconds, trackListState);
-		}
-		if (timeline != null && Timeline.TRACK_ID_CAMERA.equals(contextTrackId)
-				&& !TimelineInteractiveTrackSlots.isTrackLocked(timeline, trackListState, contextTrackId)) {
-			if (contextClipId != null) {
-				if (ImGui.checkbox("显示路径##camCtxPathVis", contextCameraShowPath)) {
-					CameraPathMetadata.setPathVisible(timeline, contextClipId, contextCameraShowPath.get());
-				}
-			}
-			TimelineEventRef ctxEv = propertiesEventId != null ? TimelineEventRefs.find(timeline, propertiesEventId) : null;
-			if (ctxEv != null && ctxEv.event() != null && ctxEv.event().getType() == EventType.CAMERA_KEYFRAME) {
-				if (ImGui.menuItem("删除关键帧##camDelKf")) {
-					TimelineOperations.removeEvent(ctxEv.clip(), ctxEv.event().getId());
-					if (selectionState != null) {
-						selectionState.deselectEvent(ctxEv.event().getId());
-					}
-					ImGui.closeCurrentPopup();
-				}
-			}
-			boolean canAddPathKf = false;
-			if (contextClipId != null) {
-				Track camT = timeline.getTrack(Timeline.TRACK_ID_CAMERA);
-				Clip ctxClip = camT != null ? camT.getClip(contextClipId) : null;
-				if (ctxClip != null) {
-					TimelineEvent seg = CameraTrackFactory.findSegmentHeadEvent(ctxClip);
-					CameraSegmentKind k = seg != null
-						? CameraSegmentKind.fromParam(seg.getParameters().get("kind"))
-						: CameraSegmentKind.PATH;
-					canAddPathKf = k == CameraSegmentKind.PATH;
-				}
-			}
-			if (ImGui.menuItem("添加路径关键帧（当前位置）##camAddKfCtx", null, false, canAddPathKf)) {
-				CameraKeyframeActions.addKeyframeAtTime(timeline, contextTimeSeconds);
-			}
-			if (ImGui.beginMenu("添加镜头片段")) {
-				double[] a = TimelineContentHitTest.readCameraAnchorFive();
-				if (ImGui.menuItem("自定义路径（关键帧）")) {
-					CameraTrackFactory.addPathSegment(timeline, contextTimeSeconds, a[0], a[1], a[2], a[3], a[4]);
-				}
-				if (ImGui.menuItem("推进（Dolly）")) {
-					CameraTrackFactory.addDollySegment(timeline, contextTimeSeconds, a[0], a[1], a[2], a[3], 8.0);
-				}
-				if (ImGui.menuItem("环绕（Orbit）")) {
-					double[] o = TimelineContentHitTest.readOrbitParamsFromView();
-					CameraTrackFactory.addOrbitSegment(timeline, contextTimeSeconds,
-						o[0], o[1], o[2], o[3], o[4], o[5], o[6]);
-				}
-				if (ImGui.menuItem("升降（Crane）")) {
-					CameraTrackFactory.addCraneSegment(timeline, contextTimeSeconds, a[0], a[1], a[2], a[3], a[4], 6.0);
-				}
-				if (ImGui.menuItem("节拍震动（Shake）")) {
-					CameraTrackFactory.addShakeSegment(timeline, contextTimeSeconds, a[0], a[1], a[2], a[3], a[4]);
-				}
-				ImGui.endMenu();
-			}
-		}
-		String deleteLabel = canDeleteAny ? "Delete" : "Delete (Locked)";
-		BeatBlockClient.LOGGER.debug(String.format(
-			"[TimelineInteraction.renderContextMenu] About to render Delete menu item: label=%s, enabled=%s",
-			deleteLabel, canDeleteAny
-		));
-		if (ImGui.menuItem(deleteLabel, "Del", false, canDeleteAny)) {
-			BeatBlockClient.LOGGER.info("[TimelineInteraction] *** DELETE MENU ITEM CLICKED! ***");
-			if (selectionState != null && canDeleteContextClip && contextClipId != null) {
-				// 右键删除应以当前命中的片段为准，避免旧选中项导致“点了删除却没删到当前片段”。
-				selectionState.clearEvents();
-				selectionState.clearClips();
-				selectionState.selectClip(contextClipId);
-			} else if (selectionState != null && !hasSelection && contextClipId != null) {
-				selectionState.clearEvents();
-				selectionState.clearClips();
-				selectionState.selectClip(contextClipId);
-			}
-			requestDeleteConfirmPopup = true;
-			ImGui.closeCurrentPopup();
-		}
-		ImGui.separator();
-		String propertiesLabel = propertiesRef != null && !canOpenProperties
-			? "Properties (Locked)"
-			: "Properties";
-		if (ImGui.menuItem(propertiesLabel, null, false, canOpenProperties)) {
-			openPropertiesPopup(timeline, selectionState, trackListState);
-		}
-		ImGui.endPopup();
-		if (requestDeleteConfirmPopup) {
-			ImGui.openPopup(POPUP_DELETE_CONFIRM);
-		}
-	}
-
-	private void renderDeleteConfirmPopup(
-		Timeline timeline,
-		SelectionState selectionState,
-		TimelineTrackListState trackListState
-	) {
-		if (!ImGui.beginPopupModal(POPUP_DELETE_CONFIRM)) {
-			BeatBlockClient.LOGGER.debug("[TimelineInteraction.renderDeleteConfirmPopup] Popup not open this frame");
-			return;
-		}
-		BeatBlockClient.LOGGER.info("[TimelineInteraction.renderDeleteConfirmPopup] Delete confirmation dialog is rendering!");
-		int selectedEventCount = selectionState != null ? selectionState.getSelectedEvents().size() : 0;
-		int selectedClipCount = selectionState != null ? selectionState.getSelectedClips().size() : 0;
-		boolean hasDeletable = TimelineInteractionDeleteSupport.hasDeletableSelection(timeline, selectionState, trackListState);
-		boolean canDeleteCtxClip = canDeleteContextClip(timeline, trackListState);
-		boolean canDelete = hasDeletable || canDeleteCtxClip;
-		BeatBlockClient.LOGGER.info(String.format(
-			"[TimelineInteraction.renderDeleteConfirmPopup] Dialog state: selectedClips=%d, selectedEvents=%d, hasDeletable=%s, canDeleteCtxClip=%s, canDelete=%s",
-			selectedClipCount, selectedEventCount, hasDeletable, canDeleteCtxClip, canDelete
-		));
-
-		ImGui.text("Delete Confirmation");
-		ImGui.separator();
-		ImGui.textWrapped(String.format(java.util.Locale.ROOT,
-			"将删除选中的内容：%d 个片段，%d 个事件。",
-			selectedClipCount,
-			selectedEventCount));
-
-		if (containsSelectedAudioTrackClip(timeline, selectionState)) {
-			ImGui.spacing();
-			ImGui.textColored(1f, 0.45f, 0.45f, 1f,
-				"警告：本次删除包含顶部音频片段。若删除后音频轨为空，将同步清理音频波形与分析数据。");
-		}
-
-		ImGui.spacing();
-		if (ImGui.button("Confirm Delete##timelineDeleteConfirm", 150f, 0f)) {
-			BeatBlockClient.LOGGER.info(String.format(
-				"[TimelineInteraction.renderDeleteConfirmPopup] CONFIRM DELETE BUTTON CLICKED! canDelete=%s, selectedClips=%d, selectedEvents=%d",
-				canDelete, selectedClipCount, selectedEventCount
-			));
-			if (canDelete) {
-				BeatBlockClient.LOGGER.info("[TimelineInteraction.renderDeleteConfirmPopup] Calling deleteSelectedEntries()...");
-				deleteSelectedEntries(timeline, selectionState, trackListState);
-			} else {
-				BeatBlockClient.LOGGER.warn("[TimelineInteraction.renderDeleteConfirmPopup] Cannot delete: canDelete is false");
-			}
-			ImGui.closeCurrentPopup();
-		}
-		ImGui.sameLine();
-		if (ImGui.button("Cancel##timelineDeleteCancel", 120f, 0f)) {
-			ImGui.closeCurrentPopup();
-		}
-
-		ImGui.endPopup();
-	}
-
-	private boolean containsSelectedAudioTrackClip(Timeline timeline, SelectionState selectionState) {
-		if (timeline == null || selectionState == null || selectionState.getSelectedClips().isEmpty()) return false;
-		Track audioTrack = timeline.getTrack(Timeline.TRACK_ID_AUDIO);
-		if (audioTrack == null) return false;
-		for (String clipId : selectionState.getSelectedClips()) {
-			if (clipId != null && audioTrack.getClip(clipId) != null) return true;
-		}
-		return false;
-	}
-
-	private void renderMarkerContextPopup(Timeline timeline, TimelineClock clock) {
-		if (!ImGui.beginPopup(POPUP_MARKER_CONTEXT)) return;
-		int markerIndex = timeline != null ? timeline.findMarkerIndexById(contextMarkerId) : -1;
-		if (timeline == null || markerIndex < 0 || markerIndex >= timeline.getMarkers().size()) {
-			contextMarkerId = null;
-			ImGui.textDisabled("Marker no longer exists.");
-			if (ImGui.button("Close##markerPopupClose")) ImGui.closeCurrentPopup();
-			ImGui.endPopup();
-			return;
-		}
-
-		TimelineMarker marker = timeline.getMarkers().get(markerIndex);
-		ImGui.text("Marker");
-		ImGui.textDisabled(String.format(java.util.Locale.ROOT, "%.3fs", marker.getTimeSeconds()));
-		ImGui.setNextItemWidth(180f);
-		ImGui.inputText("Name##markerRename", markerNameBuffer);
-
-		if (ImGui.button("Jump##markerJump")) {
-			if (clock != null) seekClockAndMusic(clock, marker.getTimeSeconds());
-		}
-		ImGui.sameLine();
-		if (ImGui.button("Rename##markerApply")) {
-			String newName = markerNameBuffer.get() == null ? "" : markerNameBuffer.get().trim();
-			timeline.updateMarker(contextMarkerId, marker.getTimeSeconds(), newName);
-			contextMarkerId = null;
-			ImGui.closeCurrentPopup();
-		}
-		ImGui.sameLine();
-		if (ImGui.button("Delete##markerDelete")) {
-			timeline.removeMarker(contextMarkerId);
-			contextMarkerId = null;
-			ImGui.closeCurrentPopup();
-		}
-		ImGui.sameLine();
-		if (ImGui.button("Close##markerClose")) {
-			contextMarkerId = null;
-			ImGui.closeCurrentPopup();
-		}
-
-		ImGui.endPopup();
-	}
-
-	private void openPropertiesPopup(Timeline timeline, SelectionState selectionState,
-			TimelineTrackListState trackListState) {
-		TimelineEventRef ref = resolvePropertiesEventRef(timeline, selectionState);
-		if (ref == null || ref.event() == null) return;
-		if (TimelineInteractiveTrackSlots.isTrackLocked(timeline, trackListState, ref.track().getId())) return;
-		propertiesEventId = ref.event().getId();
-		propertiesTimeBuffer.set(String.format(java.util.Locale.ROOT, "%.6f", ref.event().getTimeSeconds()));
-		loadPropertiesParameterBuffers(ref.event());
-		propertiesError = null;
-		ImGui.openPopup(POPUP_EVENT_PROPERTIES);
-	}
-
-	private void loadPropertiesParameterBuffers(TimelineEvent event) {
-		propertiesParamBuffers.clear();
-		propertiesParamAsNumber.clear();
-		propertiesOriginalParamValues.clear();
-		propertiesOriginalParamAsNumber.clear();
-		propertiesNewParamKey.set("");
-		propertiesNewParamValue.set("");
-		propertiesNewParamAsNumber = false;
-		if (event == null) return;
-		propertiesOriginalTime = String.format(java.util.Locale.ROOT, "%.6f", event.getTimeSeconds());
-		propertiesTimeBuffer.set(propertiesOriginalTime);
-		for (Map.Entry<String, Object> entry : event.getParameters().entrySet()) {
-			String key = entry.getKey();
-			Object value = entry.getValue();
-			String text = value == null ? "" : String.valueOf(value);
-			boolean asNumber = value instanceof Number;
-			ImString buf = new ImString(256);
-			buf.set(text);
-			propertiesParamBuffers.put(key, buf);
-			propertiesParamAsNumber.put(key, asNumber);
-			propertiesOriginalParamValues.put(key, text);
-			propertiesOriginalParamAsNumber.put(key, asNumber);
-		}
-	}
-
-	private void resetPropertiesBuffers() {
-		propertiesTimeBuffer.set(propertiesOriginalTime != null ? propertiesOriginalTime : "0");
-		for (Map.Entry<String, ImString> entry : propertiesParamBuffers.entrySet()) {
-			String key = entry.getKey();
-			entry.getValue().set(propertiesOriginalParamValues.getOrDefault(key, ""));
-			propertiesParamAsNumber.put(key, propertiesOriginalParamAsNumber.getOrDefault(key, false));
-		}
-		propertiesError = null;
-	}
-
-	private void renderPropertiesPopup(Timeline timeline, TimelineTrackListState trackListState) {
-		if (!ImGui.beginPopup(POPUP_EVENT_PROPERTIES)) return;
-		TimelineEventRef ref = TimelineEventRefs.find(timeline, propertiesEventId);
-		if (ref == null || ref.event() == null) {
-			ImGui.textDisabled("Event no longer exists.");
-			if (ImGui.button("Close")) ImGui.closeCurrentPopup();
-			ImGui.endPopup();
-			return;
-		}
-		boolean trackLocked = TimelineInteractiveTrackSlots.isTrackLocked(timeline, trackListState, ref.track().getId());
-		boolean applyRequested = !trackLocked && ImGui.isKeyPressed(ImGuiKey.Enter);
-		boolean closeRequested = ImGui.isKeyPressed(ImGuiKey.Escape);
-
-		ImGui.text("Event ID: " + ref.event().getId());
-		ImGui.text("Type: " + ref.event().getType().name());
-		if (trackLocked) {
-			ImGui.textDisabled("Track is locked. Editing is disabled.");
-		}
-		if (trackLocked) {
-			ImGui.beginDisabled();
-		}
-		ImGui.separator();
-		ImGui.text("Time (seconds)");
-		ImGui.setNextItemWidth(170f);
-		ImGui.inputText("##eventTime", propertiesTimeBuffer);
-		if (propertiesError != null) {
-			ImGui.textColored(1f, 0.45f, 0.45f, 1f, propertiesError);
-		}
-
-		if (!ref.event().getParameters().isEmpty()) {
-			ImGui.separator();
-			ImGui.text("Parameters");
-			List<String> keys = new ArrayList<>(ref.event().getParameters().keySet());
-			keys.sort(String::compareTo);
-			List<String> removedKeys = new ArrayList<>();
-			for (String key : keys) {
-				ImString buf = propertiesParamBuffers.computeIfAbsent(key, k -> new ImString(256));
-				Boolean asNumber = propertiesParamAsNumber.computeIfAbsent(key,
-					k -> ref.event().getParameters().get(k) instanceof Number);
-				ImGui.text(key);
-				ImGui.sameLine();
-				ImGui.setNextItemWidth(130f);
-				ImGui.inputText("##param_" + key, buf);
-				ImGui.sameLine();
-				boolean numberFlag = asNumber;
-				if (ImGui.checkbox("Number##param_type_" + key, numberFlag)) {
-					propertiesParamAsNumber.put(key, !numberFlag);
-				}
-				ImGui.sameLine();
-				if (ImGui.smallButton("X##param_remove_" + key)) {
-					removedKeys.add(key);
-				}
-			}
-			for (String key : removedKeys) {
-				propertiesParamBuffers.remove(key);
-				propertiesParamAsNumber.remove(key);
-			}
-		}
-
-		ImGui.separator();
-		ImGui.text("Add Parameter");
-		ImGui.setNextItemWidth(120f);
-		ImGui.inputText("Key##param_add_key", propertiesNewParamKey);
-		ImGui.sameLine();
-		ImGui.setNextItemWidth(120f);
-		ImGui.inputText("Value##param_add_value", propertiesNewParamValue);
-		ImGui.sameLine();
-		if (ImGui.checkbox("Number##param_add_type", propertiesNewParamAsNumber)) {
-			propertiesNewParamAsNumber = !propertiesNewParamAsNumber;
-		}
-		ImGui.sameLine();
-		if (ImGui.button("Add/Update##param_add")) {
-			String key = propertiesNewParamKey.get() != null ? propertiesNewParamKey.get().trim() : "";
-			if (key.isEmpty()) {
-				propertiesError = "Parameter key cannot be empty";
-			} else {
-				ImString valueBuf = propertiesParamBuffers.computeIfAbsent(key, k -> new ImString(PARAM_INPUT_BUFFER_SIZE));
-				valueBuf.set(propertiesNewParamValue.get() == null ? "" : propertiesNewParamValue.get());
-				propertiesParamAsNumber.put(key, propertiesNewParamAsNumber);
-				propertiesError = null;
-			}
-		}
-
-		if (ImGui.button("Apply") || applyRequested) {
-			try {
-				double t = Double.parseDouble(propertiesTimeBuffer.get().trim());
-				Map<String, String> paramRaw = new HashMap<>();
-				for (Map.Entry<String, ImString> entry : propertiesParamBuffers.entrySet()) {
-					paramRaw.put(entry.getKey(), entry.getValue().get());
-				}
-				var result = GenericEventPropertiesEditor.buildUpdatedSnapshot(
-					t,
-					paramRaw,
-					propertiesParamAsNumber,
-					ref.clip().getStartTimeSeconds(),
-					ref.clip().getEndTimeSeconds()
-				);
-				if (result instanceof GenericEventPropertiesEditor.Result.Err err) {
-					propertiesError = err.message();
-				} else {
-					AnimationEventSnapshot after = ((GenericEventPropertiesEditor.Result.Ok) result).snapshot();
-					AnimationEventSnapshot before = AnimationEventSnapshot.capture(ref.event(), ref.clip());
-					TimelineEditor editor = timelineEditor;
-					if (editor != null && TimelineEventEditActions.execute(
-						timeline,
-						editor.getCommandManager(),
-						ref.track().getId(),
-						ref.clip().getId(),
-						ref.event().getId(),
-						before,
-						after
-					)) {
-						propertiesOriginalTime = String.format(java.util.Locale.ROOT, "%.6f", ref.event().getTimeSeconds());
-						for (Map.Entry<String, ImString> entry : propertiesParamBuffers.entrySet()) {
-							String key = entry.getKey();
-							propertiesOriginalParamValues.put(key, entry.getValue().get());
-							propertiesOriginalParamAsNumber.put(key, propertiesParamAsNumber.getOrDefault(key, false));
-						}
-						propertiesError = null;
-					}
-				}
-			} catch (Exception ex) {
-				propertiesError = "Invalid number in time/parameter";
-			}
-		}
-		ImGui.sameLine();
-		if (ImGui.button("Reset")) {
-			resetPropertiesBuffers();
-		}
-
-		if (trackLocked) {
-			ImGui.endDisabled();
-		}
-
-		ImGui.sameLine();
-		if (ImGui.button("Close") || closeRequested) {
-			ImGui.closeCurrentPopup();
-		}
-		ImGui.endPopup();
-	}
-
-	private TimelineEventRef resolvePropertiesEventRef(Timeline timeline, SelectionState selectionState) {
+	@Override
+	public TimelineEventRef resolvePropertiesEventRef(Timeline timeline, SelectionState selectionState) {
 		return TimelineEventRefs.resolveForProperties(
 			timeline,
 			selectionState,
-			propertiesEventId,
-			id -> propertiesEventId = id
+			popupState.propertiesEventId,
+			id -> popupState.propertiesEventId = id
 		);
 	}
 
-	private boolean canDeleteContextClip(Timeline timeline, TimelineTrackListState trackListState) {
+	@Override
+	public boolean canDeleteContextClip(Timeline timeline, TimelineTrackListState trackListState) {
 		return TimelineInteractionDeleteSupport.canDeleteContextClip(
-			timeline, trackListState, contextTrackId, contextClipId);
+			timeline, trackListState, popupState.contextTrackId, popupState.contextClipId);
 	}
 
-	private void copySelectedEvents(Timeline timeline, SelectionState selectionState) {
+	@Override
+	public void copySelectedEvents(Timeline timeline, SelectionState selectionState) {
 		TimelineInteractionClipboard.copy(clipboardEvents, timeline, selectionState);
 	}
 
-	private void pasteClipboardEvents(Timeline timeline, SelectionState selectionState, double anchorTimeSeconds,
+	@Override
+	public void pasteClipboardEvents(Timeline timeline, SelectionState selectionState, double anchorTimeSeconds,
 			TimelineTrackListState trackListState) {
 		TimelineInteractionClipboard.paste(new TimelineInteractionClipboard.PasteRequest(
 			timeline,
 			selectionState,
 			clipboardEvents,
 			anchorTimeSeconds,
-			contextTrackId,
-			contextClipId,
+			popupState.contextTrackId,
+			popupState.contextClipId,
 			trackListState
 		));
 	}
 
-	private void deleteSelectedEntries(Timeline timeline, SelectionState selectionState, TimelineTrackListState trackListState) {
+	@Override
+	public void deleteSelectedEntries(Timeline timeline, SelectionState selectionState, TimelineTrackListState trackListState) {
 		TimelineInteractionDeleteSupport.deleteSelectedEntries(timeline, selectionState, trackListState);
 	}
 
@@ -1400,17 +944,5 @@ public final class TimelineInteraction implements TimelineInteractionPopupHost {
 
 	private void revertClipDrag(Timeline timeline, ClipDragStateSnapshot before) {
 		TimelineDragCommitSupport.revertClipDrag(timeline, before);
-	}
-
-	private void finishResizeClipDrag(Timeline timeline, InteractionState interactionState, float mx, float my) {
-		TimelineDragCommitSupport.finishResizeClipDrag(
-			timeline,
-			timelineEditor,
-			interactionState,
-			mx,
-			my,
-			resizeClipBeforeSnapshot,
-			() -> resizeClipBeforeSnapshot = null
-		);
 	}
 }
