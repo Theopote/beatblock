@@ -1,44 +1,23 @@
 package com.beatblock.timeline.rendering;
 
 import com.beatblock.BeatBlock;
-import com.beatblock.timeline.binding.AnimationBindingEngine;
-import com.beatblock.timeline.binding.AnimationBindingRule;
-import com.beatblock.timeline.binding.SpatialDispatchMode;
-import com.beatblock.timeline.MarkerType;
-import com.beatblock.timeline.TimelineAnimationActionMode;
-import com.beatblock.timeline.Clip;
 import com.beatblock.timeline.Timeline;
 import com.beatblock.timeline.TimelineEditor;
-import com.beatblock.timeline.TimelineEvent;
-import com.beatblock.timeline.TimelineMarker;
-import com.beatblock.timeline.Track;
-import com.beatblock.engine.AnimationDefinition;
-import com.beatblock.engine.StageObject;
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
+import com.beatblock.timeline.binding.AnimationBindingRule;
 import com.beatblock.ui.icons.Icons;
 import com.beatblock.ui.imgui.IconButtonStyle;
-import com.beatblock.ui.presenter.PresenterFactories;
+import com.beatblock.ui.presenter.TimelineBindingEditorPresenter;
 import com.beatblock.ui.presenter.TimelineToolbarActionsPresenter;
+import com.beatblock.ui.presenter.TimelineToolbarConfigPresenter;
 import com.beatblock.ui.presenter.TimelineToolbarViewPresenter;
 import com.beatblock.ui.presenter.TimelineTransportPresenter;
 import imgui.ImGui;
+import imgui.type.ImBoolean;
 import imgui.type.ImInt;
 import imgui.type.ImString;
-import net.fabricmc.loader.api.FabricLoader;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
 import java.util.HashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -48,7 +27,6 @@ import java.util.Map;
  * 参考专业 DCC（Blender / Unreal Sequencer）的 transport + 吸附条。
  */
 public final class TimelineToolbar {
-	private static final Logger LOGGER = LoggerFactory.getLogger(TimelineToolbar.class);
 
 	private static final String TOOLTIP_PLAY = "播放 (空格)";
 	private static final String TOOLTIP_PAUSE = "暂停";
@@ -84,37 +62,10 @@ public final class TimelineToolbar {
 	private static final String TOOLTIP_BINDING_EDITOR = "编辑特征绑定规则：来源特征、动作、目标对象、阈值和冷却";
 	private static final String TOOLTIP_BINDING_TEMPLATE = "规则模板：可覆盖（Replace）或合并（Append）到当前规则集";
 
-	private static final String[] DEMUCS_PRESET_LABELS = { "Drive", "Balanced", "Detail" };
-	private static final String[] DEMUCS_PRESET_VALUES = { "drive", "balanced", "detail" };
-	private static final String[] CLIP_GENERATION_MODE_LABELS = { "Mixed", "Trigger", "Sustain" };
-	private static final String[] CLIP_GENERATION_MODE_VALUES = { "mixed", "trigger", "sustain" };
-	private static final String[] ACTION_ROLLBACK_LABELS = { "Preview", "Persistent" };
-	private static final String[] ACTION_ROLLBACK_VALUES = { "preview", "persistent" };
-	private static final String[] DEMUCS_FEATURE_KEYS = {
-		"kick", "snare", "hihat", "hihat_open", "snare_hi", "bass", "vocals", "other"
-	};
-	private static final String[] DEMUCS_FEATURE_LABELS = {
-		"Kick", "Snare", "HiHat", "HiHat Open", "Snare Hi", "Bass", "Vocals", "Other"
-	};
 	private static final String DEMUCS_ADVANCED_POPUP_ID = "tlDemucsMappingAdvanced";
 	private static final String BINDING_EDITOR_POPUP_ID = "tlBindingEditor";
-	private static final String[] BINDING_TEMPLATE_LABELS = { "Rhythm Parkour", "Architectural Show" };
-	private static final String[] BINDING_TEMPLATE_VALUES = {
-		AnimationBindingEngine.TEMPLATE_RHYTHM_PARKOUR,
-		AnimationBindingEngine.TEMPLATE_ARCHITECTURAL_SHOW
-	};
-	private static final String[] BINDING_ACTION_LABELS = { "动画", "放置", "清除", "建造" };
-	private static final String[] BINDING_ACTION_VALUES = { "ANIMATE", "PLACE", "CLEAR", "BUILD" };
-	private static final String[] BINDING_SPATIAL_LABELS = { "ALL", "SEQUENTIAL", "RADIAL", "RANDOM", "SPIRAL" };
-	private static final String[] BINDING_SPATIAL_VALUES = { "ALL", "SEQUENTIAL", "RADIAL", "RANDOM", "SPIRAL" };
-    private static final String BINDING_SECTION_ALL = "ALL";
-	private static final Gson UI_CONFIG_GSON = new GsonBuilder().setPrettyPrinting().create();
 	private static final float TOOLBAR_ITEM_SPACING = 4f;
 	private static final float TOOLBAR_GROUP_SPACING = 8f;
-	private static final double DEMUCS_SCALE_MIN = 0.5;
-	private static final double DEMUCS_SCALE_MAX = 2.0;
-	private static final double DEMUCS_ENERGY_SCALE_MIN = 0.6;
-	private static final double DEMUCS_ENERGY_SCALE_MAX = 1.6;
 
 	/** 上次 Auto Map 生成数量，用于提示 */
 	private int lastAutoMapCount = -1;
@@ -125,6 +76,8 @@ public final class TimelineToolbar {
 	private final ImInt speedComboIndex = new ImInt(2); // 默认 1x
 	private final TimelineTransportPresenter transport;
 	private final TimelineToolbarActionsPresenter actions;
+	private final TimelineToolbarConfigPresenter config;
+	private final TimelineBindingEditorPresenter binding;
 	private final ImInt demucsPresetComboIndex = new ImInt(1); // 默认 balanced
 	private final ImInt clipGenerationModeComboIndex = new ImInt(0); // 默认 mixed
 	private final ImInt actionRollbackComboIndex = new ImInt(0); // 默认 preview
@@ -135,16 +88,26 @@ public final class TimelineToolbar {
 	private String lastTemplateApplyFeedback = "";
 	private long lastTemplateApplyFeedbackAtMs = 0L;
 	private boolean lastTemplateApplyFeedbackSuccess = false;
-	private boolean demucsMappingConfigLoaded;
-	private boolean actionExecutionConfigLoaded;
 
 	public TimelineToolbar() {
-		this(PresenterFactories.timelineTransportPresenter(), PresenterFactories.timelineToolbarActionsPresenter());
+		this(
+			PresenterFactories.timelineTransportPresenter(),
+			PresenterFactories.timelineToolbarActionsPresenter(),
+			PresenterFactories.timelineToolbarConfigPresenter(),
+			PresenterFactories.timelineBindingEditorPresenter()
+		);
 	}
 
-	TimelineToolbar(TimelineTransportPresenter transport, TimelineToolbarActionsPresenter actions) {
+	TimelineToolbar(
+		TimelineTransportPresenter transport,
+		TimelineToolbarActionsPresenter actions,
+		TimelineToolbarConfigPresenter config,
+		TimelineBindingEditorPresenter binding
+	) {
 		this.transport = transport;
 		this.actions = actions;
+		this.config = config;
+		this.binding = binding;
 	}
 
 	public void render(TimelineEditor editor, TimelineToolbarState toolbarState) {
@@ -462,30 +425,26 @@ public final class TimelineToolbar {
 	}
 
 	private void renderActionRollbackControl(boolean compactMode) {
-		ensureActionExecutionConfigLoaded();
-		actionRollbackComboIndex.set(indexOfActionRollbackValue(readActionRollbackModeFromTimeline()));
+		config.ensureActionExecutionConfigLoaded();
+		actionRollbackComboIndex.set(TimelineToolbarConfigPresenter.indexOfActionRollbackValue(config.readActionRollbackMode()));
 		if (compactMode) {
-			ImGui.setNextItemWidth(comboWidthForLabels(ACTION_ROLLBACK_LABELS));
-			if (ImGui.combo("Rollback##tlMoreActionRollback", actionRollbackComboIndex, ACTION_ROLLBACK_LABELS)) {
-				writeActionRollbackModeToTimeline(ACTION_ROLLBACK_VALUES[actionRollbackComboIndex.get()]);
+			ImGui.setNextItemWidth(comboWidthForLabels(TimelineToolbarConfigPresenter.ACTION_ROLLBACK_LABELS));
+			if (ImGui.combo("Rollback##tlMoreActionRollback", actionRollbackComboIndex, TimelineToolbarConfigPresenter.ACTION_ROLLBACK_LABELS)) {
+				config.writeActionRollbackMode(TimelineToolbarConfigPresenter.ACTION_ROLLBACK_VALUES[actionRollbackComboIndex.get()]);
 			}
 			if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_ACTION_ROLLBACK);
 			return;
 		}
 
-		ImGui.setNextItemWidth(comboWidthForLabels(ACTION_ROLLBACK_LABELS));
-		if (ImGui.combo("Rollback", actionRollbackComboIndex, ACTION_ROLLBACK_LABELS)) {
-			writeActionRollbackModeToTimeline(ACTION_ROLLBACK_VALUES[actionRollbackComboIndex.get()]);
+		ImGui.setNextItemWidth(comboWidthForLabels(TimelineToolbarConfigPresenter.ACTION_ROLLBACK_LABELS));
+		if (ImGui.combo("Rollback", actionRollbackComboIndex, TimelineToolbarConfigPresenter.ACTION_ROLLBACK_LABELS)) {
+			config.writeActionRollbackMode(TimelineToolbarConfigPresenter.ACTION_ROLLBACK_VALUES[actionRollbackComboIndex.get()]);
 		}
 		if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_ACTION_ROLLBACK);
 	}
 
 	private void renderActionRollbackStatus() {
-		String mode = readActionRollbackModeFromTimeline();
-		String label = "persistent".equalsIgnoreCase(mode)
-			? "Action: Persistent"
-			: "Action: Preview";
-		ImGui.textDisabled(label);
+		ImGui.textDisabled(config.actionRollbackViewState().statusLabel());
 		if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_ACTION_ROLLBACK_STATUS);
 	}
 
@@ -540,26 +499,23 @@ public final class TimelineToolbar {
 	}
 
 	private void renderDemucsMappingPresetControl(boolean compactMode) {
-		if (BeatBlock.timeline == null) return;
-		Object separationMode = BeatBlock.timeline.getMetadata("separationMode");
-		if (separationMode == null || !"demucs".equalsIgnoreCase(separationMode.toString().trim())) return;
-		ensureDemucsMappingConfigLoaded();
+		if (!config.isDemucsSeparationActive()) return;
+		config.ensureDemucsMappingConfigLoaded();
 
-		int currentIndex = indexOfDemucsPresetValue(readDemucsPresetFromTimeline());
-		demucsPresetComboIndex.set(currentIndex);
-		clipGenerationModeComboIndex.set(indexOfClipGenerationMode(readClipGenerationModeFromTimeline()));
+		demucsPresetComboIndex.set(TimelineToolbarConfigPresenter.indexOfDemucsPresetValue(config.readDemucsPreset()));
+		clipGenerationModeComboIndex.set(TimelineToolbarConfigPresenter.indexOfClipGenerationMode(config.readClipGenerationMode()));
 
 		if (compactMode) {
 			ImGui.separator();
 			ImGui.textDisabled("Demucs Mapping");
-			ImGui.setNextItemWidth(comboWidthForLabels(DEMUCS_PRESET_LABELS));
-			if (ImGui.combo("Preset##tlMoreDemucsPreset", demucsPresetComboIndex, DEMUCS_PRESET_LABELS)) {
-				writeDemucsPresetToTimeline(DEMUCS_PRESET_VALUES[demucsPresetComboIndex.get()]);
+			ImGui.setNextItemWidth(comboWidthForLabels(TimelineToolbarConfigPresenter.DEMUCS_PRESET_LABELS));
+			if (ImGui.combo("Preset##tlMoreDemucsPreset", demucsPresetComboIndex, TimelineToolbarConfigPresenter.DEMUCS_PRESET_LABELS)) {
+				config.writeDemucsPreset(TimelineToolbarConfigPresenter.DEMUCS_PRESET_VALUES[demucsPresetComboIndex.get()]);
 			}
 			if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_DEMUCS_PRESET);
-			ImGui.setNextItemWidth(comboWidthForLabels(CLIP_GENERATION_MODE_LABELS));
-			if (ImGui.combo("Clip Mode##tlMoreClipMode", clipGenerationModeComboIndex, CLIP_GENERATION_MODE_LABELS)) {
-				writeClipGenerationModeToTimeline(CLIP_GENERATION_MODE_VALUES[clipGenerationModeComboIndex.get()]);
+			ImGui.setNextItemWidth(comboWidthForLabels(TimelineToolbarConfigPresenter.CLIP_GENERATION_MODE_LABELS));
+			if (ImGui.combo("Clip Mode##tlMoreClipMode", clipGenerationModeComboIndex, TimelineToolbarConfigPresenter.CLIP_GENERATION_MODE_LABELS)) {
+				config.writeClipGenerationMode(TimelineToolbarConfigPresenter.CLIP_GENERATION_MODE_VALUES[clipGenerationModeComboIndex.get()]);
 			}
 			if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_CLIP_GENERATION_MODE);
 			if (ImGui.button("Advanced##tlMoreDemucsAdvanced")) {
@@ -570,15 +526,15 @@ public final class TimelineToolbar {
 			return;
 		}
 
-		ImGui.setNextItemWidth(comboWidthForLabels(DEMUCS_PRESET_LABELS));
-		if (ImGui.combo("Demucs", demucsPresetComboIndex, DEMUCS_PRESET_LABELS)) {
-			writeDemucsPresetToTimeline(DEMUCS_PRESET_VALUES[demucsPresetComboIndex.get()]);
+		ImGui.setNextItemWidth(comboWidthForLabels(TimelineToolbarConfigPresenter.DEMUCS_PRESET_LABELS));
+		if (ImGui.combo("Demucs", demucsPresetComboIndex, TimelineToolbarConfigPresenter.DEMUCS_PRESET_LABELS)) {
+			config.writeDemucsPreset(TimelineToolbarConfigPresenter.DEMUCS_PRESET_VALUES[demucsPresetComboIndex.get()]);
 		}
 		if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_DEMUCS_PRESET);
 		nextItemInGroup();
-		ImGui.setNextItemWidth(comboWidthForLabels(CLIP_GENERATION_MODE_LABELS));
-		if (ImGui.combo("Clip Mode", clipGenerationModeComboIndex, CLIP_GENERATION_MODE_LABELS)) {
-			writeClipGenerationModeToTimeline(CLIP_GENERATION_MODE_VALUES[clipGenerationModeComboIndex.get()]);
+		ImGui.setNextItemWidth(comboWidthForLabels(TimelineToolbarConfigPresenter.CLIP_GENERATION_MODE_LABELS));
+		if (ImGui.combo("Clip Mode", clipGenerationModeComboIndex, TimelineToolbarConfigPresenter.CLIP_GENERATION_MODE_LABELS)) {
+			config.writeClipGenerationMode(TimelineToolbarConfigPresenter.CLIP_GENERATION_MODE_VALUES[clipGenerationModeComboIndex.get()]);
 		}
 		if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_CLIP_GENERATION_MODE);
 		nextItemInGroup();

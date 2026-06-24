@@ -3,6 +3,7 @@ package com.beatblock.ui.presenter;
 import com.beatblock.BeatBlock;
 import com.beatblock.client.BeatBlockClientDriver;
 import com.beatblock.engine.layer.BuildLayerManager;
+import net.fabricmc.loader.api.FabricLoader;
 import com.beatblock.selection.BeatBlockSelectionManager;
 import com.beatblock.timeline.Timeline;
 import com.beatblock.timeline.TimelineEditor;
@@ -100,6 +101,22 @@ public final class PresenterFactories {
 			() -> BeatBlock.timeline,
 			() -> BeatBlock.timelineEditor,
 			PresenterFactories::currentCameraPositionOrZero
+		);
+	}
+
+	public static TimelineToolbarConfigPresenter timelineToolbarConfigPresenter() {
+		return new TimelineToolbarConfigPresenter(
+			() -> BeatBlock.timeline,
+			() -> FabricLoader.getInstance().getGameDir()
+				.resolve("config").resolve("beatblock").resolve("ui.json")
+		);
+	}
+
+	public static TimelineBindingEditorPresenter timelineBindingEditorPresenter() {
+		return new TimelineBindingEditorPresenter(
+			() -> BeatBlock.timeline,
+			() -> BeatBlock.timelineEditor,
+			() -> BeatBlock.blockAnimationEngine
 		);
 	}
 
