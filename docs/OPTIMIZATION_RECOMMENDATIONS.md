@@ -415,10 +415,10 @@ void testTick() {
 
 | 类名 | 当前行数 | 状态 | 优化建议 |
 |------|----------|------|----------|
-| `BeatBlockSelectionManager` | ~720 → ~530 | ✅ Phase 3 | `SelectionToolRegistry` + `tools/*` 点击分发；`collect/*` + `SelectionFeedback`；门面 `get()` 不变 |
+| `BeatBlockSelectionManager` | ~720 → ~568 | ✅ Phase 3 | `SelectionToolRegistry` + `tools/*` 点击分发；`collect/*` + `SelectionFeedback`；门面 `get()` 不变 |
 | `TimelineInteraction` | ~1816 | ⏸ 待拆 | 按 ruler / drag / popup / hit-test 拆 handler（**比 TimelineEditor 优先级更高**） |
 | `TimelineRenderer` | ~1707 | ⏸ 待拆 | 按 ruler / track / clip / drag-drop 拆 renderer |
-| `MusicPlayer` | ~787 | ⏸ 待拆 | 分离 Clip / SourceDataLine / OpenAL 播放后端 |
+| `MusicPlayer` | ~787 → ~470 | 🔄 进行中 | `playback/StreamMusicBackend`、`OpenAlMusicBackend`、`JavaSoundMixerSupport` 已拆；Clip 仍留门面 |
 | `BlockAnimationEngine` | ~397 | ✅ 已门面化 | 子系统已抽出（`BuildSequencer`、`AnimationPlayer` 等），暂无需再拆 |
 | `TimelineEditor` | ~384 | ✅ 已协调层 | 交互/渲染已委托 `TimelineInteraction` / `TimelineRenderer`，本身不必再动 |
 
