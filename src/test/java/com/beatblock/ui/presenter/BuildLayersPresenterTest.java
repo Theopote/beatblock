@@ -6,6 +6,7 @@ import com.beatblock.engine.layer.BuildLayerManager;
 import com.beatblock.engine.layer.LayerVisibilityState;
 import com.beatblock.timeline.command.CommandManager;
 import com.beatblock.timeline.command.layer.CreateLayerCommand;
+import com.beatblock.ui.i18n.BBTexts;
 import net.minecraft.util.math.BlockPos;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -71,7 +72,7 @@ class BuildLayersPresenterTest {
 	void createLayerFromSelectionRejectsEmptySelection() {
 		var outcome = presenter.createLayerFromSelection("Layer A", List.of());
 		assertFalse(outcome.result().ok());
-		assertEquals("请先建立方块选区。", outcome.result().messageOrEmpty());
+		assertEquals(BBTexts.get("beatblock.message.create_selection_first"), outcome.result().messageOrEmpty());
 	}
 
 	@Test
@@ -127,7 +128,7 @@ class BuildLayersPresenterTest {
 		var outcome = presenter.toggleVisibility(layer.getId());
 
 		assertFalse(outcome.result().ok());
-		assertEquals("当前无世界上下文，无法切换可见性。", outcome.result().messageOrEmpty());
+		assertEquals(BBTexts.get("beatblock.message.no_world_context"), outcome.result().messageOrEmpty());
 		assertEquals(LayerVisibilityState.FREE_VISIBLE, layerManager.get(layer.getId()).getState());
 	}
 
@@ -139,7 +140,7 @@ class BuildLayersPresenterTest {
 		var outcome = presenter.createLayerFromSelection("Another", List.of(pos));
 
 		assertFalse(outcome.result().ok());
-		assertTrue(outcome.result().messageOrEmpty().contains("均已属于其他图层"));
+		assertTrue(outcome.result().messageOrEmpty().contains(BBTexts.get("beatblock.message.all_blocks_claimed")));
 	}
 
 	@Test
@@ -152,7 +153,7 @@ class BuildLayersPresenterTest {
 
 		assertTrue(outcome.result().ok());
 		assertTrue(layerManager.isBlockClaimed(free));
-		assertTrue(outcome.result().messageOrEmpty().contains("跳过 1 个"));
+		assertEquals(BBTexts.get("beatblock.message.layer_created_skipped", "Mixed", 1), outcome.result().messageOrEmpty());
 		assertEquals(1, outcome.blocksToRemoveFromSelection().size());
 	}
 
@@ -160,13 +161,13 @@ class BuildLayersPresenterTest {
 	void renameLayerFailsWhenLayerMissing() {
 		var outcome = presenter.renameLayer("missing-layer", "Name");
 		assertFalse(outcome.result().ok());
-		assertEquals("图层不存在。", outcome.result().messageOrEmpty());
+		assertEquals(BBTexts.get("beatblock.message.layer_not_found"), outcome.result().messageOrEmpty());
 	}
 
 	@Test
 	void deleteLayerFailsWhenLayerMissing() {
 		var outcome = presenter.deleteLayer("missing-layer");
 		assertFalse(outcome.result().ok());
-		assertEquals("图层不存在。", outcome.result().messageOrEmpty());
+		assertEquals(BBTexts.get("beatblock.message.layer_not_found"), outcome.result().messageOrEmpty());
 	}
 }

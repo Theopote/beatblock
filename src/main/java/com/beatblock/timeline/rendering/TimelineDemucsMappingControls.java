@@ -1,5 +1,6 @@
 package com.beatblock.timeline.rendering;
 
+import com.beatblock.ui.i18n.BBTexts;
 import com.beatblock.ui.presenter.TimelineToolbarConfigPresenter;
 import imgui.ImGui;
 import imgui.type.ImInt;
@@ -10,12 +11,6 @@ import imgui.type.ImInt;
 final class TimelineDemucsMappingControls {
 
 	static final String ADVANCED_POPUP_ID = "tlDemucsMappingAdvanced";
-
-	private static final String TOOLTIP_DEMUCS_PRESET =
-		"Demucs 映射预设：Drive=更强律动，Detail=更细节，Balanced=平衡";
-	private static final String TOOLTIP_CLIP_GENERATION_MODE =
-		"控制轨片段生成策略：Trigger=逐点短片段，Sustain=持续分段，Mixed=按特征自动混合";
-	private static final String TOOLTIP_DEMUCS_ADVANCED = "高级参数：时长/能量阈值/最小间隔";
 
 	private final TimelineToolbarConfigPresenter config;
 	private final ImInt demucsPresetComboIndex = new ImInt(1);
@@ -47,25 +42,25 @@ final class TimelineDemucsMappingControls {
 
 	private void renderCompactControls() {
 		ImGui.separator();
-		ImGui.textDisabled("Demucs Mapping");
-		renderPresetCombo("Preset##tlMoreDemucsPreset");
-		renderClipModeCombo("Clip Mode##tlMoreClipMode");
-		if (ImGui.button("Advanced##tlMoreDemucsAdvanced")) {
+		ImGui.textDisabled(BBTexts.get("beatblock.timeline.demucs.title"));
+		renderPresetCombo(BBTexts.get("beatblock.timeline.demucs.preset") + "##tlMoreDemucsPreset");
+		renderClipModeCombo(BBTexts.get("beatblock.timeline.demucs.clip_mode") + "##tlMoreClipMode");
+		if (ImGui.button(BBTexts.get("beatblock.timeline.demucs.advanced") + "##tlMoreDemucsAdvanced")) {
 			openAdvancedPopup();
 		}
-		if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_DEMUCS_ADVANCED);
+		if (ImGui.isItemHovered()) ImGui.setTooltip(BBTexts.get("beatblock.timeline.demucs.advanced.tooltip"));
 		renderAdvancedPopup();
 	}
 
 	private void renderInlineControls(Runnable nextInlineItem) {
-		renderPresetCombo("Demucs");
+		renderPresetCombo(BBTexts.get("beatblock.timeline.demucs.label"));
 		if (nextInlineItem != null) nextInlineItem.run();
-		renderClipModeCombo("Clip Mode");
+		renderClipModeCombo(BBTexts.get("beatblock.timeline.demucs.clip_mode"));
 		if (nextInlineItem != null) nextInlineItem.run();
-		if (ImGui.button("Map...##tlDemucsAdvanced")) {
+		if (ImGui.button(BBTexts.get("beatblock.timeline.demucs.map") + "##tlDemucsAdvanced")) {
 			openAdvancedPopup();
 		}
-		if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_DEMUCS_ADVANCED);
+		if (ImGui.isItemHovered()) ImGui.setTooltip(BBTexts.get("beatblock.timeline.demucs.advanced.tooltip"));
 		renderAdvancedPopup();
 	}
 
@@ -75,7 +70,7 @@ final class TimelineDemucsMappingControls {
 		if (ImGui.combo(label, demucsPresetComboIndex, presetLabels)) {
 			config.writeDemucsPreset(TimelineToolbarConfigPresenter.demucsPresetValueAt(demucsPresetComboIndex.get()));
 		}
-		if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_DEMUCS_PRESET);
+		if (ImGui.isItemHovered()) ImGui.setTooltip(BBTexts.get("beatblock.timeline.demucs.preset.tooltip"));
 	}
 
 	private void renderClipModeCombo(String label) {
@@ -85,12 +80,12 @@ final class TimelineDemucsMappingControls {
 			config.writeClipGenerationMode(
 				TimelineToolbarConfigPresenter.clipGenerationModeValueAt(clipGenerationModeComboIndex.get()));
 		}
-		if (ImGui.isItemHovered()) ImGui.setTooltip(TOOLTIP_CLIP_GENERATION_MODE);
+		if (ImGui.isItemHovered()) ImGui.setTooltip(BBTexts.get("beatblock.timeline.demucs.clip_mode.tooltip"));
 	}
 
 	private void renderAdvancedPopup() {
 		if (!ImGui.beginPopup(ADVANCED_POPUP_ID)) return;
-		ImGui.textDisabled("Demucs Mapping Advanced");
+		ImGui.textDisabled(BBTexts.get("beatblock.timeline.demucs.advanced_title"));
 
 		var scales = config.readGlobalScales();
 		float[] durationScale = new float[] { (float) scales.durationScale() };
@@ -99,15 +94,15 @@ final class TimelineDemucsMappingControls {
 
 		boolean changed = false;
 		ImGui.setNextItemWidth(220f);
-		changed |= ImGui.sliderFloat("Duration Scale##demucsDur", durationScale,
+		changed |= ImGui.sliderFloat(BBTexts.get("beatblock.timeline.demucs.duration_scale") + "##demucsDur", durationScale,
 			(float) TimelineToolbarConfigPresenter.DEMUCS_SCALE_MIN,
 			(float) TimelineToolbarConfigPresenter.DEMUCS_SCALE_MAX, "%.2f");
 		ImGui.setNextItemWidth(220f);
-		changed |= ImGui.sliderFloat("Energy Threshold##demucsEnergy", energyScale,
+		changed |= ImGui.sliderFloat(BBTexts.get("beatblock.timeline.demucs.energy_threshold") + "##demucsEnergy", energyScale,
 			(float) TimelineToolbarConfigPresenter.DEMUCS_ENERGY_SCALE_MIN,
 			(float) TimelineToolbarConfigPresenter.DEMUCS_ENERGY_SCALE_MAX, "%.2f");
 		ImGui.setNextItemWidth(220f);
-		changed |= ImGui.sliderFloat("Min Gap Scale##demucsGap", gapScale,
+		changed |= ImGui.sliderFloat(BBTexts.get("beatblock.timeline.demucs.min_gap_scale") + "##demucsGap", gapScale,
 			(float) TimelineToolbarConfigPresenter.DEMUCS_SCALE_MIN,
 			(float) TimelineToolbarConfigPresenter.DEMUCS_SCALE_MAX, "%.2f");
 
@@ -115,12 +110,12 @@ final class TimelineDemucsMappingControls {
 			config.writeGlobalScales(durationScale[0], energyScale[0], gapScale[0]);
 		}
 
-		if (ImGui.button("Reset to 1.0##demucsScaleReset")) {
+		if (ImGui.button(BBTexts.get("beatblock.timeline.demucs.reset_scales") + "##demucsScaleReset")) {
 			config.resetGlobalScalesToDefault();
 		}
 
 		ImGui.separator();
-		if (ImGui.treeNode("Per-Feature Overrides##demucsFeatureOverrides")) {
+		if (ImGui.treeNode(BBTexts.get("beatblock.timeline.demucs.feature_overrides") + "##demucsFeatureOverrides")) {
 			for (int i = 0; i < TimelineToolbarConfigPresenter.demucsFeatureCount(); i++) {
 				String featureKey = TimelineToolbarConfigPresenter.demucsFeatureKeyAt(i);
 				String label = TimelineToolbarConfigPresenter.demucsFeatureLabelAt(i);
@@ -131,15 +126,15 @@ final class TimelineDemucsMappingControls {
 					float[] fGap = new float[] { (float) config.readFeatureScale(featureKey, "gap") };
 
 					ImGui.setNextItemWidth(220f);
-					nodeChanged |= ImGui.sliderFloat("Duration##demucsFeatDur_" + featureKey, fDur,
+					nodeChanged |= ImGui.sliderFloat(BBTexts.get("beatblock.timeline.demucs.duration") + "##demucsFeatDur_" + featureKey, fDur,
 						(float) TimelineToolbarConfigPresenter.DEMUCS_SCALE_MIN,
 						(float) TimelineToolbarConfigPresenter.DEMUCS_SCALE_MAX, "%.2f");
 					ImGui.setNextItemWidth(220f);
-					nodeChanged |= ImGui.sliderFloat("Energy##demucsFeatEnergy_" + featureKey, fEnergy,
+					nodeChanged |= ImGui.sliderFloat(BBTexts.get("beatblock.timeline.demucs.energy") + "##demucsFeatEnergy_" + featureKey, fEnergy,
 						(float) TimelineToolbarConfigPresenter.DEMUCS_ENERGY_SCALE_MIN,
 						(float) TimelineToolbarConfigPresenter.DEMUCS_ENERGY_SCALE_MAX, "%.2f");
 					ImGui.setNextItemWidth(220f);
-					nodeChanged |= ImGui.sliderFloat("Gap##demucsFeatGap_" + featureKey, fGap,
+					nodeChanged |= ImGui.sliderFloat(BBTexts.get("beatblock.timeline.demucs.gap") + "##demucsFeatGap_" + featureKey, fGap,
 						(float) TimelineToolbarConfigPresenter.DEMUCS_SCALE_MIN,
 						(float) TimelineToolbarConfigPresenter.DEMUCS_SCALE_MAX, "%.2f");
 
@@ -151,7 +146,7 @@ final class TimelineDemucsMappingControls {
 				}
 			}
 
-			if (ImGui.button("Reset Feature Overrides##demucsFeatReset")) {
+			if (ImGui.button(BBTexts.get("beatblock.timeline.demucs.reset_features") + "##demucsFeatReset")) {
 				config.resetAllFeatureOverrides();
 			}
 

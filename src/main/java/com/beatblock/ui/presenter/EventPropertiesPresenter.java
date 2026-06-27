@@ -25,6 +25,7 @@ import com.beatblock.timeline.generation.DistancePacing;
 import com.beatblock.timeline.rendering.TimelineTrackMeta;
 import com.beatblock.timeline.rendering.TrackDefinition;
 import com.beatblock.timeline.rendering.TrackRegistry;
+import com.beatblock.ui.i18n.BBTexts;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -116,10 +117,10 @@ public final class EventPropertiesPresenter {
 		List<EventPropertiesOption> options = new ArrayList<>();
 		for (TimelineAnimationActionMode mode : TimelineAnimationActionMode.values()) {
 			String label = switch (mode) {
-				case ANIMATE -> "动画";
-				case PLACE -> "放置";
-				case CLEAR -> "清除";
-				case BUILD -> "建造";
+				case ANIMATE -> BBTexts.get("beatblock.event.action.animate");
+				case PLACE -> BBTexts.get("beatblock.event.action.place");
+				case CLEAR -> BBTexts.get("beatblock.event.action.clear");
+				case BUILD -> BBTexts.get("beatblock.event.action.build");
 			};
 			options.add(new EventPropertiesOption(mode.name(), label + " [" + mode.name() + "]"));
 		}
@@ -151,10 +152,10 @@ public final class EventPropertiesPresenter {
 		WorldTrajectoryEventParamsEditor.FormInput trajectoryInput
 	) {
 		if (commandManager == null) {
-			return new ApplyResult.Err("时间线编辑器未初始化。");
+			return new ApplyResult.Err(BBTexts.get("beatblock.common.timeline_editor_not_initialized"));
 		}
 		if (ref == null || ref.event() == null) {
-			return new ApplyResult.Err("无动画事件。");
+			return new ApplyResult.Err(BBTexts.get("beatblock.message.no_animation_event"));
 		}
 		var result = AnimationEventPropertiesEditor.buildUpdatedSnapshot(
 			input,
@@ -198,10 +199,10 @@ public final class EventPropertiesPresenter {
 		boolean pathVisible
 	) {
 		if (commandManager == null) {
-			return new ApplyResult.Err("时间线编辑器未初始化。");
+			return new ApplyResult.Err(BBTexts.get("beatblock.common.timeline_editor_not_initialized"));
 		}
 		if (ref == null || ref.clip() == null) {
-			return new ApplyResult.Err("无摄像机片段。");
+			return new ApplyResult.Err(BBTexts.get("beatblock.message.no_camera_clip"));
 		}
 		double oldStart = ref.clip().getStartTimeSeconds();
 		Map<String, Double> existingTimes = new HashMap<>();
@@ -228,10 +229,10 @@ public final class EventPropertiesPresenter {
 		CameraSegmentKind newKind
 	) {
 		if (commandManager == null) {
-			return new ApplyResult.Err("时间线编辑器未初始化。");
+			return new ApplyResult.Err(BBTexts.get("beatblock.common.timeline_editor_not_initialized"));
 		}
 		if (ref == null || ref.event() == null) {
-			return new ApplyResult.Err("无镜头段事件。");
+			return new ApplyResult.Err(BBTexts.get("beatblock.message.no_segment_event"));
 		}
 		var result = CameraEventPropertiesEditor.buildKindChangeSnapshot(
 			newKind,
@@ -259,10 +260,10 @@ public final class EventPropertiesPresenter {
 		Map<String, String> rawParams
 	) {
 		if (commandManager == null) {
-			return new ApplyResult.Err("时间线编辑器未初始化。");
+			return new ApplyResult.Err(BBTexts.get("beatblock.common.timeline_editor_not_initialized"));
 		}
 		if (ref == null || ref.event() == null || ref.clip() == null) {
-			return new ApplyResult.Err("无镜头段事件。");
+			return new ApplyResult.Err(BBTexts.get("beatblock.message.no_segment_event"));
 		}
 		CameraSegmentKind currentKind = CameraSegmentKind.fromParam(ref.event().getParameters().get("kind"));
 		var result = CameraEventPropertiesEditor.buildSegmentSnapshot(
@@ -298,10 +299,10 @@ public final class EventPropertiesPresenter {
 		String ease
 	) {
 		if (commandManager == null) {
-			return new ApplyResult.Err("时间线编辑器未初始化。");
+			return new ApplyResult.Err(BBTexts.get("beatblock.common.timeline_editor_not_initialized"));
 		}
 		if (ref == null || ref.event() == null || ref.clip() == null) {
-			return new ApplyResult.Err("无关键帧事件。");
+			return new ApplyResult.Err(BBTexts.get("beatblock.message.no_keyframe_event"));
 		}
 		var result = CameraEventPropertiesEditor.buildKeyframeSnapshot(
 			ref.clip().getStartTimeSeconds(),
@@ -672,7 +673,7 @@ public final class EventPropertiesPresenter {
 		Supplier<Map<String, AnimationDefinition>> librarySupplier
 	) {
 		List<EventPropertiesOption> options = new ArrayList<>();
-		options.add(new EventPropertiesOption("", "未绑定"));
+		options.add(new EventPropertiesOption("", BBTexts.get("beatblock.common.unbound")));
 		Map<String, AnimationDefinition> library = librarySupplier != null ? librarySupplier.get() : null;
 		if (library == null || library.isEmpty()) {
 			return options;
@@ -691,7 +692,7 @@ public final class EventPropertiesPresenter {
 	/** 从舞台对象系统收集目标选项（无引擎时仅「未绑定」）。 */
 	public static List<EventPropertiesOption> collectTargetOptions(Supplier<List<StageObject>> objectsSupplier) {
 		List<EventPropertiesOption> options = new ArrayList<>();
-		options.add(new EventPropertiesOption("", "未绑定"));
+		options.add(new EventPropertiesOption("", BBTexts.get("beatblock.common.unbound")));
 		List<StageObject> objects = objectsSupplier != null ? objectsSupplier.get() : null;
 		if (objects == null || objects.isEmpty()) {
 			return options;

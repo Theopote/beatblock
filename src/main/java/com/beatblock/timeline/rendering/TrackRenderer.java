@@ -3,6 +3,8 @@ package com.beatblock.timeline.rendering;
 import com.beatblock.client.camera.CameraKeyframeActions;
 import com.beatblock.timeline.Timeline;
 import com.beatblock.timeline.editor.TimelineClock;
+import com.beatblock.timeline.rendering.TimelineTrackMeta;
+import com.beatblock.ui.i18n.BBTexts;
 import com.beatblock.ui.icons.Icons;
 import com.beatblock.ui.imgui.IconButtonStyle;
 import imgui.ImGui;
@@ -32,7 +34,13 @@ public final class TrackRenderer {
 	 */
 	private static final float LEFT_INSET = 0f;
 	private static final float TEXT_INSET = 4f;
-	private static final String[] TYPE_LABELS = {"音频", "节奏特征", "动画", "摄像机", "事件"};
+	private static final String[] TYPE_LABEL_KEYS = {
+		"beatblock.track.type.audio",
+		"beatblock.track.type.feature",
+		"beatblock.track.type.animation",
+		"beatblock.track.type.camera",
+		"beatblock.track.type.event"
+	};
 
 	private static final int MICRO_SEP_COLOR = 0x55_66_66_66; // ABGR
 	private static final float STATE_ACTIVE_GREEN_R = 0.20f;
@@ -127,7 +135,9 @@ public final class TrackRenderer {
 				listState.toggleGroupCollapsed(rowIndex);
 			}
 			if (ImGui.isItemHovered()) {
-				foldTooltip = collapsed ? "Expand sub-tracks" : "Collapse sub-tracks";
+				foldTooltip = collapsed
+					? BBTexts.get("beatblock.track.tooltip.expand")
+					: BBTexts.get("beatblock.track.tooltip.collapse");
 			}
 			IconButtonStyle.popBeatBlockIconButton();
 			if (foldTooltip != null) {
@@ -177,8 +187,8 @@ public final class TrackRenderer {
 			ImGui.pushClipRect(clipX1, clipY1, clipX1 + nameTextW, clipY1 + rowH, true);
 
 			ImGui.setCursorScreenPos(clipX1, rowOriginScreenY + textOffsetY);
-			boolean isAudioControlLane = "音频".equals(resolvedTypeLabel);
-			boolean isReferenceLane = "节奏特征".equals(resolvedTypeLabel);
+			boolean isAudioControlLane = TimelineTrackMeta.isAudioSubRow(rowIndex);
+			boolean isReferenceLane = rowIndex == TimelineTrackMeta.ROW_ANIMATION_GROUP;
 			float[] groupColor = resolveGroupTitleColor(rowIndex);
 			if (isGroup) {
 				if (groupColor != null) {
@@ -202,9 +212,9 @@ public final class TrackRenderer {
 			}
 			if (listState != null && nameHovered) {
 				if (TimelineTrackMeta.isAudioSubRow(rowIndex)) {
-					ImGui.setTooltip("双击可修改轨道名称\nAlt+滚轮：调整音频轨高度\nAlt+中键：重置音频轨高度");
+					ImGui.setTooltip(BBTexts.get("beatblock.track.tooltip.rename_audio"));
 				} else {
-					ImGui.setTooltip("双击可修改轨道名称");
+					ImGui.setTooltip(BBTexts.get("beatblock.track.tooltip.rename"));
 				}
 			}
 		}
@@ -234,7 +244,9 @@ public final class TrackRenderer {
 				}
 				if (muted) popStateButtonStyle();
 				if (ImGui.isItemHovered()) {
-					muteTooltip = muted ? "已静音 (点击取消)" : "静音 (点击静音)";
+					muteTooltip = muted
+						? BBTexts.get("beatblock.track.tooltip.mute_on")
+						: BBTexts.get("beatblock.track.tooltip.mute_off");
 				}
 
 				// ── 独奏按钮 ────────────────────────────────────────────
@@ -246,7 +258,9 @@ public final class TrackRenderer {
 				}
 				if (solo) popStateButtonStyle();
 				if (ImGui.isItemHovered()) {
-					soloTooltip = solo ? "独奏中 (点击取消)" : "独奏 (点击独奏)";
+					soloTooltip = solo
+						? BBTexts.get("beatblock.track.tooltip.solo_on")
+						: BBTexts.get("beatblock.track.tooltip.solo_off");
 				}
 			}
 
@@ -259,7 +273,7 @@ public final class TrackRenderer {
 					}
 				}
 				if (ImGui.isItemHovered()) {
-					camKfTooltip = "在播放头位置添加路径关键帧（须落在「自定义路径」片段内）";
+					camKfTooltip = BBTexts.get("beatblock.track.tooltip.cam_keyframe");
 				}
 			}
 
@@ -275,7 +289,9 @@ public final class TrackRenderer {
 			}
 			if (visStylePushed) popStateButtonStyle();
 			if (ImGui.isItemHovered()) {
-				visTooltip = vis ? "当前可见 (点击隐藏波形/轨道)" : "当前隐藏 (点击显示波形/轨道)";
+				visTooltip = vis
+					? BBTexts.get("beatblock.track.tooltip.visible_on")
+					: BBTexts.get("beatblock.track.tooltip.visible_off");
 			}
 
 			boolean lock = listState.isLocked(rowIndex);
@@ -286,7 +302,9 @@ public final class TrackRenderer {
 			}
 			if (lock) popStateButtonStyle();
 			if (ImGui.isItemHovered()) {
-				lockTooltip = lock ? "已锁定 (点击解锁)" : "未锁定 (点击锁定)";
+				lockTooltip = lock
+					? BBTexts.get("beatblock.track.tooltip.lock_on")
+					: BBTexts.get("beatblock.track.tooltip.lock_off");
 			}
 
 			IconButtonStyle.popBeatBlockIconButton();
@@ -314,7 +332,8 @@ public final class TrackRenderer {
 	private float resolveTypeColumnWidth() {
 		if (cachedTypeColumnWidth > 0f) return cachedTypeColumnWidth;
 		float maxTypeW = 0f;
-		for (String label : TYPE_LABELS) {
+		for (String key : TYPE_LABEL_KEYS) {
+			String label = BBTexts.get(key);
 			if (label.isBlank()) continue;
 			maxTypeW = Math.max(maxTypeW, ImGui.calcTextSize(label).x);
 		}

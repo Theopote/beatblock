@@ -12,6 +12,7 @@ import com.beatblock.timeline.binding.AnimationBindingEngine;
 import com.beatblock.timeline.binding.AnimationBindingRule;
 import com.beatblock.timeline.binding.SpatialDispatchMode;
 import com.beatblock.timeline.rendering.TimelineTrackMeta;
+import com.beatblock.ui.i18n.BBTexts;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -29,26 +30,55 @@ import java.util.function.Supplier;
 public final class TimelineBindingEditorPresenter {
 
 	public static final String SECTION_ALL = "ALL";
-	private static final String[] TEMPLATE_LABELS = { "Rhythm Parkour", "Architectural Show" };
+	private static final String[] TEMPLATE_LABEL_KEYS = {
+		"beatblock.timeline.binding.template.rhythm_parkour",
+		"beatblock.timeline.binding.template.architectural_show"
+	};
 	private static final String[] TEMPLATE_VALUES = {
 		AnimationBindingEngine.TEMPLATE_RHYTHM_PARKOUR,
 		AnimationBindingEngine.TEMPLATE_ARCHITECTURAL_SHOW
 	};
-	private static final String[] ACTION_LABELS = { "动画", "放置", "清除", "建造" };
+	private static final String[] ACTION_LABEL_KEYS = {
+		"beatblock.event.action.animate",
+		"beatblock.event.action.place",
+		"beatblock.event.action.clear",
+		"beatblock.event.action.build"
+	};
 	private static final String[] ACTION_VALUES = { "ANIMATE", "PLACE", "CLEAR", "BUILD" };
-	private static final String[] SPATIAL_LABELS = { "ALL", "SEQUENTIAL", "RADIAL", "RANDOM", "SPIRAL" };
+	private static final String[] SPATIAL_LABEL_KEYS = {
+		"beatblock.event.spatial.all",
+		"beatblock.event.spatial.sequential",
+		"beatblock.event.spatial.radial",
+		"beatblock.event.spatial.random",
+		"beatblock.event.spatial.spiral"
+	};
 	private static final String[] SPATIAL_VALUES = { "ALL", "SEQUENTIAL", "RADIAL", "RANDOM", "SPIRAL" };
+	private static final String[] BUILD_MODE_LABEL_KEYS = {
+		"beatblock.timeline.binding.build_mode.wall",
+		"beatblock.timeline.binding.build_mode.bridge",
+		"beatblock.timeline.binding.build_mode.tower",
+		"beatblock.timeline.binding.build_mode.dissolve"
+	};
+	private static final String[] BUILD_MODE_VALUES = { "WALL", "BRIDGE", "TOWER", "DISSOLVE" };
 
 	public static String[] templateLabels() {
-		return TEMPLATE_LABELS.clone();
+		return BBTexts.labels(TEMPLATE_LABEL_KEYS);
 	}
 
 	public static String templateLabelAt(int index) {
-		return TEMPLATE_LABELS[index];
+		return BBTexts.get(TEMPLATE_LABEL_KEYS[index]);
 	}
 
 	public static String[] actionLabels() {
-		return ACTION_LABELS.clone();
+		return BBTexts.labels(ACTION_LABEL_KEYS);
+	}
+
+	public static String[] buildModeLabels() {
+		return BBTexts.labels(BUILD_MODE_LABEL_KEYS);
+	}
+
+	public static String[] buildModeValues() {
+		return BUILD_MODE_VALUES.clone();
 	}
 
 	public static String actionValueAt(int index) {
@@ -64,7 +94,7 @@ public final class TimelineBindingEditorPresenter {
 	}
 
 	public static String[] spatialLabels() {
-		return SPATIAL_LABELS.clone();
+		return BBTexts.labels(SPATIAL_LABEL_KEYS);
 	}
 
 	public static int spatialValueCount() {
@@ -184,11 +214,11 @@ public final class TimelineBindingEditorPresenter {
 		List<AnimationBindingRule> templated = new ArrayList<>(
 			AnimationBindingEngine.createTemplateRules(current, TEMPLATE_VALUES[idx]));
 		if (templated.isEmpty()) {
-			return new TemplateOutcome("Template " + TEMPLATE_LABELS[idx] + " produced no rules", false, rules);
+			return new TemplateOutcome("Template " + templateLabelAt(idx) + " produced no rules", false, rules);
 		}
 		AnimationBindingEngine.saveRules(current, templated);
 		return new TemplateOutcome(
-			"Template " + TEMPLATE_LABELS[idx] + " replaced all rules: " + templated.size(),
+			"Template " + templateLabelAt(idx) + " replaced all rules: " + templated.size(),
 			true,
 			templated
 		);
@@ -202,12 +232,12 @@ public final class TimelineBindingEditorPresenter {
 		List<AnimationBindingRule> templated = new ArrayList<>(
 			AnimationBindingEngine.createTemplateRules(current, TEMPLATE_VALUES[idx]));
 		if (templated.isEmpty()) {
-			return new TemplateOutcome("Template " + TEMPLATE_LABELS[idx] + " produced no rules", false, rules);
+			return new TemplateOutcome("Template " + templateLabelAt(idx) + " produced no rules", false, rules);
 		}
 		TemplateMergeResult merge = mergeTemplateRules(rules, templated);
 		AnimationBindingEngine.saveRules(current, merge.merged());
 		return new TemplateOutcome(
-			"Template " + TEMPLATE_LABELS[idx] + " appended: +" + merge.added() + ", skipped " + merge.skipped(),
+			"Template " + templateLabelAt(idx) + " appended: +" + merge.added() + ", skipped " + merge.skipped(),
 			merge.added() > 0,
 			merge.merged()
 		);

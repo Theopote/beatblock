@@ -19,6 +19,7 @@ import com.beatblock.timeline.editing.TimelineEventEditActions;
 import com.beatblock.timeline.editor.SelectionState;
 import com.beatblock.timeline.editor.TimelineClock;
 import com.beatblock.timeline.rendering.TimelineTrackListState;
+import com.beatblock.ui.i18n.BBTexts;
 import imgui.ImGui;
 import imgui.flag.ImGuiKey;
 import imgui.type.ImString;
@@ -99,23 +100,23 @@ public final class TimelineInteractionPopups {
 		TimelineEventRef propertiesRef = host.resolvePropertiesEventRef(timeline, selectionState);
 		boolean canOpenProperties = propertiesRef != null
 			&& !TimelineInteractiveTrackSlots.isTrackLocked(timeline, trackListState, propertiesRef.track().getId());
-		if (ImGui.menuItem("Copy", "Ctrl+C", false, hasSelection)) {
+		if (ImGui.menuItem(BBTexts.get("beatblock.common.copy"), "Ctrl+C", false, hasSelection)) {
 			host.copySelectedEvents(timeline, selectionState);
 		}
-		if (ImGui.menuItem("Paste", "Ctrl+V", false, hasClipboard)) {
+		if (ImGui.menuItem(BBTexts.get("beatblock.common.paste"), "Ctrl+V", false, hasClipboard)) {
 			host.pasteClipboardEvents(timeline, selectionState, state.contextTimeSeconds, trackListState);
 		}
 		if (timeline != null && Timeline.TRACK_ID_CAMERA.equals(state.contextTrackId)
 				&& !TimelineInteractiveTrackSlots.isTrackLocked(timeline, trackListState, state.contextTrackId)) {
 			if (state.contextClipId != null) {
-				if (ImGui.checkbox("显示路径##camCtxPathVis", state.contextCameraShowPath)) {
+				if (ImGui.checkbox(BBTexts.get("beatblock.camera.show_path") + "##camCtxPathVis", state.contextCameraShowPath)) {
 					CameraPathMetadata.setPathVisible(timeline, state.contextClipId, state.contextCameraShowPath.get());
 				}
 			}
 			TimelineEventRef ctxEv = state.propertiesEventId != null
 				? TimelineEventRefs.find(timeline, state.propertiesEventId) : null;
 			if (ctxEv != null && ctxEv.event() != null && ctxEv.event().getType() == EventType.CAMERA_KEYFRAME) {
-				if (ImGui.menuItem("删除关键帧##camDelKf")) {
+				if (ImGui.menuItem(BBTexts.get("beatblock.camera.delete_keyframe") + "##camDelKf")) {
 					TimelineOperations.removeEvent(ctxEv.clip(), ctxEv.event().getId());
 					if (selectionState != null) {
 						selectionState.deselectEvent(ctxEv.event().getId());
@@ -135,32 +136,34 @@ public final class TimelineInteractionPopups {
 					canAddPathKf = k == CameraSegmentKind.PATH;
 				}
 			}
-			if (ImGui.menuItem("添加路径关键帧（当前位置）##camAddKfCtx", null, false, canAddPathKf)) {
+			if (ImGui.menuItem(BBTexts.get("beatblock.timeline.interaction.add_path_keyframe") + "##camAddKfCtx", null, false, canAddPathKf)) {
 				CameraKeyframeActions.addKeyframeAtTime(timeline, state.contextTimeSeconds);
 			}
-			if (ImGui.beginMenu("添加镜头片段")) {
+			if (ImGui.beginMenu(BBTexts.get("beatblock.timeline.interaction.add_segment_menu"))) {
 				double[] a = TimelineContentHitTest.readCameraAnchorFive();
-				if (ImGui.menuItem("自定义路径（关键帧）")) {
+				if (ImGui.menuItem(BBTexts.get("beatblock.timeline.interaction.custom_path"))) {
 					CameraTrackFactory.addPathSegment(timeline, state.contextTimeSeconds, a[0], a[1], a[2], a[3], a[4]);
 				}
-				if (ImGui.menuItem("推进（Dolly）")) {
+				if (ImGui.menuItem(BBTexts.get("beatblock.timeline.interaction.dolly"))) {
 					CameraTrackFactory.addDollySegment(timeline, state.contextTimeSeconds, a[0], a[1], a[2], a[3], 8.0);
 				}
-				if (ImGui.menuItem("环绕（Orbit）")) {
+				if (ImGui.menuItem(BBTexts.get("beatblock.timeline.interaction.orbit"))) {
 					double[] o = TimelineContentHitTest.readOrbitParamsFromView();
 					CameraTrackFactory.addOrbitSegment(timeline, state.contextTimeSeconds,
 						o[0], o[1], o[2], o[3], o[4], o[5], o[6]);
 				}
-				if (ImGui.menuItem("升降（Crane）")) {
+				if (ImGui.menuItem(BBTexts.get("beatblock.timeline.interaction.crane"))) {
 					CameraTrackFactory.addCraneSegment(timeline, state.contextTimeSeconds, a[0], a[1], a[2], a[3], a[4], 6.0);
 				}
-				if (ImGui.menuItem("节拍震动（Shake）")) {
+				if (ImGui.menuItem(BBTexts.get("beatblock.timeline.interaction.shake"))) {
 					CameraTrackFactory.addShakeSegment(timeline, state.contextTimeSeconds, a[0], a[1], a[2], a[3], a[4]);
 				}
 				ImGui.endMenu();
 			}
 		}
-		String deleteLabel = canDeleteAny ? "Delete" : "Delete (Locked)";
+		String deleteLabel = canDeleteAny
+			? BBTexts.get("beatblock.timeline.interaction.delete")
+			: BBTexts.get("beatblock.timeline.interaction.delete_locked");
 		if (ImGui.menuItem(deleteLabel, "Del", false, canDeleteAny)) {
 			if (selectionState != null && canDeleteContextClip && state.contextClipId != null) {
 				selectionState.clearEvents();
@@ -176,8 +179,8 @@ public final class TimelineInteractionPopups {
 		}
 		ImGui.separator();
 		String propertiesLabel = propertiesRef != null && !canOpenProperties
-			? "Properties (Locked)"
-			: "Properties";
+			? BBTexts.get("beatblock.timeline.interaction.properties_locked")
+			: BBTexts.get("beatblock.timeline.interaction.properties");
 		if (ImGui.menuItem(propertiesLabel, null, false, canOpenProperties)) {
 			openPropertiesPopup(timeline, selectionState, trackListState, host);
 		}
@@ -200,28 +203,26 @@ public final class TimelineInteractionPopups {
 		boolean canDeleteCtxClip = host.canDeleteContextClip(timeline, trackListState);
 		boolean canDelete = hasDeletable || canDeleteCtxClip;
 
-		ImGui.text("Delete Confirmation");
+		ImGui.text(BBTexts.get("beatblock.timeline.interaction.delete_confirm_title"));
 		ImGui.separator();
-		ImGui.textWrapped(String.format(java.util.Locale.ROOT,
-			"将删除选中的内容：%d 个片段，%d 个事件。",
-			selectedClipCount,
-			selectedEventCount));
+		ImGui.textWrapped(BBTexts.get("beatblock.timeline.interaction.delete_confirm_body",
+			selectedClipCount, selectedEventCount));
 
 		if (containsSelectedAudioTrackClip(timeline, selectionState)) {
 			ImGui.spacing();
 			ImGui.textColored(1f, 0.45f, 0.45f, 1f,
-				"警告：本次删除包含顶部音频片段。若删除后音频轨为空，将同步清理音频波形与分析数据。");
+				BBTexts.get("beatblock.timeline.interaction.delete_audio_warning"));
 		}
 
 		ImGui.spacing();
-		if (ImGui.button("Confirm Delete##timelineDeleteConfirm", 150f, 0f)) {
+		if (ImGui.button(BBTexts.get("beatblock.common.confirm_delete") + "##timelineDeleteConfirm", 150f, 0f)) {
 			if (canDelete) {
 				host.deleteSelectedEntries(timeline, selectionState, trackListState);
 			}
 			ImGui.closeCurrentPopup();
 		}
 		ImGui.sameLine();
-		if (ImGui.button("Cancel##timelineDeleteCancel", 120f, 0f)) {
+		if (ImGui.button(BBTexts.get("beatblock.common.cancel") + "##timelineDeleteCancel", 120f, 0f)) {
 			ImGui.closeCurrentPopup();
 		}
 		ImGui.endPopup();
@@ -237,36 +238,36 @@ public final class TimelineInteractionPopups {
 		int markerIndex = timeline != null ? timeline.findMarkerIndexById(state.contextMarkerId) : -1;
 		if (timeline == null || markerIndex < 0 || markerIndex >= timeline.getMarkers().size()) {
 			state.contextMarkerId = null;
-			ImGui.textDisabled("Marker no longer exists.");
-			if (ImGui.button("Close##markerPopupClose")) ImGui.closeCurrentPopup();
+			ImGui.textDisabled(BBTexts.get("beatblock.timeline.interaction.marker_gone"));
+			if (ImGui.button(BBTexts.get("beatblock.common.close") + "##markerPopupClose")) ImGui.closeCurrentPopup();
 			ImGui.endPopup();
 			return;
 		}
 
 		TimelineMarker marker = timeline.getMarkers().get(markerIndex);
-		ImGui.text("Marker");
+		ImGui.text(BBTexts.get("beatblock.timeline.interaction.marker"));
 		ImGui.textDisabled(String.format(java.util.Locale.ROOT, "%.3fs", marker.getTimeSeconds()));
 		ImGui.setNextItemWidth(180f);
-		ImGui.inputText("Name##markerRename", state.markerNameBuffer);
+		ImGui.inputText(BBTexts.get("beatblock.marker.name") + "##markerRename", state.markerNameBuffer);
 
-		if (ImGui.button("Jump##markerJump")) {
+		if (ImGui.button(BBTexts.get("beatblock.timeline.interaction.jump") + "##markerJump")) {
 			if (clock != null) host.seekClockAndMusic(clock, marker.getTimeSeconds());
 		}
 		ImGui.sameLine();
-		if (ImGui.button("Rename##markerApply")) {
+		if (ImGui.button(BBTexts.get("beatblock.timeline.interaction.rename") + "##markerApply")) {
 			String newName = state.markerNameBuffer.get() == null ? "" : state.markerNameBuffer.get().trim();
 			timeline.updateMarker(state.contextMarkerId, marker.getTimeSeconds(), newName);
 			state.contextMarkerId = null;
 			ImGui.closeCurrentPopup();
 		}
 		ImGui.sameLine();
-		if (ImGui.button("Delete##markerDelete")) {
+		if (ImGui.button(BBTexts.get("beatblock.common.delete") + "##markerDelete")) {
 			timeline.removeMarker(state.contextMarkerId);
 			state.contextMarkerId = null;
 			ImGui.closeCurrentPopup();
 		}
 		ImGui.sameLine();
-		if (ImGui.button("Close##markerClose")) {
+		if (ImGui.button(BBTexts.get("beatblock.common.close") + "##markerClose")) {
 			state.contextMarkerId = null;
 			ImGui.closeCurrentPopup();
 		}
@@ -282,8 +283,8 @@ public final class TimelineInteractionPopups {
 		TimelineInteractionPopupState state = host.popupState();
 		TimelineEventRef ref = TimelineEventRefs.find(timeline, state.propertiesEventId);
 		if (ref == null || ref.event() == null) {
-			ImGui.textDisabled("Event no longer exists.");
-			if (ImGui.button("Close")) ImGui.closeCurrentPopup();
+			ImGui.textDisabled(BBTexts.get("beatblock.timeline.interaction.event_gone"));
+			if (ImGui.button(BBTexts.get("beatblock.common.close"))) ImGui.closeCurrentPopup();
 			ImGui.endPopup();
 			return;
 		}
@@ -291,14 +292,14 @@ public final class TimelineInteractionPopups {
 		boolean applyRequested = !trackLocked && ImGui.isKeyPressed(ImGuiKey.Enter);
 		boolean closeRequested = ImGui.isKeyPressed(ImGuiKey.Escape);
 
-		ImGui.text("Event ID: " + ref.event().getId());
-		ImGui.text("Type: " + ref.event().getType().name());
+		ImGui.text(BBTexts.get("beatblock.timeline.interaction.event_id", ref.event().getId()));
+		ImGui.text(BBTexts.get("beatblock.timeline.interaction.event_type", ref.event().getType().name()));
 		if (trackLocked) {
-			ImGui.textDisabled("Track is locked. Editing is disabled.");
+			ImGui.textDisabled(BBTexts.get("beatblock.timeline.interaction.track_locked"));
 			ImGui.beginDisabled();
 		}
 		ImGui.separator();
-		ImGui.text("Time (seconds)");
+		ImGui.text(BBTexts.get("beatblock.timeline.interaction.time_seconds"));
 		ImGui.setNextItemWidth(170f);
 		ImGui.inputText("##eventTime", state.propertiesTimeBuffer);
 		if (state.propertiesError != null) {
@@ -307,7 +308,7 @@ public final class TimelineInteractionPopups {
 
 		if (!ref.event().getParameters().isEmpty()) {
 			ImGui.separator();
-			ImGui.text("Parameters");
+			ImGui.text(BBTexts.get("beatblock.timeline.interaction.parameters"));
 			List<String> keys = new ArrayList<>(ref.event().getParameters().keySet());
 			keys.sort(String::compareTo);
 			List<String> removedKeys = new ArrayList<>();
@@ -321,7 +322,7 @@ public final class TimelineInteractionPopups {
 				ImGui.inputText("##param_" + key, buf);
 				ImGui.sameLine();
 				boolean numberFlag = asNumber;
-				if (ImGui.checkbox("Number##param_type_" + key, numberFlag)) {
+				if (ImGui.checkbox(BBTexts.get("beatblock.common.number") + "##param_type_" + key, numberFlag)) {
 					state.propertiesParamAsNumber.put(key, !numberFlag);
 				}
 				ImGui.sameLine();
@@ -336,21 +337,21 @@ public final class TimelineInteractionPopups {
 		}
 
 		ImGui.separator();
-		ImGui.text("Add Parameter");
+		ImGui.text(BBTexts.get("beatblock.timeline.interaction.add_parameter"));
 		ImGui.setNextItemWidth(120f);
-		ImGui.inputText("Key##param_add_key", state.propertiesNewParamKey);
+		ImGui.inputText(BBTexts.get("beatblock.timeline.interaction.param_key") + "##param_add_key", state.propertiesNewParamKey);
 		ImGui.sameLine();
 		ImGui.setNextItemWidth(120f);
-		ImGui.inputText("Value##param_add_value", state.propertiesNewParamValue);
+		ImGui.inputText(BBTexts.get("beatblock.timeline.interaction.param_value") + "##param_add_value", state.propertiesNewParamValue);
 		ImGui.sameLine();
-		if (ImGui.checkbox("Number##param_add_type", state.propertiesNewParamAsNumber)) {
+		if (ImGui.checkbox(BBTexts.get("beatblock.common.number") + "##param_add_type", state.propertiesNewParamAsNumber)) {
 			state.propertiesNewParamAsNumber = !state.propertiesNewParamAsNumber;
 		}
 		ImGui.sameLine();
-		if (ImGui.button("Add/Update##param_add")) {
+		if (ImGui.button(BBTexts.get("beatblock.timeline.interaction.add_update") + "##param_add")) {
 			String key = state.propertiesNewParamKey.get() != null ? state.propertiesNewParamKey.get().trim() : "";
 			if (key.isEmpty()) {
-				state.propertiesError = "Parameter key cannot be empty";
+				state.propertiesError = BBTexts.get("beatblock.timeline.interaction.param_key_empty");
 			} else {
 				ImString valueBuf = state.propertiesParamBuffers.computeIfAbsent(key, k -> new ImString(PARAM_INPUT_BUFFER_SIZE));
 				valueBuf.set(state.propertiesNewParamValue.get() == null ? "" : state.propertiesNewParamValue.get());
@@ -359,7 +360,7 @@ public final class TimelineInteractionPopups {
 			}
 		}
 
-		if (ImGui.button("Apply") || applyRequested) {
+		if (ImGui.button(BBTexts.get("beatblock.common.apply")) || applyRequested) {
 			try {
 				double t = Double.parseDouble(state.propertiesTimeBuffer.get().trim());
 				Map<String, String> paramRaw = new HashMap<>();
@@ -398,18 +399,18 @@ public final class TimelineInteractionPopups {
 					}
 				}
 			} catch (NumberFormatException ex) {
-				state.propertiesError = "Invalid number in time/parameter";
+				state.propertiesError = BBTexts.get("beatblock.timeline.interaction.invalid_number");
 			}
 		}
 		ImGui.sameLine();
-		if (ImGui.button("Reset")) {
+		if (ImGui.button(BBTexts.get("beatblock.common.reset"))) {
 			resetPropertiesBuffers(state);
 		}
 		if (trackLocked) {
 			ImGui.endDisabled();
 		}
 		ImGui.sameLine();
-		if (ImGui.button("Close") || closeRequested) {
+		if (ImGui.button(BBTexts.get("beatblock.common.close")) || closeRequested) {
 			ImGui.closeCurrentPopup();
 		}
 		ImGui.endPopup();

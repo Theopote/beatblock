@@ -7,6 +7,7 @@ import com.beatblock.timeline.camera.CameraSegmentKind;
 import com.beatblock.timeline.camera.CameraTrackFactory;
 import com.beatblock.timeline.editor.SelectionState;
 import com.beatblock.timeline.editor.TimelineViewState;
+import com.beatblock.ui.i18n.BBTexts;
 import imgui.ImGui;
 
 import java.util.ArrayList;
@@ -178,9 +179,9 @@ public final class EventRenderer {
 
 		if (ImGui.isMouseHoveringRect(bx0, by0, bx1, by1)) {
 			if (step) {
-				ImGui.setTooltip("Dispatch: STEP\nAdvances sequence on each beat event.");
+				ImGui.setTooltip(BBTexts.get("beatblock.event.badge.dispatch_step"));
 			} else {
-				ImGui.setTooltip("Dispatch: BURST\nTriggers the group animation immediately at event time.");
+				ImGui.setTooltip(BBTexts.get("beatblock.event.badge.dispatch_burst"));
 			}
 		}
 	}
@@ -199,7 +200,7 @@ public final class EventRenderer {
 		ImGui.getWindowDrawList().addText(bx0 + 2f, by0 - 1f, 0xFF_11_11_11, "G");
 
 		if (ImGui.isMouseHoveringRect(bx0, by0, bx1, by1)) {
-			ImGui.setTooltip("Inherit group spatial: ON\nspatialMode/sequentialDelaySeconds are resolved from target group when not overridden.");
+			ImGui.setTooltip(BBTexts.get("beatblock.event.badge.inherit_spatial"));
 		}
 	}
 
@@ -221,7 +222,7 @@ public final class EventRenderer {
 		ImGui.getWindowDrawList().addText(bx0 + 2f, by0 - 1f, 0xFF_11_11_11, "V");
 
 		if (ImGui.isMouseHoveringRect(bx0, by0, bx1, by1)) {
-			ImGui.setTooltip("Frustum Gating: ON\nPauses STEP progression when target group is outside camera view.");
+			ImGui.setTooltip(BBTexts.get("beatblock.event.badge.frustum_gating"));
 		}
 	}
 
@@ -244,7 +245,7 @@ public final class EventRenderer {
 		ImGui.getWindowDrawList().addText(bx0 + 2f, by0 - 1f, 0xFF_11_11_11, "E");
 
 		if (ImGui.isMouseHoveringRect(bx0, by0, bx1, by1)) {
-			ImGui.setTooltip(String.format("Edge Priority: %.0f%%%nPrioritizes silhouette blocks early in progression.", edgePriority * 100.0));
+			ImGui.setTooltip(BBTexts.get("beatblock.event.badge.edge_priority", edgePriority * 100.0));
 		}
 	}
 

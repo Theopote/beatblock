@@ -1,6 +1,7 @@
 package com.beatblock.ui.presenter;
 
 import com.beatblock.timeline.Timeline;
+import com.beatblock.ui.i18n.BBTexts;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonObject;
@@ -22,21 +23,26 @@ public final class TimelineToolbarConfigPresenter {
 	private static final Logger LOGGER = LoggerFactory.getLogger(TimelineToolbarConfigPresenter.class);
 	private static final Gson UI_CONFIG_GSON = new GsonBuilder().setPrettyPrinting().create();
 
-	private static final String[] DEMUCS_PRESET_LABELS = { "Drive", "Balanced", "Detail" };
+	private static final String[] DEMUCS_PRESET_LABEL_KEYS = {
+		"beatblock.timeline.demucs.preset.drive",
+		"beatblock.timeline.demucs.preset.balanced",
+		"beatblock.timeline.demucs.preset.detail"
+	};
 	private static final String[] DEMUCS_PRESET_VALUES = { "drive", "balanced", "detail" };
-	private static final String[] CLIP_GENERATION_MODE_LABELS = { "Mixed", "Trigger", "Sustain" };
+	private static final String[] CLIP_GENERATION_MODE_LABEL_KEYS = {
+		"beatblock.timeline.demucs.clip_mode.mixed",
+		"beatblock.timeline.demucs.clip_mode.trigger",
+		"beatblock.timeline.demucs.clip_mode.sustain"
+	};
 	private static final String[] CLIP_GENERATION_MODE_VALUES = { "mixed", "trigger", "sustain" };
 	private static final String[] ACTION_ROLLBACK_LABELS = { "Preview", "Persistent" };
 	private static final String[] ACTION_ROLLBACK_VALUES = { "preview", "persistent" };
 	private static final String[] DEMUCS_FEATURE_KEYS = {
 		"kick", "snare", "hihat", "hihat_open", "snare_hi", "bass", "vocals", "other"
 	};
-	private static final String[] DEMUCS_FEATURE_LABELS = {
-		"Kick", "Snare", "HiHat", "HiHat Open", "Snare Hi", "Bass", "Vocals", "Other"
-	};
 
 	public static String[] demucsPresetLabels() {
-		return DEMUCS_PRESET_LABELS.clone();
+		return BBTexts.labels(DEMUCS_PRESET_LABEL_KEYS);
 	}
 
 	public static String demucsPresetValueAt(int index) {
@@ -44,7 +50,7 @@ public final class TimelineToolbarConfigPresenter {
 	}
 
 	public static String[] clipGenerationModeLabels() {
-		return CLIP_GENERATION_MODE_LABELS.clone();
+		return BBTexts.labels(CLIP_GENERATION_MODE_LABEL_KEYS);
 	}
 
 	public static String clipGenerationModeValueAt(int index) {
@@ -68,7 +74,7 @@ public final class TimelineToolbarConfigPresenter {
 	}
 
 	public static String demucsFeatureLabelAt(int index) {
-		return DEMUCS_FEATURE_LABELS[index];
+		return BBTexts.trackName(DEMUCS_FEATURE_KEYS[index]);
 	}
 
 	public static final double DEMUCS_SCALE_MIN = 0.5;

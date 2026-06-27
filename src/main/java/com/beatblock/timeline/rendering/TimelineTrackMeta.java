@@ -1,5 +1,7 @@
 package com.beatblock.timeline.rendering;
 
+import com.beatblock.ui.i18n.BBTexts;
+
 /**
  * 轨道行元数据：默认名称、层级（一级轨道 / 子轨道），与 TimelineLayout.CONTENT_ROW_COUNT 对应。
  *
@@ -129,14 +131,14 @@ public final class TimelineTrackMeta {
 	 */
 	public static String getCategoryTypeLabel(int rowIndex) {
 		if (rowIndex < 0 || rowIndex >= DEFAULT_NAMES.length) return "";
-		if (rowIndex == ROW_AUDIO_GROUP) return "音频片段";
-		if (isAudioSubRow(rowIndex)) return "节奏特征";
-		if (rowIndex == ROW_ANIMATION_GROUP) return "节奏特征";
-		if (rowIndex == ROW_ACTION_GROUP) return "动作";
-		if (rowIndex == ROW_ANIM_BLOCK || rowIndex == ROW_ANIM_AUTO || rowIndex == ROW_BUILD_REVERSE) return "动画";
-		if (isAnimationFeatureSubRow(rowIndex)) return "动画控制";
-		if (rowIndex == ROW_CAMERA) return "摄像机";
-		if (rowIndex == ROW_GLOBAL_EVENT) return "事件";
+		if (rowIndex == ROW_AUDIO_GROUP) return BBTexts.get("beatblock.track.type.audio_clip");
+		if (isAudioSubRow(rowIndex)) return BBTexts.get("beatblock.track.type.feature");
+		if (rowIndex == ROW_ANIMATION_GROUP) return BBTexts.get("beatblock.track.type.feature");
+		if (rowIndex == ROW_ACTION_GROUP) return BBTexts.get("beatblock.track.type.action");
+		if (rowIndex == ROW_ANIM_BLOCK || rowIndex == ROW_ANIM_AUTO || rowIndex == ROW_BUILD_REVERSE) return BBTexts.get("beatblock.track.type.animation");
+		if (isAnimationFeatureSubRow(rowIndex)) return BBTexts.get("beatblock.track.type.animation_control");
+		if (rowIndex == ROW_CAMERA) return BBTexts.get("beatblock.track.type.camera");
+		if (rowIndex == ROW_GLOBAL_EVENT) return BBTexts.get("beatblock.track.type.event");
 		return "";
 	}
 }
