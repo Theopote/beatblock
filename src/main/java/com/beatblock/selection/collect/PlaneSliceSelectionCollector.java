@@ -2,6 +2,7 @@ package com.beatblock.selection.collect;
 
 import com.beatblock.selection.PlaneSliceBounds;
 import com.beatblock.selection.SelectionCollectResult;
+import com.beatblock.ui.i18n.BBTexts;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.ChunkPos;
 import net.minecraft.util.math.Direction;
@@ -26,7 +27,7 @@ public final class PlaneSliceSelectionCollector {
 		Predicate<BlockPos> withinReach
 	) {
 		if (world == null || pos == null || face == null) {
-			return SelectionCollectResult.failure("平面切片：无效参数。");
+			return SelectionCollectResult.failure(BBTexts.get("beatblock.selection.error.plane_slice.invalid_params"));
 		}
 		PlaneSliceBounds bounds = PlaneSliceBounds.compute(
 			pos,
@@ -38,18 +39,16 @@ public final class PlaneSliceSelectionCollector {
 			world.getBottomY() + world.getHeight() - 1
 		);
 		if (bounds.isEmpty()) {
-			return SelectionCollectResult.failure(
-				"平面切片：该平面与当前范围无交集（可先有选区再切，或对准区块内）。"
-			);
+			return SelectionCollectResult.failure(BBTexts.get("beatblock.selection.error.plane_slice.no_intersection"));
 		}
 		long vol = bounds.volume();
 		if (vol > maxBlocks) {
-			return SelectionCollectResult.failure(String.format("平面切片体积 %d 超过上限 %d。", vol, maxBlocks));
+			return SelectionCollectResult.failure(BBTexts.get("beatblock.selection.error.plane_slice.volume_exceeded", vol, maxBlocks));
 		}
 		List<BlockPos> raw = bounds.positions();
 		List<BlockPos> filtered = SelectionCollectSupport.filterBlocks(world, raw, includeAir, withinReach);
 		if (filtered.size() > maxBlocks) {
-			return SelectionCollectResult.failure(String.format("平面切片超过上限 %d。", maxBlocks));
+			return SelectionCollectResult.failure(BBTexts.get("beatblock.selection.error.plane_slice.count_exceeded", maxBlocks));
 		}
 		return SelectionCollectResult.success(filtered);
 	}

@@ -3,6 +3,7 @@ package com.beatblock.selection.collect;
 import com.beatblock.selection.BrushShape;
 import com.beatblock.selection.SelectionBrushRegions;
 import com.beatblock.selection.SelectionCollectResult;
+import com.beatblock.ui.i18n.BBTexts;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 
@@ -24,7 +25,7 @@ public final class BrushSelectionCollector {
 		Predicate<BlockPos> withinReach
 	) {
 		if (center == null) {
-			return SelectionCollectResult.failure("笔刷：无效中心。");
+			return SelectionCollectResult.failure(BBTexts.get("beatblock.selection.error.brush.invalid_center"));
 		}
 		BrushShape resolved = shape != null ? shape : BrushShape.SPHERE;
 		List<BlockPos> raw = switch (resolved) {
@@ -33,9 +34,9 @@ public final class BrushSelectionCollector {
 		};
 		if (raw == null) {
 			long worst = (2L * radius + 1) * (2L * radius + 1) * (2L * radius + 1);
-			String label = resolved == BrushShape.CUBE ? "立方笔刷包络" : "球体包络方块数";
-			String hint = resolved == BrushShape.SPHERE ? "，请缩小半径" : "";
-			return SelectionCollectResult.failure(String.format("%s约 %d 方块，超过上限 %d%s。", label, worst, maxBlocks, hint));
+			return SelectionCollectResult.failure(resolved == BrushShape.CUBE
+				? BBTexts.get("beatblock.selection.error.brush.cube_envelope_exceeded", worst, maxBlocks)
+				: BBTexts.get("beatblock.selection.error.brush.sphere_envelope_exceeded", worst, maxBlocks));
 		}
 		if (world == null) {
 			return SelectionCollectResult.success(raw);

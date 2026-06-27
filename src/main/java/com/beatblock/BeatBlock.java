@@ -14,6 +14,7 @@ import com.beatblock.timeline.TimelineEditor;
 import com.beatblock.engine.BlockAnimationEngine;
 import com.beatblock.audio.analysis.AudioAnalysisEngine;
 import com.beatblock.runtime.BeatBlockContext;
+import com.beatblock.ui.i18n.BBTexts;
 import com.beatblock.video.VideoExportService;
 import net.fabricmc.api.ModInitializer;
 import org.jspecify.annotations.NonNull;
@@ -93,7 +94,7 @@ public class BeatBlock implements ModInitializer {
 			if (asset == null || asset.getPath() == null) return;
 			asset.setStatus(com.beatblock.audio.assets.AudioAssetStatus.ANALYZING);
 			asset.setAnalysisProgressPercent(3);
-			asset.setProcessingStatusText("FFmpeg 转换中（目标格式：MP3）");
+			asset.setProcessingStatusText(BBTexts.get("beatblock.audio.ffmpeg_converting"));
 			asset.setErrorMessage(null);
 			getContext().audioConversionService().convertToMp3Async(
 				asset.getPath(),
@@ -107,10 +108,10 @@ public class BeatBlock implements ModInitializer {
 					String outName = convertedPath.getFileName() != null
 						? convertedPath.getFileName().toString()
 						: convertedPath.toString();
-					asset.setInfoMessage("已转换为: " + outName);
+					asset.setInfoMessage(BBTexts.get("beatblock.audio.converted_to", outName));
 					asset.setStatus(com.beatblock.audio.assets.AudioAssetStatus.PENDING);
 					asset.setAnalysisProgressPercent(0);
-					asset.setProcessingStatusText("转换完成，开始解析...");
+					asset.setProcessingStatusText(BBTexts.get("beatblock.audio.convert_done_parsing"));
 					asset.setErrorMessage(null);
 					AudioAssetManager.getInstance().startAnalysis(asset);
 				},

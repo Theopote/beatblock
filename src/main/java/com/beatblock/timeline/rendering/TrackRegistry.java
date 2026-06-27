@@ -148,7 +148,7 @@ public final class TrackRegistry {
 
 		// 1. 主混音波形（非 Demucs 模式下为唯一可听音轨）
 		result.add(new TrackDefinition(
-			"waveform", "主混音",
+			"waveform", BBTexts.get("beatblock.track.main_mix"),
 			TrackDefinition.VisualType.WAVEFORM,
 			TrackDefinition.GROUP_NONE
 		));

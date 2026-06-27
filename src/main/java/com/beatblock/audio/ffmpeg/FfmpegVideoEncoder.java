@@ -1,5 +1,6 @@
 package com.beatblock.audio.ffmpeg;
 
+import com.beatblock.ui.i18n.BBTexts;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -62,7 +63,7 @@ public final class FfmpegVideoEncoder implements AutoCloseable {
 		this.process = new ProcessBuilder(command).redirectErrorStream(true).start();
 		this.stdin = process.getOutputStream();
 		startProgressReader();
-		notifyProgress("正在启动 FFmpeg...", 1);
+		notifyProgress(BBTexts.get("beatblock.export.progress.starting_ffmpeg"), 1);
 	}
 
 	static List<String> buildVideoCommand(
@@ -138,7 +139,7 @@ public final class FfmpegVideoEncoder implements AutoCloseable {
 		stdin.write(rgba);
 		framesWritten++;
 		int percent = Math.min(99, (int) Math.round((framesWritten * 100.0) / totalFrames));
-		notifyProgress("正在写入视频帧 " + framesWritten + "/" + totalFrames, percent);
+		notifyProgress(BBTexts.get("beatblock.export.progress.writing_frame", framesWritten, totalFrames), percent);
 	}
 
 	public FfmpegTranscodeOutcome finishAndAwait() {
@@ -147,18 +148,18 @@ public final class FfmpegVideoEncoder implements AutoCloseable {
 			int exitCode = process.waitFor();
 			if (exitCode != 0) {
 				return new FfmpegTranscodeOutcome.Failure(
-					"ffmpeg 视频编码失败（退出码 " + exitCode + "）。"
+					BBTexts.get("beatblock.export.error.encode_failed", exitCode)
 				);
 			}
-			notifyProgress("视频编码完成。", 100);
+			notifyProgress(BBTexts.get("beatblock.export.progress.encode_complete"), 100);
 			return new FfmpegTranscodeOutcome.Success(outputPath);
 		} catch (InterruptedException e) {
 			Thread.currentThread().interrupt();
 			process.destroyForcibly();
-			return new FfmpegTranscodeOutcome.Failure("视频导出被中断。");
+			return new FfmpegTranscodeOutcome.Failure(BBTexts.get("beatblock.export.cancelled"));
 		} catch (IOException e) {
 			process.destroyForcibly();
-			return new FfmpegTranscodeOutcome.Failure("无法完成 ffmpeg 编码: " + e.getMessage());
+			return new FfmpegTranscodeOutcome.Failure(BBTexts.get("beatblock.export.error.finish_encode", e.getMessage()));
 		} finally {
 			closed = true;
 		}

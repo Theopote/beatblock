@@ -331,7 +331,7 @@ final class AudioAnalysisPanelImGui {
 		String path = resolveStemDisplayPath(bm, relativePath);
 		boolean fileExists = new File(path).isFile();
 		detailRowCompact(state, label, fileExists ? BBTexts.get("beatblock.audio.generated") : BBTexts.get("beatblock.audio.path_missing"), color);
-		detailRowCompact(state, label + " 路径", path);
+		detailRowCompact(state, BBTexts.get("beatblock.audio.path_for", label), path);
 		renderCopyPathAction(host, path, stemKey, label);
 	}
 

@@ -2,6 +2,7 @@ package com.beatblock.selection.collect;
 
 import com.beatblock.selection.SelectionCollectResult;
 import com.beatblock.selection.SelectionRegions;
+import com.beatblock.ui.i18n.BBTexts;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 
@@ -22,12 +23,12 @@ public final class BoxSelectionCollector {
 		Predicate<BlockPos> withinReach
 	) {
 		if (cornerA == null || cornerB == null) {
-			return SelectionCollectResult.failure("框选：无效角点。");
+			return SelectionCollectResult.failure(BBTexts.get("beatblock.selection.error.box.invalid_corners"));
 		}
 		List<BlockPos> raw = SelectionRegions.cuboidPositions(cornerA, cornerB, maxBlocks);
 		if (raw == null) {
-			return SelectionCollectResult.failure(String.format(
-				"框选体积 %d 超过上限 %d，已取消。",
+			return SelectionCollectResult.failure(BBTexts.get(
+				"beatblock.selection.error.box.volume_exceeded",
 				SelectionRegions.cuboidVolume(cornerA, cornerB),
 				maxBlocks
 			));

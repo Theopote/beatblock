@@ -1,6 +1,7 @@
 package com.beatblock.selection.collect;
 
 import com.beatblock.selection.SelectionCollectResult;
+import com.beatblock.ui.i18n.BBTexts;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 
@@ -21,7 +22,7 @@ public final class ColumnSelectionCollector {
 		Predicate<BlockPos> withinReach
 	) {
 		if (world == null || pos == null) {
-			return SelectionCollectResult.failure("整列：无效位置。");
+			return SelectionCollectResult.failure(BBTexts.get("beatblock.selection.error.column.invalid_position"));
 		}
 		int x = pos.getX();
 		int z = pos.getZ();
@@ -29,7 +30,7 @@ public final class ColumnSelectionCollector {
 		int maxY = minY + world.getHeight() - 1;
 		int span = maxY - minY + 1;
 		if (span > maxBlocks) {
-			return SelectionCollectResult.failure(String.format("整列高度 %d 超过上限 %d。", span, maxBlocks));
+			return SelectionCollectResult.failure(BBTexts.get("beatblock.selection.error.column.height_exceeded", span, maxBlocks));
 		}
 		List<BlockPos> out = new ArrayList<>(Math.min(span, 4096));
 		for (int y = minY; y <= maxY; y++) {

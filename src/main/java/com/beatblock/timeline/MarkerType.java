@@ -21,7 +21,13 @@ public enum MarkerType {
 	}
 
 	public String getDisplayName() {
-		return displayName;
+		return BBTexts.get(switch (this) {
+			case GENERIC -> "beatblock.marker_type.generic";
+			case SECTION -> "beatblock.marker_type.section";
+			case DROP -> "beatblock.marker_type.drop";
+			case CAMERA -> "beatblock.marker_type.camera";
+			case FX -> "beatblock.marker_type.fx";
+		});
 	}
 
 	public int getColorAbgr() {

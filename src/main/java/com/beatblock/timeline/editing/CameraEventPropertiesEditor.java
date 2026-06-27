@@ -3,6 +3,7 @@ package com.beatblock.timeline.editing;
 import com.beatblock.timeline.Timeline;
 import com.beatblock.timeline.camera.CameraPathMetadata;
 import com.beatblock.timeline.camera.CameraSegmentKind;
+import com.beatblock.ui.i18n.BBTexts;
 
 import java.util.HashMap;
 import java.util.List;
@@ -151,7 +152,7 @@ public final class CameraEventPropertiesEditor {
 		String clipId
 	) {
 		if (newEnd <= newStart) {
-			return new Result.Err("结束时间须大于开始时间。");
+			return new Result.Err(BBTexts.get("beatblock.camera.end_must_be_after_start"));
 		}
 		Map<String, Double> shiftedTimes = existingEventTimes != null
 			? shiftClipEventTimes(existingEventTimes.entrySet(), oldClipStart, newStart, newEnd)

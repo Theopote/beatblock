@@ -49,26 +49,19 @@ public final class TimelineTrackMeta {
 	@Deprecated
 	public static final int ROW_FREQ_HIGH = ROW_AUDIO_SUBS_START + 3; // 槽 3 = 行 4
 
-	private static final String[] DEFAULT_NAMES = new String[ROW_COUNT];
+	private static final String[] DEFAULT_NAME_KEYS = new String[ROW_COUNT];
 	/** 父行索引，NO_PARENT 表示一级轨道（或组标题） */
 	private static final int[] PARENT_ROW = new int[ROW_COUNT];
 
 	static {
-		DEFAULT_NAMES[ROW_AUDIO_GROUP]     = "音频片段";
-		// 动态子轨槽：默认名称为空（由 TrackRegistry / TrackListState 提供）
-		for (int i = ROW_AUDIO_SUBS_START; i <= ROW_AUDIO_SUBS_END; i++) {
-			DEFAULT_NAMES[i] = "";
-		}
-		DEFAULT_NAMES[ROW_ANIMATION_GROUP] = "节奏特征";
-		DEFAULT_NAMES[ROW_ACTION_GROUP]    = "动作";
-		DEFAULT_NAMES[ROW_ANIM_BLOCK]      = "方块动画";
-		for (int i = ROW_ANIM_FEATURES_START; i <= ROW_ANIM_FEATURES_END; i++) {
-			DEFAULT_NAMES[i] = "";
-		}
-		DEFAULT_NAMES[ROW_ANIM_AUTO]       = "自动动画";
-		DEFAULT_NAMES[ROW_BUILD_REVERSE]   = "建造还原";
-		DEFAULT_NAMES[ROW_CAMERA]          = "摄像机";
-		DEFAULT_NAMES[ROW_GLOBAL_EVENT]    = "事件";
+		DEFAULT_NAME_KEYS[ROW_AUDIO_GROUP]     = "beatblock.track.default.audio_clips";
+		DEFAULT_NAME_KEYS[ROW_ANIMATION_GROUP] = "beatblock.track.default.rhythm_features";
+		DEFAULT_NAME_KEYS[ROW_ACTION_GROUP]    = "beatblock.track.default.action";
+		DEFAULT_NAME_KEYS[ROW_ANIM_BLOCK]      = "beatblock.track.default.block_animation";
+		DEFAULT_NAME_KEYS[ROW_ANIM_AUTO]       = "beatblock.track.default.auto_animation";
+		DEFAULT_NAME_KEYS[ROW_BUILD_REVERSE]   = "beatblock.track.default.build_reverse";
+		DEFAULT_NAME_KEYS[ROW_CAMERA]          = "beatblock.track.default.camera";
+		DEFAULT_NAME_KEYS[ROW_GLOBAL_EVENT]    = "beatblock.track.default.events";
 
 		PARENT_ROW[ROW_AUDIO_GROUP] = NO_PARENT;
 		for (int i = ROW_AUDIO_SUBS_START; i <= ROW_AUDIO_SUBS_END; i++) {
@@ -87,8 +80,9 @@ public final class TimelineTrackMeta {
 	}
 
 	public static String getDefaultName(int rowIndex) {
-		if (rowIndex < 0 || rowIndex >= DEFAULT_NAMES.length) return "";
-		return DEFAULT_NAMES[rowIndex];
+		if (rowIndex < 0 || rowIndex >= DEFAULT_NAME_KEYS.length) return "";
+		String key = DEFAULT_NAME_KEYS[rowIndex];
+		return key != null && !key.isBlank() ? BBTexts.get(key) : "";
 	}
 
 	public static boolean isGroupRow(int rowIndex) {
@@ -130,7 +124,7 @@ public final class TimelineTrackMeta {
 	 * 轨道「类型」列文案：音频组与子轨、动画组与子轨、摄像机、事件（用于时间线左侧表头）。
 	 */
 	public static String getCategoryTypeLabel(int rowIndex) {
-		if (rowIndex < 0 || rowIndex >= DEFAULT_NAMES.length) return "";
+		if (rowIndex < 0 || rowIndex >= DEFAULT_NAME_KEYS.length) return "";
 		if (rowIndex == ROW_AUDIO_GROUP) return BBTexts.get("beatblock.track.type.audio_clip");
 		if (isAudioSubRow(rowIndex)) return BBTexts.get("beatblock.track.type.feature");
 		if (rowIndex == ROW_ANIMATION_GROUP) return BBTexts.get("beatblock.track.type.feature");

@@ -4,6 +4,7 @@ import com.beatblock.selection.BlockStateLookup;
 import com.beatblock.selection.ConnectedCellLookup;
 import com.beatblock.selection.ConnectedSelectionFloodFill;
 import com.beatblock.selection.SelectionCollectResult;
+import com.beatblock.ui.i18n.BBTexts;
 import net.minecraft.util.math.BlockPos;
 
 import java.util.function.Predicate;
@@ -67,7 +68,7 @@ public final class ConnectedSelectionCollector {
 		String outOfReachMessage
 	) {
 		if (start == null) {
-			return SelectionCollectResult.failure("魔棒：无效起点。");
+			return SelectionCollectResult.failure(BBTexts.get("beatblock.selection.error.connected.invalid_seed"));
 		}
 		BlockPos startImm = start.toImmutable();
 		if (withinReach != null && !withinReach.test(startImm)) {

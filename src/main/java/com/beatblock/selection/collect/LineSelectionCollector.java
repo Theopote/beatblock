@@ -2,6 +2,7 @@ package com.beatblock.selection.collect;
 
 import com.beatblock.selection.BlockSelectionLine;
 import com.beatblock.selection.SelectionCollectResult;
+import com.beatblock.ui.i18n.BBTexts;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 
@@ -23,13 +24,11 @@ public final class LineSelectionCollector {
 		Predicate<BlockPos> withinReach
 	) {
 		if (endA == null || endB == null) {
-			return SelectionCollectResult.failure("线选：无效端点。");
+			return SelectionCollectResult.failure(BBTexts.get("beatblock.selection.error.line.invalid_endpoints"));
 		}
 		List<BlockPos> raw = BlockSelectionLine.blocksForSegment(endA, endB, thicknessRadius, maxBlocks);
 		if (raw == null) {
-			return SelectionCollectResult.failure(String.format(
-				"线选候选方块超过上限 %d（可缩小线粗细或框选上限）。", maxBlocks
-			));
+			return SelectionCollectResult.failure(BBTexts.get("beatblock.selection.error.line.candidates_exceeded", maxBlocks));
 		}
 		if (world == null) {
 			return SelectionCollectResult.success(raw);
