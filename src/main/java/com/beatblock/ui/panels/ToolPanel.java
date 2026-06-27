@@ -1,7 +1,6 @@
 package com.beatblock.ui.panels;
 
 import com.beatblock.automap.engine.SmartAutoMapEngine;
-import com.beatblock.client.BeatBlockWorldPick;
 import com.beatblock.selection.BeatBlockSelectionManager;
 import com.beatblock.selection.SelectionMode;
 import com.beatblock.ui.layout.BeatBlockDockPanelBegin;
@@ -14,7 +13,6 @@ import imgui.flag.ImGuiWindowFlags;
 import imgui.type.ImBoolean;
 import imgui.type.ImInt;
 import imgui.type.ImString;
-import net.minecraft.util.math.BlockPos;
 
 /**
  * 左侧工具面板：层次为「场景选区 → 自动化编排 → 动画场景对象」。
@@ -211,9 +209,7 @@ public class ToolPanel {
 					selMgr.setPlaneSliceFaceOverride(newDir);
 				}
 			}
-			case OFF, CLICK, BOX, COLUMN, LASSO -> {
-				ImGui.textDisabled("（无特殊设置）");
-			}
+			case OFF, CLICK, BOX, COLUMN, LASSO -> ImGui.textDisabled("（无特殊设置）");
 		}
 	}
 
