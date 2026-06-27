@@ -159,8 +159,11 @@ public final class GridRenderer {
 		float textY      = rTop + 2;
 
 		// 副刻度（跳过与主刻度重合的点）
-		double t0m = Math.floor(viewStart / minorStep) * minorStep;
-		for (double t = t0m; t <= viewEnd + 0.001; t += minorStep) {
+		// 使用整数计数器避免浮点累积误差
+		int minorStartIndex = (int) Math.floor(viewStart / minorStep);
+		int minorEndIndex = (int) Math.ceil(viewEnd / minorStep);
+		for (int i = minorStartIndex; i <= minorEndIndex; i++) {
+			double t = i * minorStep;
 			if (Math.abs(t % majorStep) < minorStep * 0.01) continue;
 			float xOff = view.timeToScreen(t);
 			if (xOff < -2 || xOff > layout.contentWidth + 2) continue;
@@ -169,8 +172,11 @@ public final class GridRenderer {
 		}
 
 		// 主刻度 + mm:ss 标签
-		double t0 = Math.floor(viewStart / majorStep) * majorStep;
-		for (double t = t0; t <= viewEnd + 0.001; t += majorStep) {
+		// 使用整数计数器避免浮点累积误差
+		int majorStartIndex = (int) Math.floor(viewStart / majorStep);
+		int majorEndIndex = (int) Math.ceil(viewEnd / majorStep);
+		for (int i = majorStartIndex; i <= majorEndIndex; i++) {
+			double t = i * majorStep;
 			float xOff = view.timeToScreen(t);
 			if (xOff < -2 || xOff > layout.contentWidth + 2) continue;
 			float sx = rLeft + xOff;
@@ -188,8 +194,10 @@ public final class GridRenderer {
 
 			// 小节线（brighter，底部贯穿）
 			if (barPx >= 10) {
-				double t0b = Math.floor(viewStart / secondsPerBar) * secondsPerBar;
-				for (double t = t0b; t <= viewEnd + 0.001; t += secondsPerBar) {
+				int barStartIndex = (int) Math.floor(viewStart / secondsPerBar);
+				int barEndIndex = (int) Math.ceil(viewEnd / secondsPerBar);
+				for (int i = barStartIndex; i <= barEndIndex; i++) {
+					double t = i * secondsPerBar;
 					float xOff = view.timeToScreen(t);
 					if (xOff < -2 || xOff > layout.contentWidth + 2) continue;
 					float sx = rLeft + xOff;
@@ -205,8 +213,10 @@ public final class GridRenderer {
 
 			// 拍线（排除小节边界）
 			if (beatPx >= 8) {
-				double t0bt = Math.floor(viewStart / secondsPerBeat) * secondsPerBeat;
-				for (double t = t0bt; t <= viewEnd + 0.001; t += secondsPerBeat) {
+				int beatStartIndex = (int) Math.floor(viewStart / secondsPerBeat);
+				int beatEndIndex = (int) Math.ceil(viewEnd / secondsPerBeat);
+				for (int i = beatStartIndex; i <= beatEndIndex; i++) {
+					double t = i * secondsPerBeat;
 					if (Math.abs(t % secondsPerBar) < secondsPerBeat * 0.01) continue;
 					float xOff = view.timeToScreen(t);
 					if (xOff < -2 || xOff > layout.contentWidth + 2) continue;
