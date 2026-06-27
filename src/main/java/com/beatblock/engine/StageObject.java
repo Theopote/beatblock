@@ -71,7 +71,7 @@ public final class StageObject {
 	 * @return 排序后的方块列表（不可变视图）
 	 */
 	public List<BlockPos> getBlocksSorted(GroupSortingStrategy strategy) {
-		if (strategy == null || strategy == GroupSortingStrategy.NONE) {
+		if (strategy == null) {
 			return getBlocks();
 		}
 		return sortedBlocksCache.computeIfAbsent(strategy, s -> {
@@ -101,20 +101,18 @@ public final class StageObject {
 				double distB = center.squaredDistanceTo(b.getX() + 0.5, b.getY(), b.getZ() + 0.5);
 				return Double.compare(distA, distB);
 			});
-			case SPIRAL -> {
-				// 简化螺旋：先按半径，再按角度
-				blockList.sort((a, b) -> {
-					double dx1 = a.getX() - center.x, dz1 = a.getZ() - center.z;
-					double dx2 = b.getX() - center.x, dz2 = b.getZ() - center.z;
-					double r1 = Math.sqrt(dx1 * dx1 + dz1 * dz1);
-					double r2 = Math.sqrt(dx2 * dx2 + dz2 * dz2);
-					int cmp = Double.compare(r1, r2);
-					if (cmp != 0) return cmp;
-					double angle1 = Math.atan2(dz1, dx1);
-					double angle2 = Math.atan2(dz2, dx2);
-					return Double.compare(angle1, angle2);
-				});
-			}
+			case SPIRAL -> // 简化螺旋：先按半径，再按角度
+                    blockList.sort((a, b) -> {
+                        double dx1 = a.getX() - center.x, dz1 = a.getZ() - center.z;
+                        double dx2 = b.getX() - center.x, dz2 = b.getZ() - center.z;
+                        double r1 = Math.sqrt(dx1 * dx1 + dz1 * dz1);
+                        double r2 = Math.sqrt(dx2 * dx2 + dz2 * dz2);
+                        int cmp = Double.compare(r1, r2);
+                        if (cmp != 0) return cmp;
+                        double angle1 = Math.atan2(dz1, dx1);
+                        double angle2 = Math.atan2(dz2, dx2);
+                        return Double.compare(angle1, angle2);
+                    });
 			case RANDOM -> {
 				// 随机打乱（使用固定种子以保持可重复性）
 				java.util.Random rng = new java.util.Random(id.hashCode());
