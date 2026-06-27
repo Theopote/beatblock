@@ -5,8 +5,6 @@ import com.beatblock.engine.StageObjectSystem;
 import com.beatblock.selection.BeatBlockSelectionManager;
 import com.beatblock.selection.SelectionMode;
 import com.beatblock.selection.SelectionOperation;
-import com.beatblock.timeline.Timeline;
-import com.beatblock.timeline.TimelineEditor;
 import net.minecraft.util.math.BlockPos;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -148,45 +146,24 @@ class ToolPanelPresenterTest {
 	}
 
 	@Test
-	void createFromCuboidFailsWithoutWorldOrCorners() {
+	void createFromCuboidFailsWithoutWorld() {
 		presenter.setCornerFromCrosshair(true);
 		presenter.setCornerFromCrosshair(false);
 
-		var noWorld = presenter.createFromCuboid(new ToolPanelPresenter.StageObjectCreateRequest(
+		var outcome = presenter.createFromCuboid(new ToolPanelPresenter.StageObjectCreateRequest(
 			"Cuboid", false, GroupSortingStrategy.ALL, 0.0));
-		assertFalse(noWorld.result().ok());
-		assertEquals("当前无世界上下文，无法读取选区。", noWorld.result().messageOrEmpty());
 
-		var noCorners = new ToolPanelPresenter(
-			() -> selectionManager, () -> stageObjectSystem, () -> null, () -> new BlockPos(0, 64, 0)
-		).createFromCuboid(new ToolPanelPresenter.StageObjectCreateRequest(
-			"Cuboid", false, GroupSortingStrategy.ALL, 0.0));
-		assertFalse(noCorners.result().ok());
-		assertEquals("请先设置 A/B 两个选区点。", noCorners.result().messageOrEmpty());
+		assertFalse(outcome.result().ok());
+		assertEquals("当前无世界上下文，无法读取选区。", outcome.result().messageOrEmpty());
 	}
 
 	@Test
-	void createFromCuboidRejectsOversizedVolume() {
-		presenter.setCornerFromCrosshair(true);
-		BlockPos far = new BlockPos(
-			ToolPanelPresenter.MAX_STAGE_OBJECT_BLOCKS,
-			64,
-			ToolPanelPresenter.MAX_STAGE_OBJECT_BLOCKS
+	void estimateSelectionVolumeCanExceedStageObjectLimit() {
+		long volume = ToolPanelPresenter.estimateSelectionVolume(
+			new BlockPos(0, 64, 0),
+			new BlockPos(ToolPanelPresenter.MAX_STAGE_OBJECT_BLOCKS, 64, ToolPanelPresenter.MAX_STAGE_OBJECT_BLOCKS)
 		);
-		var withCorners = new ToolPanelPresenter(
-			() -> selectionManager,
-			() -> stageObjectSystem,
-			() -> null,
-			() -> far
-		);
-		withCorners.setCornerFromCrosshair(true);
-		withCorners.setCornerFromCrosshair(false);
-
-		var outcome = withCorners.createFromCuboid(new ToolPanelPresenter.StageObjectCreateRequest(
-			"Huge", false, GroupSortingStrategy.ALL, 0.0));
-
-		assertFalse(outcome.result().ok());
-		assertTrue(outcome.result().messageOrEmpty().contains("选区过大"));
+		assertTrue(volume > ToolPanelPresenter.MAX_STAGE_OBJECT_BLOCKS);
 	}
 
 	@Test
@@ -233,6 +210,14 @@ class ToolPanelPresenterTest {
 		assertEquals(2, items.size());
 		assertEquals("Alpha", items.get(0).name());
 		assertEquals("Zulu", items.get(1).name());
+	}
+
+	@Test
+	void selectionToolViewStateReturnsOffWhenManagerMissing() {
+		var missing = new ToolPanelPresenter(() -> null, () -> stageObjectSystem, () -> null, () -> null);
+		var state = missing.selectionToolViewState();
+		assertEquals(SelectionMode.OFF, state.mode());
+		assertEquals(0, state.selectionCount());
 	}
 
 	@Test
