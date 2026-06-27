@@ -31,6 +31,9 @@ public final class BeatBlockDockSpaceLayoutBuilder {
 	public static final String LAYER_PANEL_ID = "LayerPanel";
 	public static final String RHYTHM_DROP_PANEL_ID = "RhythmDropPanel";
 	public static final String UNDO_HISTORY_PANEL_ID = "UndoHistoryPanel";
+	public static final String EVENT_LIBRARY_PANEL_ID = "EventLibraryPanel";
+	public static final String PERFORMANCE_MONITOR_PANEL_ID = "PerformanceMonitorPanel";
+	public static final String PREFERENCES_PANEL_ID = "PreferencesPanel";
 
 	private static boolean layoutInitialized = false;
 
@@ -76,6 +79,18 @@ public final class BeatBlockDockSpaceLayoutBuilder {
 
 	public static String undoHistoryWindow() {
 		return BBTexts.windowTitle("beatblock.panel.undo_history", UNDO_HISTORY_PANEL_ID);
+	}
+
+	public static String eventLibraryWindow() {
+		return BBTexts.windowTitle("beatblock.panel.event_library", EVENT_LIBRARY_PANEL_ID);
+	}
+
+	public static String performanceMonitorWindow() {
+		return BBTexts.windowTitle("beatblock.panel.performance_monitor", PERFORMANCE_MONITOR_PANEL_ID);
+	}
+
+	public static String preferencesWindow() {
+		return BBTexts.windowTitle("beatblock.panel.preferences", PREFERENCES_PANEL_ID);
 	}
 
 	public static void buildDefaultLayout(int dockspaceId) {

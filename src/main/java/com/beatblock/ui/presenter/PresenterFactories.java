@@ -235,6 +235,33 @@ public final class PresenterFactories {
 		);
 	}
 
+	public static EventLibraryPanelPresenter eventLibraryPanelPresenter() {
+		return eventLibraryPanelPresenter(ctx());
+	}
+
+	public static EventLibraryPanelPresenter eventLibraryPanelPresenter(BeatBlockContext context) {
+		return new EventLibraryPanelPresenter(
+			eventPropertiesPresenter(context),
+			context::timeline,
+			context::timelineEditor,
+			() -> {
+				var engine = context.blockAnimationEngine();
+				return engine != null ? engine.getStageObjectSystem() : null;
+			}
+		);
+	}
+
+	public static ProjectTemplatePresenter projectTemplatePresenter() {
+		return projectTemplatePresenter(ctx());
+	}
+
+	public static ProjectTemplatePresenter projectTemplatePresenter(BeatBlockContext context) {
+		return new ProjectTemplatePresenter(
+			context::timeline,
+			timelineBindingEditorPresenter(context)
+		);
+	}
+
 	private static Vec3d currentCameraPositionOrZero() {
 		MinecraftClient client = MinecraftClient.getInstance();
 		if (client != null && client.gameRenderer != null && client.gameRenderer.getCamera() != null) {

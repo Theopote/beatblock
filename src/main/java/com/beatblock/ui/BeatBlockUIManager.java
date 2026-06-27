@@ -5,6 +5,8 @@ import com.beatblock.selection.BeatBlockSelectionManager;
 import com.beatblock.ui.layout.BeatBlockDockSpaceLayoutBuilder;
 import com.beatblock.ui.notification.ToastNotificationSystem;
 import com.beatblock.ui.panels.*;
+import com.beatblock.ui.preferences.BeatBlockShortcutHandler;
+import com.beatblock.ui.preferences.UiPreferences;
 import com.beatblock.ui.presenter.PresenterFactories;
 import imgui.ImGui;
 import imgui.ImGuiIO;
@@ -43,6 +45,9 @@ public class BeatBlockUIManager {
 	private final RhythmDropPanel rhythmDropPanel;
 	private final QuickStartWizardPanel quickStartWizardPanel;
 	private final UndoHistoryPanel undoHistoryPanel;
+	private final EventLibraryPanel eventLibraryPanel;
+	private final PerformanceMonitorPanel performanceMonitorPanel;
+	private final PreferencesPanel preferencesPanel;
 
 	private final BeatBlockPanelVisibility panelVisibility = new BeatBlockPanelVisibility();
 	private boolean firstLayout = true;
@@ -67,6 +72,9 @@ public class BeatBlockUIManager {
 		this.rhythmDropPanel = new RhythmDropPanel();
 		this.quickStartWizardPanel = new QuickStartWizardPanel();
 		this.undoHistoryPanel = new UndoHistoryPanel();
+		this.eventLibraryPanel = new EventLibraryPanel();
+		this.performanceMonitorPanel = new PerformanceMonitorPanel();
+		this.preferencesPanel = new PreferencesPanel();
 	}
 
 	public void openQuickStartWizard() {
@@ -109,6 +117,8 @@ public class BeatBlockUIManager {
 	}
 
 	public void render() {
+		BeatBlockShortcutHandler.processGlobalShortcuts();
+
 		// 1. 菜单栏（独立于 Dockspace）
 		menuBarPanel.render();
 
@@ -142,12 +152,8 @@ public class BeatBlockUIManager {
 
 		if (dockspaceId == -1) return;
 
-		// 3. 各停靠面板：背景 + 文字色 + 标题栏（参考 ChronoBlocks UITheme，否则面板黑底黑字看不见）
-		ImGui.pushStyleColor(ImGuiCol.WindowBg, 0.09f, 0.09f, 0.1f, 1f);           // 深灰背景
-		ImGui.pushStyleColor(ImGuiCol.Text, 0.86f, 0.86f, 0.86f, 1f);              // 浅灰文字
-		ImGui.pushStyleColor(ImGuiCol.TitleBg, 0.125f, 0.125f, 0.14f, 1f);         // 标题栏
-		ImGui.pushStyleColor(ImGuiCol.TitleBgActive, 0.16f, 0.16f, 0.18f, 1f);
-		ImGui.pushStyleColor(ImGuiCol.TitleBgCollapsed, 0.11f, 0.11f, 0.12f, 1f);
+		// 3. 各停靠面板：主题色
+		UiPreferences.pushPanelThemeColors();
 		audioAnalysisPanel.render(panelVisibility.audioAnalysis);
 		toolPanel.render(panelVisibility.tool);
 		markerPanel.render(panelVisibility.marker);
@@ -159,7 +165,10 @@ public class BeatBlockUIManager {
 		layerPanel.render(panelVisibility.layer);
 		rhythmDropPanel.render(panelVisibility.rhythmDrop);
 		undoHistoryPanel.render(panelVisibility.undoHistory);
-		ImGui.popStyleColor(5);
+		eventLibraryPanel.render(panelVisibility.eventLibrary);
+		performanceMonitorPanel.render(panelVisibility.performanceMonitor);
+		preferencesPanel.render(panelVisibility.preferences);
+		UiPreferences.popPanelThemeColors();
 
 		quickStartWizardPanel.render();
 		BeatBlockLassoOverlay.render();

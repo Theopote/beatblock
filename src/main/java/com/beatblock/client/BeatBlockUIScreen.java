@@ -5,6 +5,7 @@ import com.beatblock.client.input.BeatBlockInputSystem;
 import com.beatblock.selection.BeatBlockSelectionManager;
 import com.beatblock.selection.SelectionMode;
 import com.beatblock.ui.BeatBlockUIManager;
+import com.beatblock.ui.performance.PerformanceMonitor;
 import imgui.ImGui;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.Click;
@@ -87,6 +88,7 @@ public class BeatBlockUIScreen extends Screen {
 		renderer.updateDisplaySize();
 		renderer.beginFrame();
 		try {
+			PerformanceMonitor.markFrame();
 			uiManager.render();
 		} catch (Exception e) {
 			LOGGER.error("BeatBlock UI 渲染异常", e);

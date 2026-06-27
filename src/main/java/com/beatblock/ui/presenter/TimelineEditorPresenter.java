@@ -118,4 +118,8 @@ public final class TimelineEditorPresenter {
 		TimelineEditor editor = timelineEditor.get();
 		return editor != null ? editor.getToolbarState() : null;
 	}
+
+	public TimelineEditor editorOrNull() {
+		return timelineEditor.get();
+	}
 }

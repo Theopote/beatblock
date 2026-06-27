@@ -129,6 +129,9 @@ public class MenuBarPanel {
 					panelToggleItem(BBTexts.get("beatblock.panel.layer"), panels.layer);
 					panelToggleItem(BBTexts.get("beatblock.panel.rhythm_drop"), panels.rhythmDrop);
 					panelToggleItem(BBTexts.get("beatblock.panel.undo_history"), panels.undoHistory);
+					panelToggleItem(BBTexts.get("beatblock.panel.event_library"), panels.eventLibrary);
+					panelToggleItem(BBTexts.get("beatblock.panel.performance_monitor"), panels.performanceMonitor);
+					panelToggleItem(BBTexts.get("beatblock.panel.preferences"), panels.preferences);
 					ImGui.endMenu();
 				}
 				ImGui.endMenu();
