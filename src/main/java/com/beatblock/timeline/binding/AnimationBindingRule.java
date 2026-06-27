@@ -189,7 +189,7 @@ public final class AnimationBindingRule {
 		private boolean enabled = true;
 		private @Nullable String sourceFeatureKey;
 		private String animationTypeId = "Pulse";
-		private TimelineAnimationActionMode actionMode = TimelineAnimationActionMode.ANIMATE;
+		private @Nullable TimelineAnimationActionMode actionMode = TimelineAnimationActionMode.ANIMATE;
 		private @Nullable String targetObjectId;
 		private float energyThreshold = 0.2f;
 		private float energyScale = 1.0f;
@@ -205,7 +205,7 @@ public final class AnimationBindingRule {
 		public Builder name(@Nullable String value) { this.name = value; return this; }
 		public Builder enabled(boolean value) { this.enabled = value; return this; }
 		public Builder sourceFeatureKey(@Nullable String value) { this.sourceFeatureKey = value; return this; }
-		public Builder animationTypeId(@Nullable String value) { this.animationTypeId = value; return this; }
+		public Builder animationTypeId(@Nullable String value) { this.animationTypeId = value != null ? value : "Pulse"; return this; }
 		public Builder actionMode(@Nullable TimelineAnimationActionMode value) { this.actionMode = value; return this; }
 		public Builder targetObjectId(@Nullable String value) { this.targetObjectId = value; return this; }
 		public Builder energyThreshold(float value) { this.energyThreshold = value; return this; }

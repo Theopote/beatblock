@@ -17,6 +17,8 @@ import com.beatblock.timeline.generation.TimelineDraftWriter;
 import com.beatblock.timeline.rendering.TimelineTrackMeta;
 import com.beatblock.timeline.rendering.TrackRegistry;
 
+import org.jspecify.annotations.Nullable;
+
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -350,7 +352,7 @@ public final class AnimationBindingEngine {
 		return keys.isEmpty() ? (preferred != null ? preferred : "other") : keys.getFirst();
 	}
 
-	private static AnimationBindingRule defaultRuleForFeature(String featureKey, String targetObjectId) {
+	private static @Nullable AnimationBindingRule defaultRuleForFeature(String featureKey, String targetObjectId) {
 		if (featureKey == null || featureKey.isBlank()) return null;
 		String key = featureKey.trim().toLowerCase(Locale.ROOT);
 		AnimationBindingRule.Builder b = AnimationBindingRule.builder()
