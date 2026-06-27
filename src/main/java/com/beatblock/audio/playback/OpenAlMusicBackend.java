@@ -98,14 +98,16 @@ public final class OpenAlMusicBackend {
 				AL10.alSourceStop(alSource);
 				AL10.alSourcei(alSource, AL10.AL_BUFFER, 0);
 				AL10.alDeleteSources(alSource);
-			} catch (Throwable ignored) {
+			} catch (Throwable e) {
+				logger.debug("OpenAL source cleanup failed", e);
 			}
 			alSource = 0;
 		}
 		if (alBuffer != 0) {
 			try {
 				AL10.alDeleteBuffers(alBuffer);
-			} catch (Throwable ignored) {
+			} catch (Throwable e) {
+				logger.debug("OpenAL source cleanup failed", e);
 			}
 			alBuffer = 0;
 		}
@@ -123,12 +125,14 @@ public final class OpenAlMusicBackend {
 		if (restartFromStart) {
 			try {
 				AL11.alSourcef(alSource, AL11.AL_SEC_OFFSET, 0.0f);
-			} catch (Throwable ignored) {
+			} catch (Throwable e) {
+				logger.debug("OpenAL source cleanup failed", e);
 			}
 		}
 		try {
 			AL10.alSourcePlay(alSource);
-		} catch (Throwable ignored) {
+		} catch (Throwable e) {
+			logger.debug("OpenAL play failed", e);
 		}
 	}
 
@@ -136,7 +140,8 @@ public final class OpenAlMusicBackend {
 		if (!isActive()) return;
 		try {
 			AL10.alSourcePause(alSource);
-		} catch (Throwable ignored) {
+		} catch (Throwable e) {
+			logger.debug("OpenAL play failed", e);
 		}
 	}
 
@@ -145,7 +150,8 @@ public final class OpenAlMusicBackend {
 		try {
 			AL10.alSourceStop(alSource);
 			AL11.alSourcef(alSource, AL11.AL_SEC_OFFSET, 0.0f);
-		} catch (Throwable ignored) {
+		} catch (Throwable e) {
+			logger.debug("OpenAL play failed", e);
 		}
 	}
 
@@ -159,7 +165,8 @@ public final class OpenAlMusicBackend {
 			if (wasPlaying) {
 				AL10.alSourcePlay(alSource);
 			}
-		} catch (Throwable ignored) {
+		} catch (Throwable e) {
+			logger.debug("OpenAL play failed", e);
 		}
 	}
 
@@ -167,7 +174,8 @@ public final class OpenAlMusicBackend {
 		if (!isActive()) return fallback;
 		try {
 			return AL10.alGetSourcef(alSource, AL11.AL_SEC_OFFSET);
-		} catch (Throwable ignored) {
+		} catch (Throwable e) {
+			logger.debug("OpenAL position query failed", e);
 			return fallback;
 		}
 	}
@@ -176,7 +184,8 @@ public final class OpenAlMusicBackend {
 		if (!isActive()) return;
 		try {
 			AL10.alSourcef(alSource, AL10.AL_GAIN, muted ? 0.0f : 1.0f);
-		} catch (Throwable ignored) {
+		} catch (Throwable e) {
+			logger.debug("OpenAL play failed", e);
 		}
 	}
 
@@ -189,7 +198,8 @@ public final class OpenAlMusicBackend {
 					return durationSeconds > 0;
 				}
 			}
-		} catch (Throwable ignored) {
+		} catch (Throwable e) {
+			logger.debug("OpenAL play failed", e);
 		}
 		return false;
 	}
@@ -198,7 +208,8 @@ public final class OpenAlMusicBackend {
 		if (!isActive()) return false;
 		try {
 			return AL10.alGetSourcei(alSource, AL10.AL_SOURCE_STATE) == AL10.AL_PLAYING;
-		} catch (Throwable ignored) {
+		} catch (Throwable e) {
+			logger.debug("OpenAL playing-state query failed", e);
 			return false;
 		}
 	}
@@ -212,7 +223,8 @@ public final class OpenAlMusicBackend {
 			boolean bufferValid = AL10.alIsBuffer(alBuffer);
 			int bufferErr = AL10.alGetError();
 			return sourceErr == AL10.AL_NO_ERROR && bufferErr == AL10.AL_NO_ERROR && sourceValid && bufferValid;
-		} catch (Throwable ignored) {
+		} catch (Throwable e) {
+			logger.debug("OpenAL playing-state query failed", e);
 			return false;
 		}
 	}

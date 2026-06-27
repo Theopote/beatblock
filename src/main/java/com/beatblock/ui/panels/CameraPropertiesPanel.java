@@ -504,7 +504,9 @@ public class CameraPropertiesPanel {
 					new net.minecraft.util.math.Vec3d(x, y, z), (float) yaw, (float) pitch
 				)
 			);
-		} catch (NumberFormatException ignored) {}
+		} catch (NumberFormatException e) {
+			com.beatblock.BeatBlock.LOGGER.debug("Invalid camera preview coordinates", e);
+		}
 	}
 
 	private void applyCameraKeyframe(EventPropertiesRef ref, Timeline timeline) {

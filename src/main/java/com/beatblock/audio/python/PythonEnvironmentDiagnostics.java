@@ -79,7 +79,9 @@ public final class PythonEnvironmentDiagnostics {
 				if (!customExe.isEmpty() && isUsablePythonForAnalyzer(customExe)) {
 					return customExe;
 				}
-			} catch (IOException ignored) {}
+			} catch (IOException e) {
+				LOGGER.debug("Unable to read python_path.txt from config", e);
+			}
 		}
 
 		List<String> candidates = new ArrayList<>();

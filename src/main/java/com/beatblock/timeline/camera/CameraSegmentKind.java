@@ -1,5 +1,7 @@
 package com.beatblock.timeline.camera;
 
+import com.beatblock.BeatBlock;
+
 import java.util.Locale;
 
 /**
@@ -18,7 +20,8 @@ public enum CameraSegmentKind {
 		if (s.isEmpty()) return PATH;
 		try {
 			return valueOf(s);
-		} catch (Exception ignored) {
+		} catch (IllegalArgumentException e) {
+			BeatBlock.LOGGER.debug("Unknown camera segment kind '{}', using PATH", s, e);
 			return PATH;
 		}
 	}

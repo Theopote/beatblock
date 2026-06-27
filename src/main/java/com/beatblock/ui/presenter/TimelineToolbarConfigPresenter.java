@@ -498,7 +498,9 @@ public final class TimelineToolbarConfigPresenter {
 		if (dm.has(jsonKey)) {
 			try {
 				value = dm.get(jsonKey).getAsDouble();
-			} catch (Exception ignored) {}
+			} catch (RuntimeException e) {
+				LOGGER.debug("Invalid toolbar config value for '{}', using default {}", jsonKey, value, e);
+			}
 		}
 		value = Math.max(min, Math.min(max, value));
 		timeline.setMetadata(metadataKey, value);

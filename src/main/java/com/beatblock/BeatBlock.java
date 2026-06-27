@@ -28,15 +28,35 @@ public class BeatBlock implements ModInitializer {
 		return net.minecraft.util.Identifier.of(MOD_ID, path);
 	}
 
+	/** @deprecated 使用 {@link #getContext()}{@code .audioLoader()} */
+	@Deprecated(forRemoval = true)
 	public static AudioLoader audioLoader;
+	/** @deprecated 使用 {@link #getContext()}{@code .musicPlayer()} */
+	@Deprecated(forRemoval = true)
 	public static MusicPlayer musicPlayer;
+	/** @deprecated 使用 {@link #getContext()}{@code .stageManager()} */
+	@Deprecated(forRemoval = true)
 	public static StageManager stageManager;
+	/** @deprecated 使用 {@link #getContext()}{@code .timeline()} */
+	@Deprecated(forRemoval = true)
 	public static Timeline timeline;
+	/** @deprecated 使用 {@link #getContext()}{@code .timelineEditor()} */
+	@Deprecated(forRemoval = true)
 	public static TimelineEditor timelineEditor;
+	/** @deprecated 使用 {@link #getContext()}{@code .blockAnimationEngine()} */
+	@Deprecated(forRemoval = true)
 	public static BlockAnimationEngine blockAnimationEngine;
+	/** @deprecated 使用 {@link #getContext()}{@code .audioAnalysisEngine()} */
+	@Deprecated(forRemoval = true)
 	public static AudioAnalysisEngine audioAnalysisEngine;
+	/** @deprecated 使用 {@link #getContext()}{@code .externalAudioAnalyzer()} */
+	@Deprecated(forRemoval = true)
 	public static AudioAnalysisService externalAudioAnalyzer;
+	/** @deprecated 使用 {@link #getContext()}{@code .audioConversionService()} */
+	@Deprecated(forRemoval = true)
 	public static AudioConversionService audioConversionService;
+	/** @deprecated 使用 {@link #getContext()}{@code .stemMixer()} */
+	@Deprecated(forRemoval = true)
 	public static StemMixer stemMixer;
 
 	private static BeatBlockContext context;

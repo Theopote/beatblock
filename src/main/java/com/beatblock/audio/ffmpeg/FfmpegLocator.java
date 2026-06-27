@@ -40,7 +40,9 @@ public final class FfmpegLocator {
 				if (!txt.isEmpty() && probe.isExecutable(txt)) {
 					return txt;
 				}
-			} catch (IOException ignored) {
+			} catch (IOException e) {
+				org.slf4j.LoggerFactory.getLogger(FfmpegLocator.class)
+					.debug("Unable to read ffmpeg_path.txt", e);
 			}
 		}
 

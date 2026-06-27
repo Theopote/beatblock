@@ -1,5 +1,8 @@
 package com.beatblock.timeline;
 
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
+
 import java.util.Collections;
 import java.util.Map;
 
@@ -17,27 +20,32 @@ public class TimelineEvent {
 		this("", 0, EventType.ANIMATION, Collections.emptyMap());
 	}
 
-	public TimelineEvent(String id, double timeSeconds, EventType type, Map<String, Object> parameters) {
+	public TimelineEvent(
+		@Nullable String id,
+		double timeSeconds,
+		@Nullable EventType type,
+		@Nullable Map<String, Object> parameters
+	) {
 		this.id = id != null ? id : "";
 		this.timeSeconds = Math.max(0, timeSeconds);
 		this.type = type != null ? type : EventType.ANIMATION;
 		this.parameters = parameters != null ? new java.util.HashMap<>(parameters) : new java.util.HashMap<>();
 	}
 
-	public String getId() { return id; }
-	public void setId(String id) { this.id = id != null ? id : ""; }
+	public @NonNull String getId() { return id; }
+	public void setId(@Nullable String id) { this.id = id != null ? id : ""; }
 	public double getTimeSeconds() { return timeSeconds; }
 	public void setTimeSeconds(double timeSeconds) { this.timeSeconds = Math.max(0, timeSeconds); }
-	public EventType getType() { return type; }
-	public void setType(EventType type) { this.type = type != null ? type : EventType.ANIMATION; }
-	public Map<String, Object> getParameters() { return Collections.unmodifiableMap(parameters); }
-	public void setParameter(String key, Object value) {
+	public @NonNull EventType getType() { return type; }
+	public void setType(@Nullable EventType type) { this.type = type != null ? type : EventType.ANIMATION; }
+	public @NonNull Map<String, Object> getParameters() { return Collections.unmodifiableMap(parameters); }
+	public void setParameter(@Nullable String key, @Nullable Object value) {
 		if (parameters == null) parameters = new java.util.HashMap<>();
 		parameters.put(key, value);
 	}
-	public void removeParameter(String key) {
+	public void removeParameter(@Nullable String key) {
 		if (parameters == null || key == null) return;
 		parameters.remove(key);
 	}
-	public Object getParameter(String key) { return parameters != null ? parameters.get(key) : null; }
+	public @Nullable Object getParameter(@Nullable String key) { return parameters != null ? parameters.get(key) : null; }
 }

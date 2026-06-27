@@ -2,6 +2,8 @@ package com.beatblock.audio;
 
 import com.beatblock.audio.ffmpeg.FfmpegService;
 import com.beatblock.timeline.IAudioPlayer;
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.lwjgl.openal.AL10;
 import org.lwjgl.openal.AL11;
 import org.slf4j.Logger;
@@ -62,7 +64,7 @@ public final class StemMixer implements IAudioPlayer {
 	 * @param wavPath WAV 文件绝对路径
 	 * @return true 表示加载成功
 	 */
-	public synchronized boolean loadStem(String key, Path wavPath) {
+	public synchronized boolean loadStem(@Nullable String key, @Nullable Path wavPath) {
 		if (key == null || wavPath == null) return false;
 		Path normalizedPath = wavPath.toAbsolutePath().normalize();
 		try {
@@ -139,14 +141,16 @@ public final class StemMixer implements IAudioPlayer {
 	 * @param key   茎名称
 	 * @param muted true = 静音，false = 恢复
 	 */
-	public void setStemMuted(String key, boolean muted) {
+	public void setStemMuted(@Nullable String key, boolean muted) {
 		ensureOpenAlBackendReady();
 		StemTrack t = stems.get(key);
 		if (t == null) return;
 		t.muted = muted;
 		try {
 			AL10.alSourcef(t.alSource, AL10.AL_GAIN, muted ? 0.0f : 1.0f);
-		} catch (Throwable ignored) {}
+		} catch (Throwable e) {
+			LOGGER.debug("OpenAL alSourcef failed for stem={}", key, e);
+		}
 	}
 
 	// ── IAudioPlayer ─────────────────────────────────────────────────────────
@@ -164,7 +168,9 @@ public final class StemMixer implements IAudioPlayer {
 			try {
 				lastKnownTimeSeconds = AL11.alGetSourcef(t.alSource, AL11.AL_SEC_OFFSET);
 				return lastKnownTimeSeconds;
-			} catch (Throwable ignored) {}
+			} catch (Throwable e) {
+				LOGGER.debug("OpenAL alGetSourcef failed for stem={}", t.key, e);
+			}
 		}
 		return lastKnownTimeSeconds;
 	}
@@ -183,7 +189,9 @@ public final class StemMixer implements IAudioPlayer {
 		for (StemTrack t : stems.values()) {
 			try {
 				AL11.alSourcef(t.alSource, AL11.AL_SEC_OFFSET, secs);
-			} catch (Throwable ignored) {}
+			} catch (Throwable e) {
+				LOGGER.debug("OpenAL seek failed for stem={}", t.key, e);
+			}
 		}
 		if (wasPlaying) playAll();
 	}
@@ -220,7 +228,9 @@ public final class StemMixer implements IAudioPlayer {
 			try {
 				AL10.alSourceStop(t.alSource);
 				AL11.alSourcef(t.alSource, AL11.AL_SEC_OFFSET, 0.0f);
-			} catch (Throwable ignored) {}
+			} catch (Throwable e) {
+				LOGGER.debug("OpenAL stop failed for stem={}", t.key, e);
+			}
 		}
 		playing = false;
 		lastKnownTimeSeconds = 0.0;
@@ -244,7 +254,9 @@ public final class StemMixer implements IAudioPlayer {
 		for (StemTrack t : stems.values()) {
 			try {
 				AL10.alSourcePause(t.alSource);
-			} catch (Throwable ignored) {}
+			} catch (Throwable e) {
+				LOGGER.debug("OpenAL alSourcePause failed for stem={}", t.key, e);
+			}
 		}
 	}
 
@@ -253,10 +265,14 @@ public final class StemMixer implements IAudioPlayer {
 			AL10.alSourceStop(t.alSource);
 			AL10.alSourcei(t.alSource, AL10.AL_BUFFER, 0);
 			AL10.alDeleteSources(t.alSource);
-		} catch (Throwable ignored) {}
+		} catch (Throwable e) {
+			LOGGER.debug("OpenAL source release failed for stem={}", t.key, e);
+		}
 		try {
 			AL10.alDeleteBuffers(t.alBuffer);
-		} catch (Throwable ignored) {}
+		} catch (Throwable e) {
+			LOGGER.debug("OpenAL buffer release failed for stem={}", t.key, e);
+		}
 	}
 
 	private boolean ensureOpenAlBackendReady() {
@@ -280,7 +296,8 @@ public final class StemMixer implements IAudioPlayer {
 				}
 			}
 			return true;
-		} catch (Throwable ignored) {
+		} catch (Throwable e) {
+			LOGGER.debug("OpenAL handle validation failed", e);
 			return false;
 		}
 	}

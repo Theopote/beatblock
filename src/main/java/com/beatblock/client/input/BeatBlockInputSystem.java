@@ -1,5 +1,6 @@
 package com.beatblock.client.input;
 
+import com.beatblock.BeatBlock;
 import com.beatblock.mixin.client.GameRendererAccessor;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.Camera;
@@ -14,12 +15,15 @@ import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.RaycastContext;
 import org.joml.Matrix4f;
 import org.joml.Vector4f;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * ImGui 鼠标位置 → 世界射线（与 ChronoBlocks 的 ChronoBlocksInputSystem 同源思路：投影矩阵反投影）。
  */
 public final class BeatBlockInputSystem {
 
+	private static final Logger LOGGER = LoggerFactory.getLogger(BeatBlockInputSystem.class);
 	private static final MinecraftClient MC = MinecraftClient.getInstance();
 	/**
 	 * 与 ChronoBlocks {@code ChronoBlocksInputSystem} 一致：光标射线长度，远大于原版手臂距离，
@@ -241,18 +245,26 @@ public final class BeatBlockInputSystem {
 				var m = rtc.getClass().getMethod("getTickProgress", boolean.class);
 				Object v = m.invoke(rtc, false);
 				if (v instanceof Float f) return f;
-			} catch (ReflectiveOperationException ignored) {}
+			} catch (ReflectiveOperationException e) {
+				LOGGER.trace("RenderTickCounter.getTickProgress unavailable", e);
+			}
 			try {
 				var m = rtc.getClass().getMethod("getDynamicDeltaTicks");
 				Object v = m.invoke(rtc);
 				if (v instanceof Float f) return f;
-			} catch (ReflectiveOperationException ignored) {}
+			} catch (ReflectiveOperationException e) {
+				LOGGER.trace("RenderTickCounter.getDynamicDeltaTicks unavailable", e);
+			}
 			try {
 				var m = rtc.getClass().getMethod("getFixedDeltaTicks");
 				Object v = m.invoke(rtc);
 				if (v instanceof Float f) return f;
-			} catch (ReflectiveOperationException ignored) {}
-		} catch (Throwable ignored) {}
+			} catch (ReflectiveOperationException e) {
+				LOGGER.trace("RenderTickCounter.getFixedDeltaTicks unavailable", e);
+			}
+		} catch (Throwable t) {
+			LOGGER.trace("Unable to read render tick delta", t);
+		}
 		return 0.0f;
 	}
 }

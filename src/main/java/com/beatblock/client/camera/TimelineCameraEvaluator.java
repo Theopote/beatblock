@@ -1,5 +1,6 @@
 package com.beatblock.client.camera;
 
+import com.beatblock.BeatBlock;
 import com.beatblock.timeline.Clip;
 import com.beatblock.timeline.EventType;
 import com.beatblock.timeline.Timeline;
@@ -334,7 +335,8 @@ public final class TimelineCameraEvaluator {
 		if (o != null) {
 			try {
 				return Double.parseDouble(String.valueOf(o).trim());
-			} catch (Exception ignored) {
+			} catch (NumberFormatException e) {
+				BeatBlock.LOGGER.debug("Invalid numeric camera parameter '{}', using default {}", key, def, e);
 				return def;
 			}
 		}

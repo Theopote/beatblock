@@ -1,5 +1,6 @@
 package com.beatblock.engine.layer;
 
+import com.beatblock.BeatBlock;
 import com.beatblock.engine.GroupSortingStrategy;
 import com.beatblock.engine.StageObject;
 import com.beatblock.engine.StageObjectSystem;
@@ -74,7 +75,9 @@ public final class BuildLayerPersistence {
 		if (root.has("state")) {
 			try {
 				state = LayerVisibilityState.valueOf(root.get("state").getAsString());
-			} catch (Exception ignored) {}
+			} catch (IllegalArgumentException e) {
+				BeatBlock.LOGGER.debug("Unknown build layer state in .osc, using FREE_VISIBLE", e);
+			}
 		}
 		String boundClipId = root.has("boundClipId") && !root.get("boundClipId").isJsonNull()
 			? root.get("boundClipId").getAsString() : null;

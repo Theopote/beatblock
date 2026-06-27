@@ -1,6 +1,8 @@
 package com.beatblock.audio.ffmpeg;
 
 import net.fabricmc.loader.api.FabricLoader;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -14,6 +16,8 @@ import java.util.List;
  * 通过 ffmpeg 将音频文件转码为 MP3（libmp3lame）。
  */
 public final class FfmpegTranscoder {
+
+	private static final Logger LOGGER = LoggerFactory.getLogger(FfmpegTranscoder.class);
 
 	@FunctionalInterface
 	public interface ProgressListener {
@@ -80,7 +84,8 @@ public final class FfmpegTranscoder {
 					FfmpegProgressParser.parseLine(line, totalDurationSec, onProgress::onProgress);
 				}
 			}
-		} catch (IOException ignored) {
+		} catch (IOException e) {
+			LOGGER.debug("ffmpeg stdout read ended early", e);
 		}
 
 		int exitCode;

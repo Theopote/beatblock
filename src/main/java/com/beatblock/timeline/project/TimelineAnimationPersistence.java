@@ -1,5 +1,6 @@
 package com.beatblock.timeline.project;
 
+import com.beatblock.BeatBlock;
 import com.beatblock.timeline.Clip;
 import com.beatblock.timeline.EventType;
 import com.beatblock.timeline.Timeline;
@@ -156,7 +157,9 @@ public final class TimelineAnimationPersistence {
 		if (root.has("type")) {
 			try {
 				type = EventType.valueOf(root.get("type").getAsString());
-			} catch (Exception ignored) {}
+			} catch (IllegalArgumentException e) {
+				BeatBlock.LOGGER.debug("Unknown event type in .osc, using ANIMATION", e);
+			}
 		}
 		Map<String, Object> params = paramsFromJson(root.has("parameters") ? root.get("parameters") : null);
 		return new TimelineEvent(id, time, type, params);

@@ -62,8 +62,12 @@ public final class ImGuiFontManager {
 		try {
 			atlas.clear();
 		} catch (Throwable t) {
-			try { atlas.clearFonts(); } catch (Throwable ignored) {}
-			try { atlas.clearTexData(); } catch (Throwable ignored) {}
+			try { atlas.clearFonts(); } catch (Throwable e) {
+				LOGGER.debug("ImGui font atlas clearFonts failed during reset", e);
+			}
+			try { atlas.clearTexData(); } catch (Throwable e) {
+				LOGGER.debug("ImGui font atlas clearTexData failed during reset", e);
+			}
 		}
 		iconButtonFont = null;
 
@@ -177,7 +181,9 @@ public final class ImGuiFontManager {
 			if (ranges != null && ranges.length > 0) {
 				builder.addRanges(ranges);
 			}
-		} catch (Throwable ignored) {}
+		} catch (Throwable e) {
+			LOGGER.trace("ImFontAtlas.{} unavailable", methodName, e);
+		}
 	}
 
 	private static boolean tryLoadSystemFonts(ImGuiIO io, ImFontConfig config) {

@@ -116,7 +116,8 @@ public final class CameraPathWorldRenderer {
 		if (o != null) {
 			try {
 				return Double.parseDouble(String.valueOf(o).trim());
-			} catch (Exception ignored) {
+			} catch (NumberFormatException e) {
+				BeatBlock.LOGGER.debug("Invalid numeric camera parameter '{}', using default {}", key, def, e);
 				return def;
 			}
 		}

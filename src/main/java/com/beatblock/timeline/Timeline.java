@@ -8,8 +8,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
+
 /**
  * 时间线根对象：名称、时长、轨道列表、元数据。单一时序数据源，替代原 TimelineModel。
+ * <p>
+ * 线程模型：仅在客户端主线程（ImGui 编辑器 tick / 播放驱动）访问，无需额外同步。
+ * {@link ConcurrentHashMap} 用于 metadata 以支持异步分析回调写入 BPM 等参考数据。
  */
 public class Timeline {
 
@@ -33,34 +39,34 @@ public class Timeline {
 	private final List<TimelineAnimationEvent> blockAnimationCacheView = Collections.unmodifiableList(blockAnimationCache);
 	private final List<TimelineAnimationEvent> autoAnimationCacheView = Collections.unmodifiableList(autoAnimationCache);
 	private final List<TimelineAnimationEvent> buildReverseCacheView = Collections.unmodifiableList(buildReverseCache);
-	private boolean animationCachesDirty = true;
+	private volatile boolean animationCachesDirty = true;
 
-	public String getName() { return name; }
-	public void setName(String name) { this.name = name != null ? name : ""; }
+	public @NonNull String getName() { return name; }
+	public void setName(@Nullable String name) { this.name = name != null ? name : ""; }
 	public double getDurationSeconds() { return durationSeconds; }
 	public void setDurationSeconds(double durationSeconds) { this.durationSeconds = Math.max(0, durationSeconds); }
-	public List<Track> getTracks() { return Collections.unmodifiableList(tracks); }
-	public void addTrack(Track track) {
+	public @NonNull List<Track> getTracks() { return Collections.unmodifiableList(tracks); }
+	public void addTrack(@Nullable Track track) {
 		if (track != null) {
 			tracks.add(track);
 			markAnimationEventsDirty(track.getId());
 		}
 	}
-	public boolean removeTrack(String trackId) {
+	public boolean removeTrack(@Nullable String trackId) {
 		boolean removed = tracks.removeIf(t -> trackId != null && trackId.equals(t.getId()));
 		if (removed) markAnimationEventsDirty(trackId);
 		return removed;
 	}
-	public Track getTrack(String trackId) {
+	public @Nullable Track getTrack(@Nullable String trackId) {
 		for (Track t : tracks) if (trackId != null && trackId.equals(t.getId())) return t;
 		return null;
 	}
-	public Track getTrackByType(TrackType type) {
+	public @Nullable Track getTrackByType(@NonNull TrackType type) {
 		for (Track t : tracks) if (t.getType() == type) return t;
 		return null;
 	}
-	public Map<String, Object> getMetadata() { return Collections.unmodifiableMap(metadata); }
-	public void setMetadata(String key, Object value) {
+	public @NonNull Map<String, Object> getMetadata() { return Collections.unmodifiableMap(metadata); }
+	public void setMetadata(@Nullable String key, @Nullable Object value) {
 		if (key == null) return;
 		if (value == null) {
 			metadata.remove(key);
@@ -68,8 +74,8 @@ public class Timeline {
 		}
 		metadata.put(key, value);
 	}
-	public Object getMetadata(String key) { return metadata.get(key); }
-	public List<TimelineMarker> getMarkers() { return markerView; }
+	public @Nullable Object getMetadata(@Nullable String key) { return metadata.get(key); }
+	public @NonNull List<TimelineMarker> getMarkers() { return markerView; }
 	/** BPM（由音频分析填入 metadata["bpm"]），未设置时返回 0。 */
 	public double getBpm() {
 		Object v = metadata.get("bpm");
@@ -77,7 +83,7 @@ public class Timeline {
 		return 0;
 	}
 
-	public void addMarker(TimelineMarker marker) {
+	public void addMarker(@Nullable TimelineMarker marker) {
 		if (marker == null) return;
 		markers.add(marker);
 		markers.sort(Comparator.comparingDouble(TimelineMarker::getTimeSeconds));
@@ -87,7 +93,7 @@ public class Timeline {
 		markers.clear();
 	}
 
-	public void setMarkers(List<TimelineMarker> newMarkers) {
+	public void setMarkers(@Nullable List<TimelineMarker> newMarkers) {
 		markers.clear();
 		if (newMarkers != null) {
 			markers.addAll(newMarkers);
@@ -151,11 +157,11 @@ public class Timeline {
 
 	// ----- 便捷 API（兼容原 TimelineModel 读写） -----
 
-	public WaveformData getWaveform() {
+	public @Nullable WaveformData getWaveform() {
 		AudioTrackData ad = getAudioTrackData();
 		return ad != null ? ad.getWaveform() : null;
 	}
-	public void setWaveform(WaveformData waveform) {
+	public void setWaveform(@Nullable WaveformData waveform) {
 		AudioTrackData ad = getAudioTrackData();
 		if (ad != null) ad.setWaveform(waveform);
 	}
@@ -210,12 +216,12 @@ public class Timeline {
 
 	// ── 茎波形委托（Demucs 模式）──────────────────────────────────────────
 
-	public void setStemWaveform(String stemKey, WaveformData data) {
+	public void setStemWaveform(@Nullable String stemKey, @Nullable WaveformData data) {
 		AudioTrackData ad = getAudioTrackData();
 		if (ad != null) ad.setStemWaveform(stemKey, data);
 	}
 
-	public WaveformData getStemWaveform(String stemKey) {
+	public @Nullable WaveformData getStemWaveform(@Nullable String stemKey) {
 		AudioTrackData ad = getAudioTrackData();
 		return ad != null ? ad.getStemWaveform(stemKey) : null;
 	}
@@ -356,7 +362,8 @@ public class Timeline {
 				String name = (String) p.getOrDefault("name", "");
 				try {
 					out.add(new GlobalEvent(e.getTimeSeconds(), GlobalEventType.valueOf(typeStr), name));
-				} catch (Exception ignored) {
+				} catch (IllegalArgumentException ex) {
+					com.beatblock.BeatBlock.LOGGER.debug("Unknown global event type '{}', using SPECIAL", typeStr, ex);
 					out.add(new GlobalEvent(e.getTimeSeconds(), GlobalEventType.SPECIAL, name));
 				}
 			}
@@ -434,7 +441,7 @@ public class Timeline {
 		markAnimationEventsDirty(trackId);
 	}
 
-	public static Timeline createDefault() {
+	public static @NonNull Timeline createDefault() {
 		Timeline t = new Timeline();
 		t.addTrack(new Track(TRACK_ID_AUDIO, "音频", TrackType.AUDIO));
 		t.addTrack(new Track(TRACK_ID_ANIMATION_BLOCK, "方块动画", TrackType.ANIMATION));

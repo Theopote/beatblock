@@ -1,5 +1,7 @@
 package com.beatblock.timeline.command;
 
+import org.jspecify.annotations.Nullable;
+
 import java.util.ArrayDeque;
 import java.util.Deque;
 
@@ -12,7 +14,7 @@ public final class CommandManager {
 	private final Deque<Command> redoStack = new ArrayDeque<>();
 	private static final int MAX_UNDO = 128;
 
-	public void execute(Command cmd) {
+	public void execute(@Nullable Command cmd) {
 		if (cmd == null) return;
 		Command toExecute = cmd;
 		if (!undoStack.isEmpty()) {

@@ -49,6 +49,9 @@ dependencies {
 	// JSON 解析（BeatmapReader 使用）
 	implementation include("com.google.code.gson:gson:2.10.1")
 
+	// 空值注解（公共 API 契约）
+	implementation include("org.jspecify:jspecify:1.0.0")
+
 	// MP3 解码（Java Sound SPI），用于时间线真实音频播放
 	implementation include("com.googlecode.soundlibs:mp3spi:1.9.5-1")
 	implementation include("com.googlecode.soundlibs:tritonus-share:0.3.7-2")

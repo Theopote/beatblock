@@ -358,7 +358,8 @@ public final class BeatBlockClientDriver {
 		} else if (raw != null) {
 			try {
 				threshold = Double.parseDouble(String.valueOf(raw).trim());
-			} catch (Exception ignored) {
+			} catch (NumberFormatException e) {
+				BeatBlock.LOGGER.debug("Invalid energyThreshold parameter: {}", raw, e);
 				threshold = 0.0;
 			}
 		}

@@ -6,6 +6,7 @@ import com.beatblock.audio.analysis.AudioBuffer;
 import com.beatblock.audio.analysis.AudioDecoder;
 import com.beatblock.runtime.BeatBlockContext;
 import com.beatblock.timeline.Timeline;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -36,7 +37,7 @@ public class AudioLoader {
 	/**
 	 * 当前是否已加载指定资源。
 	 */
-	public boolean isLoaded(String pathOrId) {
+	public boolean isLoaded(@Nullable String pathOrId) {
 		return pathOrId != null && pathOrId.equals(loadedPath);
 	}
 
@@ -46,7 +47,7 @@ public class AudioLoader {
 	 * @param pathOrId 本地 WAV 文件路径
 	 * @return 是否成功
 	 */
-	public boolean load(String pathOrId) {
+	public boolean load(@Nullable String pathOrId) {
 		if (pathOrId == null || pathOrId.isEmpty()) return false;
 		DecodedAudio audio = WavDecoder.loadFromPath(pathOrId);
 		if (audio == null) return false;
@@ -88,7 +89,7 @@ public class AudioLoader {
 	/**
 	 * 从已解码的音频填充时间线（用于测试或非文件来源）。
 	 */
-	public void loadFromDecoded(DecodedAudio audio) {
+	public void loadFromDecoded(@Nullable DecodedAudio audio) {
 		if (audio == null) return;
 		Timeline timeline = ctx().timeline();
 		if (timeline != null) {

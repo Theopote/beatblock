@@ -1,6 +1,7 @@
 package com.beatblock.audio.playback;
 
 import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.sound.sampled.AudioFormat;
 import javax.sound.sampled.FloatControl;
@@ -8,6 +9,8 @@ import javax.sound.sampled.SourceDataLine;
 
 /** SourceDataLine 流式 PCM 播放后端。 */
 public final class StreamMusicBackend {
+
+	private static final Logger LOGGER = LoggerFactory.getLogger(StreamMusicBackend.class);
 
 	private byte[] pcmData;
 	private AudioFormat format;
@@ -131,11 +134,13 @@ public final class StreamMusicBackend {
 			try {
 				activeLine.stop();
 				activeLine.flush();
-			} catch (Exception ignored) {
+			} catch (RuntimeException e) {
+				LOGGER.debug("Failed to stop audio line during playback shutdown", e);
 			}
 			try {
 				activeLine.close();
-			} catch (Exception ignored) {
+			} catch (RuntimeException e) {
+				LOGGER.debug("Failed to close audio line during playback shutdown", e);
 			}
 		}
 		if (t != null && t != Thread.currentThread()) {
@@ -163,7 +168,8 @@ public final class StreamMusicBackend {
 				db = Math.max(control.getMinimum(), Math.min(control.getMaximum(), db));
 				control.setValue(db);
 			}
-		} catch (Exception ignored) {
+		} catch (RuntimeException e) {
+			LOGGER.debug("Unable to set stream MASTER_GAIN", e);
 		}
 	}
 
@@ -191,11 +197,13 @@ public final class StreamMusicBackend {
 			try {
 				activeLine.stop();
 				activeLine.flush();
-			} catch (Exception ignored) {
+			} catch (RuntimeException e) {
+				LOGGER.debug("Failed to stop audio line in stream loop cleanup", e);
 			}
 			try {
 				activeLine.close();
-			} catch (Exception ignored) {
+			} catch (RuntimeException e) {
+				LOGGER.debug("Failed to close audio line in stream loop cleanup", e);
 			}
 			if (line == activeLine) {
 				line = null;

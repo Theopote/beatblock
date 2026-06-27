@@ -309,8 +309,8 @@ final class AudioAnalysisPanelImGui {
 			if (bm.beatmapFilePath != null && bm.beatmapFilePath.getParent() != null) {
 				return bm.beatmapFilePath.getParent().resolve(relativePath).normalize().toString();
 			}
-		} catch (Exception ignored) {
-			// fall back to raw path
+		} catch (RuntimeException e) {
+			com.beatblock.BeatBlock.LOGGER.debug("Unable to resolve stem path '{}', using raw value", relativePath, e);
 		}
 		return relativePath;
 	}

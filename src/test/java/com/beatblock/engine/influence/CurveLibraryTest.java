@@ -1,8 +1,10 @@
 package com.beatblock.engine.influence;
 
+import com.beatblock.engine.AnimationLibrary;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class CurveLibraryTest {
@@ -46,9 +48,13 @@ class CurveLibraryTest {
 
 	@Test
 	void builtInPresetsMirrorAnimationLibraryIds() {
-		assertTrue(BlockInfluencePresets.get("BlockJump") != null);
-		assertTrue(BlockInfluencePresets.get("Meteor") != null);
-		assertEquals(10, BlockInfluencePresets.getAll().size());
+		assertNotNull(BlockInfluencePresets.get("BlockJump"));
+		assertNotNull(BlockInfluencePresets.get("Meteor"));
+		AnimationLibrary library = new AnimationLibrary();
+		assertEquals(BlockInfluencePresets.getAll().size(), library.getAll().size());
+		for (String id : BlockInfluencePresets.getAll().keySet()) {
+			assertTrue(library.getAll().containsKey(id), "missing animation for preset: " + id);
+		}
 	}
 
 	@Test

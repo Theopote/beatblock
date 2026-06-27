@@ -4,6 +4,10 @@ import com.beatblock.audio.AnalysisProgressCallback;
 import com.beatblock.audio.AnalysisSummary;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -15,13 +19,15 @@ import java.io.InputStreamReader;
  */
 public final class AnalyzerProcessIo {
 
+	private static final Logger LOGGER = LoggerFactory.getLogger(AnalyzerProcessIo.class);
+
 	public record StdoutParseResult(String resultJson, String errorText) {}
 
 	private AnalyzerProcessIo() {}
 
-	public static String consumeStdout(
-		InputStream stdout,
-		AnalysisProgressCallback onProgress
+	public static @NonNull String consumeStdout(
+		@NonNull InputStream stdout,
+		@NonNull AnalysisProgressCallback onProgress
 	) throws IOException {
 		String resultJson = null;
 		StringBuilder errorBuf = new StringBuilder();
@@ -35,7 +41,9 @@ public final class AnalyzerProcessIo {
 							String step = parts[1];
 							int pct = Integer.parseInt(parts[2].trim());
 							onProgress.onProgress(step, pct);
-						} catch (NumberFormatException ignored) {}
+						} catch (NumberFormatException e) {
+							LOGGER.debug("Malformed PROGRESS line: {}", line, e);
+						}
 					}
 				} else if (line.startsWith("RESULT ")) {
 					resultJson = line.substring("RESULT ".length());
@@ -47,7 +55,7 @@ public final class AnalyzerProcessIo {
 		return toStdoutResult(resultJson, errorBuf.toString());
 	}
 
-	public static StdoutParseResult parseStdoutResult(String raw) {
+	public static @NonNull StdoutParseResult parseStdoutResult(@Nullable String raw) {
 		if (raw == null) return new StdoutParseResult("", "");
 		int sep = raw.indexOf('\u001f');
 		if (sep < 0) return new StdoutParseResult(raw, "");
@@ -56,7 +64,7 @@ public final class AnalyzerProcessIo {
 		return new StdoutParseResult(result, error);
 	}
 
-	public static AnalysisSummary parseResultSummary(String resultJson) {
+	public static @Nullable AnalysisSummary parseResultSummary(@Nullable String resultJson) {
 		if (resultJson == null || resultJson.isBlank()) return null;
 		try {
 			JsonObject o = JsonParser.parseString(resultJson).getAsJsonObject();
@@ -68,7 +76,8 @@ public final class AnalyzerProcessIo {
 			String cacheSource = o.has("cache_source") ? o.get("cache_source").getAsString() : "fresh";
 			return new AnalysisSummary(
 				bpm, beatCount, sectionCount, durationMs, separationMode, cacheSource);
-		} catch (Exception ignored) {
+		} catch (RuntimeException e) {
+			LOGGER.debug("Failed to parse analysis result summary JSON", e);
 			return null;
 		}
 	}

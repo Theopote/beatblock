@@ -14,13 +14,13 @@ import org.lwjgl.glfw.GLFW;
 import org.lwjgl.glfw.GLFWDropCallback;
 import org.lwjgl.glfw.GLFWDropCallbackI;
 import org.lwjgl.opengl.GL11;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.lwjgl.opengl.GL12;
 import org.lwjgl.opengl.GL15;
 import org.lwjgl.opengl.GL20;
 import org.lwjgl.opengl.GL21;
 import org.lwjgl.opengl.GL30;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -127,7 +127,9 @@ public class ImGuiRenderer {
 					if (major >= 4) return (major > 4 || minor >= 10) ? "#version 410 core" : "#version 330 core";
 				}
 			}
-		} catch (Throwable ignored) {}
+		} catch (Throwable e) {
+			LOGGER.debug("Unable to detect GLSL version, using default #version 150", e);
+		}
 		return "#version 150";
 	}
 

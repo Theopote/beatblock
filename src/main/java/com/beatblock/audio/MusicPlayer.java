@@ -334,7 +334,8 @@ public class MusicPlayer implements IAudioPlayer {
 					db = Math.max(control.getMinimum(), Math.min(control.getMaximum(), db));
 					control.setValue(db);
 				}
-			} catch (Exception ignored) {
+			} catch (IllegalArgumentException e) {
+				LOGGER.debug("Unable to set MASTER_GAIN to {} dB", gain, e);
 			}
 		}
 		streamBackend.applyGain(muted);

@@ -22,7 +22,8 @@ public final class JavaSoundMixerSupport {
 	public static Clip acquireClip(AudioFormat preferredFormat) throws LineUnavailableException {
 		try {
 			return AudioSystem.getClip();
-		} catch (NoSuchMethodError | SecurityException | IllegalArgumentException ignored) {
+		} catch (NoSuchMethodError | SecurityException | IllegalArgumentException e) {
+			LOGGER.trace("AudioSystem.getClip unavailable, probing mixers", e);
 			AudioFormat safeFormat = preferredFormat != null
 				? preferredFormat
 				: new AudioFormat(AudioFormat.Encoding.PCM_SIGNED, 44_100, 16, 2, 4, 44_100, false);
@@ -38,7 +39,8 @@ public final class JavaSoundMixerSupport {
 	public static Clip acquireClipFromAnyMixer(AudioFormat fmt) throws LineUnavailableException {
 		try {
 			return acquireClip(fmt);
-		} catch (Throwable ignored) {
+		} catch (Throwable e) {
+			LOGGER.trace("Default Clip acquisition failed, trying mixers", e);
 		}
 		DataLine.Info clipInfo = new DataLine.Info(Clip.class, fmt);
 		for (Mixer.Info mi : AudioSystem.getMixerInfo()) {
@@ -47,7 +49,8 @@ public final class JavaSoundMixerSupport {
 					Line line = mixer.getLine(clipInfo);
 					if (line instanceof Clip clip) return clip;
 				}
-			} catch (Throwable ignored) {
+			} catch (Throwable e) {
+				LOGGER.trace("Mixer '{}' does not support Clip", mi.getName(), e);
 			}
 		}
 		throw new LineUnavailableException("no mixer supports Clip");
@@ -59,7 +62,8 @@ public final class JavaSoundMixerSupport {
 			SourceDataLine line = (SourceDataLine) AudioSystem.getLine(info);
 			line.open(fmt);
 			return line;
-		} catch (Throwable ignored) {
+		} catch (Throwable e) {
+			LOGGER.trace("Default SourceDataLine acquisition failed, trying mixers", e);
 		}
 		for (Mixer.Info mi : AudioSystem.getMixerInfo()) {
 			try {
@@ -70,7 +74,8 @@ public final class JavaSoundMixerSupport {
 					LOGGER.info("BeatBlock MusicPlayer: acquired SourceDataLine from mixer '{}'", mi.getName());
 					return line;
 				}
-			} catch (Throwable ignored) {
+			} catch (Throwable e) {
+				LOGGER.trace("Mixer '{}' does not support SourceDataLine", mi.getName(), e);
 			}
 		}
 		for (Mixer.Info mi : AudioSystem.getMixerInfo()) {
@@ -80,7 +85,8 @@ public final class JavaSoundMixerSupport {
 				line.open(fmt);
 				LOGGER.info("BeatBlock MusicPlayer: force-acquired SourceDataLine from mixer '{}'", mi.getName());
 				return line;
-			} catch (Throwable ignored) {
+			} catch (Throwable e) {
+				LOGGER.trace("Mixer '{}' force-acquire SourceDataLine failed", mi.getName(), e);
 			}
 		}
 		return null;

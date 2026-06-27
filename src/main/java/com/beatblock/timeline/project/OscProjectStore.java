@@ -1,5 +1,6 @@
 package com.beatblock.timeline.project;
 
+import com.beatblock.BeatBlock;
 import com.beatblock.timeline.MarkerType;
 import com.beatblock.engine.layer.BuildLayerManager;
 import com.beatblock.engine.layer.BuildLayerPersistence;
@@ -134,7 +135,9 @@ public final class OscProjectStore {
 				MarkerType type = MarkerType.fromName(getString(obj, "type", "GENERIC"));
 				markers.add(new TimelineMarker(id, timeSeconds, name, type));
 			}
-		} catch (Exception ignored) {}
+		} catch (RuntimeException e) {
+			BeatBlock.LOGGER.warn("Failed to parse markers from .osc project, skipping malformed entries", e);
+		}
 		markers.sort(java.util.Comparator.comparingDouble(TimelineMarker::getTimeSeconds));
 		return markers;
 	}
@@ -143,7 +146,8 @@ public final class OscProjectStore {
 		if (obj == null || !obj.has(key) || obj.get(key).isJsonNull()) return def;
 		try {
 			return obj.get(key).getAsInt();
-		} catch (Exception ignored) {
+		} catch (RuntimeException e) {
+			BeatBlock.LOGGER.debug("Invalid int for key '{}', using default {}", key, def, e);
 			return def;
 		}
 	}
@@ -152,7 +156,8 @@ public final class OscProjectStore {
 		if (obj == null || !obj.has(key) || obj.get(key).isJsonNull()) return def;
 		try {
 			return obj.get(key).getAsString();
-		} catch (Exception ignored) {
+		} catch (RuntimeException e) {
+			BeatBlock.LOGGER.debug("Invalid string for key '{}', using default", key, e);
 			return def;
 		}
 	}

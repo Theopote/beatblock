@@ -3,6 +3,8 @@ package com.beatblock.audio;
 import com.beatblock.audio.ffmpeg.FfmpegService;
 import com.beatblock.audio.ffmpeg.FfmpegTranscodeOutcome;
 import net.fabricmc.loader.api.FabricLoader;
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 
 import java.nio.file.Path;
 import java.util.concurrent.ExecutorService;
@@ -21,11 +23,11 @@ public final class AudioConversionService {
 		return t;
 	});
 
-	public Future<?> convertToMp3Async(
-		Path inputAudio,
-		ProgressCallback onProgress,
-		Consumer<Path> onComplete,
-		Consumer<String> onError
+	public @NonNull Future<?> convertToMp3Async(
+		@NonNull Path inputAudio,
+		@Nullable ProgressCallback onProgress,
+		@NonNull Consumer<Path> onComplete,
+		@NonNull Consumer<String> onError
 	) {
 		return executor.submit(() -> convertToMp3(inputAudio, onProgress, onComplete, onError));
 	}

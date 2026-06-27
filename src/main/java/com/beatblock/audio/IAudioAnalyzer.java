@@ -1,6 +1,8 @@
 package com.beatblock.audio;
 
 import com.beatblock.audio.beatmap.Beatmap;
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 
 import java.nio.file.Path;
 import java.util.function.Consumer;
@@ -12,20 +14,17 @@ import java.util.function.Consumer;
  */
 public interface IAudioAnalyzer {
 
-	String backendId();
+	@NonNull String backendId();
 
 	boolean isAvailable();
 
-	/**
-	 * @param onSummary 可为 {@code null}
-	 */
 	void analyze(
-		Path audioPath,
-		AnalysisOptions options,
-		AnalysisProgressCallback onProgress,
-		Consumer<Beatmap> onComplete,
-		Consumer<String> onError,
-		Consumer<AnalysisSummary> onSummary,
-		AnalysisCancelControl control
+		@NonNull Path audioPath,
+		@NonNull AnalysisOptions options,
+		@NonNull AnalysisProgressCallback onProgress,
+		@NonNull Consumer<Beatmap> onComplete,
+		@NonNull Consumer<String> onError,
+		@Nullable Consumer<AnalysisSummary> onSummary,
+		@NonNull AnalysisCancelControl control
 	);
 }

@@ -1,5 +1,7 @@
 package com.beatblock.runtime;
 
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import com.beatblock.BeatBlock;
 import com.beatblock.audio.AudioAnalysisService;
 import com.beatblock.audio.AudioConversionService;
@@ -76,58 +78,58 @@ public final class BeatBlockContext {
 		);
 	}
 
-	public AudioLoader audioLoader() {
+	public @NonNull AudioLoader audioLoader() {
 		return audioLoader;
 	}
 
-	public MusicPlayer musicPlayer() {
+	public @NonNull MusicPlayer musicPlayer() {
 		return musicPlayer;
 	}
 
-	public StemMixer stemMixer() {
+	public @NonNull StemMixer stemMixer() {
 		return stemMixer;
 	}
 
-	public StageManager stageManager() {
+	public @NonNull StageManager stageManager() {
 		return stageManager;
 	}
 
-	public Timeline timeline() {
+	public @NonNull Timeline timeline() {
 		return timeline;
 	}
 
-	public TimelineEditor timelineEditor() {
+	public @NonNull TimelineEditor timelineEditor() {
 		return timelineEditor;
 	}
 
-	public BlockAnimationEngine blockAnimationEngine() {
+	public @NonNull BlockAnimationEngine blockAnimationEngine() {
 		return blockAnimationEngine;
 	}
 
-	public AudioAnalysisEngine audioAnalysisEngine() {
+	public @NonNull AudioAnalysisEngine audioAnalysisEngine() {
 		return audioAnalysisEngine;
 	}
 
-	public AudioAnalysisService externalAudioAnalyzer() {
+	public @NonNull AudioAnalysisService externalAudioAnalyzer() {
 		return externalAudioAnalyzer;
 	}
 
-	public AudioConversionService audioConversionService() {
+	public @NonNull AudioConversionService audioConversionService() {
 		return audioConversionService;
 	}
 
-	public IAudioPlayer activeAudioPlayer() {
+	public @NonNull IAudioPlayer activeAudioPlayer() {
 		if (stemMixer != null && stemMixer.hasStems()) {
 			return stemMixer;
 		}
 		return musicPlayer;
 	}
 
-	public CommandManager commandManager() {
+	public @Nullable CommandManager commandManager() {
 		return timelineEditor != null ? timelineEditor.getCommandManager() : null;
 	}
 
-	public BuildLayerManager buildLayerManager() {
+	public @Nullable BuildLayerManager buildLayerManager() {
 		return blockAnimationEngine != null ? blockAnimationEngine.getBuildLayerManager() : null;
 	}
 

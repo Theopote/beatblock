@@ -5,6 +5,8 @@ import com.beatblock.audio.cache.BeatmapAnalysisCache;
 import com.beatblock.audio.python.PythonAudioAnalyzer;
 import com.beatblock.audio.python.PythonEnvironmentDiagnostics;
 import com.beatblock.audio.python.PythonRuntimeHealthMonitor;
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 
 import java.nio.file.Path;
 import java.util.concurrent.Future;
@@ -43,76 +45,76 @@ public final class AudioAnalysisService {
 		this.runtimeHealthMonitor = runtimeHealthMonitor;
 	}
 
-	public IAudioAnalyzer getAnalyzer() {
+	public @NonNull IAudioAnalyzer getAnalyzer() {
 		return orchestrator.getAnalyzer();
 	}
 
 	public boolean isUseDemucs() { return useDemucs; }
 	public void setUseDemucs(boolean useDemucs) { this.useDemucs = useDemucs; }
 
-	public Future<?> analyze(
-		Path audioPath,
-		AnalysisProgressCallback onProgress,
-		Consumer<Beatmap> onComplete,
-		Consumer<String> onError
+	public @NonNull Future<?> analyze(
+		@NonNull Path audioPath,
+		@NonNull AnalysisProgressCallback onProgress,
+		@NonNull Consumer<Beatmap> onComplete,
+		@NonNull Consumer<String> onError
 	) {
 		return submitAnalysis(null, audioPath, onProgress, onComplete, onError, null, null, useDemucs);
 	}
 
-	public Future<?> analyze(
-		Path audioPath,
-		AnalysisProgressCallback onProgress,
-		Consumer<Beatmap> onComplete,
-		Consumer<String> onError,
-		Runnable onStarted
+	public @NonNull Future<?> analyze(
+		@NonNull Path audioPath,
+		@NonNull AnalysisProgressCallback onProgress,
+		@NonNull Consumer<Beatmap> onComplete,
+		@NonNull Consumer<String> onError,
+		@Nullable Runnable onStarted
 	) {
 		return submitAnalysis(null, audioPath, onProgress, onComplete, onError, null, onStarted, useDemucs);
 	}
 
-	public Future<?> analyze(
-		Path audioPath,
-		AnalysisProgressCallback onProgress,
-		Consumer<Beatmap> onComplete,
-		Consumer<String> onError,
-		Consumer<AnalysisSummary> onSummary,
-		Runnable onStarted
+	public @NonNull Future<?> analyze(
+		@NonNull Path audioPath,
+		@NonNull AnalysisProgressCallback onProgress,
+		@NonNull Consumer<Beatmap> onComplete,
+		@NonNull Consumer<String> onError,
+		@Nullable Consumer<AnalysisSummary> onSummary,
+		@Nullable Runnable onStarted
 	) {
 		return submitAnalysis(null, audioPath, onProgress, onComplete, onError, onSummary, onStarted, useDemucs);
 	}
 
-	public Future<?> analyze(
-		Path audioPath,
-		AnalysisProgressCallback onProgress,
-		Consumer<Beatmap> onComplete,
-		Consumer<String> onError,
-		Consumer<AnalysisSummary> onSummary,
-		Runnable onStarted,
+	public @NonNull Future<?> analyze(
+		@NonNull Path audioPath,
+		@NonNull AnalysisProgressCallback onProgress,
+		@NonNull Consumer<Beatmap> onComplete,
+		@NonNull Consumer<String> onError,
+		@Nullable Consumer<AnalysisSummary> onSummary,
+		@Nullable Runnable onStarted,
 		boolean requestedDemucs
 	) {
 		return submitAnalysis(null, audioPath, onProgress, onComplete, onError, onSummary, onStarted, requestedDemucs);
 	}
 
-	public Future<?> analyze(
-		String taskId,
-		Path audioPath,
-		AnalysisProgressCallback onProgress,
-		Consumer<Beatmap> onComplete,
-		Consumer<String> onError,
-		Consumer<AnalysisSummary> onSummary,
-		Runnable onStarted,
+	public @NonNull Future<?> analyze(
+		@Nullable String taskId,
+		@NonNull Path audioPath,
+		@NonNull AnalysisProgressCallback onProgress,
+		@NonNull Consumer<Beatmap> onComplete,
+		@NonNull Consumer<String> onError,
+		@Nullable Consumer<AnalysisSummary> onSummary,
+		@Nullable Runnable onStarted,
 		boolean requestedDemucs
 	) {
 		return submitAnalysis(taskId, audioPath, onProgress, onComplete, onError, onSummary, onStarted, requestedDemucs);
 	}
 
-	private Future<?> submitAnalysis(
-		String taskId,
-		Path audioPath,
-		AnalysisProgressCallback onProgress,
-		Consumer<Beatmap> onComplete,
-		Consumer<String> onError,
-		Consumer<AnalysisSummary> onSummary,
-		Runnable onStarted,
+	private @NonNull Future<?> submitAnalysis(
+		@Nullable String taskId,
+		@NonNull Path audioPath,
+		@Nullable AnalysisProgressCallback onProgress,
+		@Nullable Consumer<Beatmap> onComplete,
+		@Nullable Consumer<String> onError,
+		@Nullable Consumer<AnalysisSummary> onSummary,
+		@Nullable Runnable onStarted,
 		boolean requestedDemucs
 	) {
 		return orchestrator.submit(
@@ -127,7 +129,7 @@ public final class AudioAnalysisService {
 		);
 	}
 
-	public boolean cancelAnalysis(String taskId) {
+	public boolean cancelAnalysis(@Nullable String taskId) {
 		return orchestrator.cancel(taskId);
 	}
 
@@ -140,19 +142,19 @@ public final class AudioAnalysisService {
 		runtimeHealthMonitor.shutdown();
 	}
 
-	public int clearBeatmapCacheForAudio(Path audioPath) {
+	public int clearBeatmapCacheForAudio(@NonNull Path audioPath) {
 		return BeatmapAnalysisCache.clearBeatmapCacheForAudio(audioPath);
 	}
 
-	public int clearAllAnalysisCacheForAudio(Path audioPath) {
+	public int clearAllAnalysisCacheForAudio(@NonNull Path audioPath) {
 		return BeatmapAnalysisCache.clearAllAnalysisCacheForAudio(audioPath);
 	}
 
-	public String getPythonRuntimeSummary() {
+	public @NonNull String getPythonRuntimeSummary() {
 		return runtimeHealthMonitor.getRuntimeSummary();
 	}
 
-	public PythonEnvironmentDiagnostics.RuntimeHealthSnapshot getRuntimeHealthSnapshot() {
+	public PythonEnvironmentDiagnostics.@NonNull RuntimeHealthSnapshot getRuntimeHealthSnapshot() {
 		return runtimeHealthMonitor.getRuntimeHealthSnapshot();
 	}
 }
