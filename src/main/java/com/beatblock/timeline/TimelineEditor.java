@@ -13,7 +13,6 @@ import com.beatblock.timeline.rendering.TrackDefinition;
 import com.beatblock.timeline.rendering.TrackRegistry;
 import com.beatblock.timeline.rendering.TimelineTrackListState;
 import com.beatblock.timeline.rendering.TimelineUiStateStore;
-import imgui.ImGui;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
@@ -415,7 +414,7 @@ public final class TimelineEditor {
 	}
 
 	/**
-	 * 在 TimelinePanel 中于标尺与轨道区绘制完成后调用，绘制贯通播放头竖线。
+	 * 在 TimelinePanel 中于轨道子窗口绘制完成后调用，绘制标尺区播放头竖线（轨道区段在子窗口内单独绘制）。
 	 */
 	public void renderPlayheadOverlay() {
 		if (timeline == null) return;
@@ -424,14 +423,13 @@ public final class TimelineEditor {
 		TimelineClock clock = state.getClock();
 		if (viewState == null || clock == null) return;
 
-		double currentTime = clock.getCurrentTimeSeconds();
-		float playheadX = layout.contentLeft + viewState.timeToScreen(currentTime);
-		if (playheadX < layout.contentLeft - 2 || playheadX > layout.contentLeft + layout.contentWidth + 2) {
-			return;
-		}
-		float y0 = layout.rulerTop;
-		float y1 = cachedDividerContentBottomScreenY > y0 ? cachedDividerContentBottomScreenY : layout.contentTop + layout.contentHeight;
-		ImGui.getWindowDrawList().addLine(playheadX, y0, playheadX, y1, TimelineRenderer.PLAYHEAD_COLOR, 2f);
+		TimelineRenderer.drawPlayheadLine(
+			layout,
+			viewState,
+			clock.getCurrentTimeSeconds(),
+			layout.rulerTop,
+			layout.rulerTop + layout.rulerHeight
+		);
 	}
 
 	/**

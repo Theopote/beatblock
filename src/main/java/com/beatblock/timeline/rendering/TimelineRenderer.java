@@ -215,6 +215,33 @@ public final class TimelineRenderer implements TimelineAudioDropHost {
 		if (selectionBox != null && selectionBox.isActive()) {
 			ImGui.getWindowDrawList().addRect(selectionBox.getMinX(), selectionBox.getMinY(), selectionBox.getMaxX(), selectionBox.getMaxY(), SELECTED_BORDER_COLOR, 0f, 0, 1.5f);
 		}
+
+		// 播放头须在轨道内容最上层；子窗口 draw list 会盖住父窗口 overlay，故在轨道区末尾绘制。
+		if (clock != null) {
+			drawPlayheadLine(
+				layout,
+				viewState,
+				clock.getCurrentTimeSeconds(),
+				layout.contentTop,
+				layout.contentTop + layout.contentHeight
+			);
+		}
+	}
+
+	/** 在指定屏幕 Y 范围内绘制播放头竖线；超出可见时间范围时不绘制。 */
+	public static void drawPlayheadLine(
+		TimelineLayout layout,
+		TimelineViewState viewState,
+		double currentTimeSeconds,
+		float y0,
+		float y1
+	) {
+		if (layout == null || viewState == null || y1 <= y0) return;
+		float playheadX = layout.contentLeft + viewState.timeToScreen(currentTimeSeconds);
+		if (playheadX < layout.contentLeft - 2 || playheadX > layout.contentLeft + layout.contentWidth + 2) {
+			return;
+		}
+		ImGui.getWindowDrawList().addLine(playheadX, y0, playheadX, y1, PLAYHEAD_COLOR, 2f);
 	}
 
 	private void drawDivider(TimelineLayout layout, float y0, float y1) {
