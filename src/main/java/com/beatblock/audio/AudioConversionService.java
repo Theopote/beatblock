@@ -10,16 +10,17 @@ import java.nio.file.Path;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
 /**
  * 音频转换服务：后台调用 {@link FfmpegService} 将不支持格式转换为 MP3。
  */
-public final class AudioConversionService {
+public final class AudioConversionService implements AutoCloseable {
 
 	private final ExecutorService executor = Executors.newSingleThreadExecutor(r -> {
 		Thread t = new Thread(r, "beatblock-audio-converter");
-		t.setDaemon(true);
+		t.setDaemon(false);
 		return t;
 	});
 
@@ -61,7 +62,23 @@ public final class AudioConversionService {
 	}
 
 	public void shutdown() {
-		executor.shutdownNow();
+		executor.shutdown();
+		try {
+			if (!executor.awaitTermination(5, TimeUnit.SECONDS)) {
+				executor.shutdownNow();
+				if (!executor.awaitTermination(2, TimeUnit.SECONDS)) {
+					com.beatblock.BeatBlock.LOGGER.warn("BeatBlock AudioConversionService: executor did not terminate cleanly");
+				}
+			}
+		} catch (InterruptedException e) {
+			executor.shutdownNow();
+			Thread.currentThread().interrupt();
+		}
+	}
+
+	@Override
+	public void close() {
+		shutdown();
 	}
 
 	@FunctionalInterface

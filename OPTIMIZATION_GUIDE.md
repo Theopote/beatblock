@@ -16,20 +16,19 @@
 | P1 JSpecify 依赖 | ✅ 已完成 | `build.gradle` 引入 `org.jspecify:jspecify:1.0.0` |
 | P1 空值注解（核心 API） | 🟡 进行中 | timeline/audio 约 **22** 个文件；见 [已注解文件清单](#已注解文件清单) |
 | P1 Timeline 并发模型 | ✅ 已完成 | 类文档明确线程模型；`animationCachesDirty` 改为 `volatile` |
-| P1 资源管理 | ✅ 已完成 | `AudioAnalysisOrchestrator`：`AutoCloseable`、非 daemon、`awaitTermination` |
+| P1 资源管理 | ✅ 已完成 | `AudioAnalysisOrchestrator` + `AudioConversionService`：`AutoCloseable`、非 daemon、优雅 shutdown |
 | P2 Map 强类型化 | ⬜ 未开始 | |
 | P2 长方法拆分 | ⬜ 未开始 | |
 | P2 Magic Numbers | ⬜ 未开始 | |
-| P2 移除 @Deprecated 静态字段 | ⬜ 未开始 | 待全量测试与 SpotBugs 无回归后删除 |
 | P3 文档/命名/覆盖率 | ⬜ 未开始 | |
-| CI NullAway | ⬜ 未开始 | 建议在核心包注解覆盖 ≥80% 后接入 |
+| CI NullAway | 🟡 已配置 | 可选：`./gradlew compileJava -PenableNullaway=true`（需下载 errorprone/nullaway） |
 
 **测试基线**: `./gradlew test` — **749/749 通过**（2026-06-27）
 
 ### 已注解文件清单
 
 **runtime**
-- `BeatBlockContext`
+- `BeatBlockContext`（`package-info.java` 标记 `@NullMarked`）
 
 **timeline**
 - `Track`, `Clip`, `TimelineEvent`, `Timeline`, `TimelineMarker`, `TimelineAnimationEvent`
@@ -72,7 +71,7 @@
 ### 进度
 - ✅ 依赖与 `BeatBlockContext`、timeline/audio 核心模型
 - 🟡 UI / engine / client 包待扩展
-- ⬜ Gradle 接入 NullAway 编译检查
+- 🟡 NullAway：`build.gradle` 已配置，通过 `-PenableNullaway=true` 启用；当前仅 `com.beatblock.runtime` 为 `@NullMarked`
 
 ---
 
@@ -124,7 +123,7 @@
 1. ✅ `AudioAnalysisOrchestrator` 实现 `AutoCloseable`
 2. ✅ 客户端 `CLIENT_STOPPING` 关闭 timelineEditor / analyzer / conversionService
 3. ✅ 分析线程非 daemon + `awaitTermination`
-4. ⬜ `AudioConversionService` 仍使用 daemon 线程 — 待对齐 orchestrator 模式
+4. ✅ `AudioConversionService` 非 daemon + `awaitTermination` + `AutoCloseable`
 
 ---
 
@@ -172,15 +171,14 @@
 - [x] 核心 timeline/audio 公共 API 空值注解
 - [x] Timeline 线程模型文档 + `volatile` 脏标记
 - [x] `AudioAnalysisOrchestrator` 资源关闭
+- [x] `AudioConversionService` 关闭语义对齐
 - [ ] 扩展注解至 ui/engine/client 包
-- [ ] 接入 NullAway（或 Checker Framework）
-- [ ] `AudioConversionService` 关闭语义对齐
+- [ ] 全量启用 NullAway（当前：`-PenableNullaway=true` 可选，仅 `runtime` 包 `@NullMarked`）
 
 ### 第4-6周 (P2)
 - [ ] 替换 `Map<String,Object>`
 - [ ] 重构长方法
 - [ ] 提取常量
-- [ ] 迁移并删除 `@Deprecated` API
 
 ### 长期 (P3)
 - [ ] 统一文档语言

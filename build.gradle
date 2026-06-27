@@ -15,6 +15,10 @@ repositories {
 	mavenCentral()
 }
 
+if (findProperty('enableNullaway') == 'true') {
+	apply plugin: 'net.ltgt.errorprone'
+}
+
 configurations {
 	spotbugs
 }
@@ -62,6 +66,11 @@ dependencies {
 	testRuntimeOnly "org.junit.platform:junit-platform-launcher"
 
 	spotbugs 'com.github.spotbugs:spotbugs:4.10.2'
+
+	if (findProperty('enableNullaway') == 'true') {
+		errorprone 'com.google.errorprone:error_prone_core:2.36.0'
+		errorprone 'com.uber.nullaway:nullaway:0.12.3'
+	}
 }
 
 processResources {
@@ -74,6 +83,15 @@ processResources {
 
 tasks.withType(JavaCompile).configureEach {
 	it.options.release = 21
+	if (it.name == 'compileJava' && findProperty('enableNullaway') == 'true') {
+		it.options.compilerArgs << '-XDaddTypeAnnotationsToSymbol=true'
+		it.options.errorprone {
+			disableAllChecks = true
+			error('NullAway')
+			option('NullAway:OnlyNullMarked', 'true')
+			option('NullAway:JSpecifyMode', 'true')
+		}
+	}
 }
 
 tasks.withType(Test).configureEach {
