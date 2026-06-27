@@ -9,6 +9,8 @@ import net.minecraft.registry.Registries;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -18,6 +20,8 @@ import java.util.List;
  * ANIMATE remains handled by the animation engine path.
  */
 public final class BlockControlExecutor {
+
+	private static final Logger LOGGER = LoggerFactory.getLogger(BlockControlExecutor.class);
 
 	private final StageObjectSystem stageObjectSystem;
 
@@ -47,6 +51,20 @@ public final class BlockControlExecutor {
 	) {
 		public boolean hasMutations() {
 			return mutations != null && !mutations.isEmpty();
+		}
+
+		/**
+		 * 是否有部分方块因区块未加载而跳过。
+		 */
+		public boolean hasUnloadedChunks() {
+			return scannedBlocks > loadedBlocks;
+		}
+
+		/**
+		 * 获取跳过的方块数量。
+		 */
+		public int getSkippedBlockCount() {
+			return scannedBlocks - loadedBlocks;
 		}
 	}
 
@@ -97,8 +115,14 @@ public final class BlockControlExecutor {
 		ControlSkipReason reason = ControlSkipReason.NONE;
 		if (loadedBlocks == 0) {
 			reason = ControlSkipReason.NO_CHUNK_LOADED;
+			LOGGER.warn("BeatBlock BlockControlExecutor: 所有方块所在区块均未加载 (targetObjectId={}, scannedBlocks={})",
+				event.getTargetObjectId(), scannedBlocks);
 		} else if (mutations.isEmpty()) {
 			reason = ControlSkipReason.NO_STATE_CHANGE;
+		} else if (scannedBlocks > loadedBlocks) {
+			int skipped = scannedBlocks - loadedBlocks;
+			LOGGER.debug("BeatBlock BlockControlExecutor: 部分方块所在区块未加载 (targetObjectId={}, skipped={}/{})",
+				event.getTargetObjectId(), skipped, scannedBlocks);
 		}
 		return new ControlPlan(actionMode, event.getTargetObjectId(), mutations, reason, scannedBlocks, loadedBlocks);
 	}

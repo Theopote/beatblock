@@ -42,14 +42,24 @@ public final class BeatBlockSelectionManager implements SelectionToolHost {
 		return INSTANCE;
 	}
 
+	// ── 常量定义 ──
+	/** 默认最大选区方块数（防止内存溢出和性能问题） */
+	public static final int DEFAULT_MAX_BLOCKS = 100_000;
+	/** 默认相机最大距离（格）*/
+	public static final int DEFAULT_MAX_CAMERA_DISTANCE = 128;
+	/** 默认魔棒最大扩散半径（格）*/
+	public static final int DEFAULT_MAX_MAGIC_WAND_SPREAD = 64;
+	/** 默认球形笔刷半径（格）*/
+	public static final int DEFAULT_SPHERE_BRUSH_RADIUS = 3;
+
 	private SelectionMode mode = SelectionMode.OFF;
 	private SelectionOperation operation = SelectionOperation.NEW;
 	private final LinkedHashSet<BlockPos> selected = new LinkedHashSet<>();
 	private BlockPos boxFirstCorner;
 	private BlockPos lineFirstCorner;
 	private boolean includeAir;
-	private int maxBlocks = 100_000;
-	private int sphereBrushRadius = 3;
+	private int maxBlocks = DEFAULT_MAX_BLOCKS;
+	private int sphereBrushRadius = DEFAULT_SPHERE_BRUSH_RADIUS;
 	/** 线选：0 = 仅体素中心折线；&gt;0 = 以两端中心连线为轴的圆柱半径（格）。 */
 	private int lineThicknessRadius;
 	/** false：同类型方块即可连通（魔棒更直观）；true：BlockState 完全一致才算「同色」。 */
@@ -64,11 +74,11 @@ public final class BeatBlockSelectionManager implements SelectionToolHost {
 	/**
 	 * 相对相机：候选方块中心到该点的距离不得超过此值（格）。套索、魔棒、切片、球/列/框等均参与过滤，防止无界选区。
 	 */
-	private int maxDistanceFromCamera = 128;
+	private int maxDistanceFromCamera = DEFAULT_MAX_CAMERA_DISTANCE;
 	/**
 	 * 魔棒（全图与选区内）从点击种子起的最大欧氏扩散半径（格）。
 	 */
-	private int maxMagicWandSpreadFromSeed = 64;
+	private int maxMagicWandSpreadFromSeed = DEFAULT_MAX_MAGIC_WAND_SPREAD;
 	private Vec3d interactionCameraPos;
 	/** 逐块半透明填充（仅当选区不大时绘制，开销高） */
 	private boolean selectionFillEnabled;
