@@ -20,7 +20,6 @@ public final class VideoExportPreferences {
 
 	private static int resolutionPresetIndex = 1;
 	private static int fpsPresetIndex = 1;
-	private static boolean hideUi = true;
 	private static boolean includeAudio = true;
 	private static String lastOutputDirectory = "";
 	private static boolean loaded;
@@ -46,17 +45,6 @@ public final class VideoExportPreferences {
 	public static void setFpsPresetIndex(int index) {
 		ensureLoaded();
 		fpsPresetIndex = Math.max(0, index);
-		save();
-	}
-
-	public static boolean hideUi() {
-		ensureLoaded();
-		return hideUi;
-	}
-
-	public static void setHideUi(boolean value) {
-		ensureLoaded();
-		hideUi = value;
 		save();
 	}
 
@@ -104,9 +92,6 @@ public final class VideoExportPreferences {
 			if (root.has("fpsPresetIndex")) {
 				fpsPresetIndex = root.get("fpsPresetIndex").getAsInt();
 			}
-			if (root.has("hideUi")) {
-				hideUi = root.get("hideUi").getAsBoolean();
-			}
 			if (root.has("includeAudio")) {
 				includeAudio = root.get("includeAudio").getAsBoolean();
 			}
@@ -125,7 +110,6 @@ public final class VideoExportPreferences {
 			JsonObject root = new JsonObject();
 			root.addProperty("resolutionPresetIndex", resolutionPresetIndex);
 			root.addProperty("fpsPresetIndex", fpsPresetIndex);
-			root.addProperty("hideUi", hideUi);
 			root.addProperty("includeAudio", includeAudio);
 			root.addProperty("lastOutputDirectory", lastOutputDirectory);
 			Files.writeString(path, GSON.toJson(root), StandardCharsets.UTF_8);

@@ -80,7 +80,6 @@ public final class VideoExportPanelPresenter {
 		int fpsPresetIndex,
 		double startSeconds,
 		double endSeconds,
-		boolean hideUi,
 		boolean includeAudio
 	) {
 		ExportDialogState state = dialogState();
@@ -104,7 +103,6 @@ public final class VideoExportPanelPresenter {
 
 		VideoExportPreferences.setResolutionPresetIndex(presetIndex);
 		VideoExportPreferences.setFpsPresetIndex(fpsIndex);
-		VideoExportPreferences.setHideUi(hideUi);
 		VideoExportPreferences.setIncludeAudio(includeAudio);
 		Path outputPath = Path.of(output);
 		Path parent = outputPath.getParent();
@@ -119,7 +117,6 @@ public final class VideoExportPanelPresenter {
 			fps,
 			startSeconds,
 			endSeconds,
-			hideUi,
 			includeAudio
 		);
 

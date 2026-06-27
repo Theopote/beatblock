@@ -1040,6 +1040,7 @@
   "beatblock.export.duration_hint": "Timeline: %.1f s",
   "beatblock.export.hide_ui": "Hide editor UI during export",
   "beatblock.export.hide_ui.tooltip": "Capture only the Minecraft viewport for a clean video.",
+  "beatblock.export.scene_only_hint": "Offline frame-by-frame render of the Minecraft scene (block animation and camera). Editor panels and the vanilla HUD are not included.",
   "beatblock.export.include_audio": "Include project audio track",
   "beatblock.export.start_button": "Start export",
   "beatblock.export.ffmpeg.ok": "FFmpeg ready",

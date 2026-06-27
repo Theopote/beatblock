@@ -12,7 +12,6 @@ public record VideoExportSettings(
 	int fps,
 	double startTimeSeconds,
 	double endTimeSeconds,
-	boolean hideUi,
 	boolean includeAudio
 ) {
 	public VideoExportSettings {

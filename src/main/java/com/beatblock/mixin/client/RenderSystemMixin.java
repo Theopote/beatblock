@@ -13,7 +13,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * 在 flipFrame(HEAD) 时绘制 ImGui，避免被后续渲染覆盖。
+ * flipFrame(HEAD)：视频导出时先捕获纯 Minecraft 画面，再合成 ImGui（编辑器 UI 不会进入导出视频）。
  */
 @Mixin(RenderSystem.class)
 public class RenderSystemMixin {
@@ -25,17 +25,13 @@ public class RenderSystemMixin {
 		if (!(mc.currentScreen instanceof BeatBlockUIScreen)) return;
 
 		VideoExportCoordinator exportCoordinator = VideoExportCoordinator.getInstance();
-		boolean exporting = exportCoordinator.isActive();
-		boolean hideUi = exportCoordinator.shouldHideUi();
-
-		if (!exporting || !hideUi) {
-			ImGuiRenderer renderer = ImGuiRenderer.getInstance();
-			if (renderer.isInitialized() && renderer.hasPendingDrawData()) {
-				renderer.renderPendingDrawData();
-			}
-		}
-		if (exporting) {
+		if (exportCoordinator.isActive()) {
 			exportCoordinator.onBeforeFlipFrame();
+		}
+
+		ImGuiRenderer renderer = ImGuiRenderer.getInstance();
+		if (renderer.isInitialized() && renderer.hasPendingDrawData()) {
+			renderer.renderPendingDrawData();
 		}
 	}
 }

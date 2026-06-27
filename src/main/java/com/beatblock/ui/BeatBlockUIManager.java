@@ -127,8 +127,8 @@ public class BeatBlockUIManager {
 	public void render() {
 		BeatBlockShortcutHandler.processGlobalShortcuts();
 
-		if (VideoExportCoordinator.getInstance().shouldHideUi()) {
-			renderExportProgressOverlay();
+		if (VideoExportCoordinator.getInstance().shouldHideEditorChrome()) {
+			videoExportDialog.render();
 			return;
 		}
 
@@ -187,39 +187,6 @@ public class BeatBlockUIManager {
 		videoExportDialog.render();
 		BeatBlockLassoOverlay.render();
 		ToastNotificationSystem.render();
-	}
-
-	private void renderExportProgressOverlay() {
-		var ctx = com.beatblock.BeatBlock.getContext();
-		var service = ctx.videoExportService();
-		if (service == null) {
-			return;
-		}
-		var progress = service.activeProgress();
-		if (progress == null) {
-			return;
-		}
-		ImGuiViewport viewport = ImGui.getMainViewport();
-		ImGui.setNextWindowPos(viewport.getWorkPosX() + 24f, viewport.getWorkPosY() + 24f);
-		ImGui.setNextWindowSize(380, 0);
-		if (ImGui.begin("##beatblockExportProgress", ImGuiWindowFlags.NoDecoration | ImGuiWindowFlags.AlwaysAutoResize)) {
-			ImGui.text(com.beatblock.ui.i18n.BBTexts.get("beatblock.export.progress.title"));
-			ImGui.progressBar(progress.percent() / 100f, 340, 0, progress.message());
-			ImGui.textDisabled(com.beatblock.ui.i18n.BBTexts.get("beatblock.export.progress.percent", progress.percent()));
-			if (progress.totalFrames() > 0) {
-				ImGui.sameLine();
-				ImGui.textDisabled(com.beatblock.ui.i18n.BBTexts.get(
-					"beatblock.export.progress.frames",
-					progress.currentFrame(),
-					progress.totalFrames()
-				));
-			}
-			ImGui.spacing();
-			if (ImGui.button(com.beatblock.ui.i18n.BBTexts.get("beatblock.export.cancel_export") + "##overlay")) {
-				service.cancelExport();
-			}
-		}
-		ImGui.end();
 	}
 
 	public void resetLayoutState() {

@@ -26,7 +26,6 @@ public final class VideoExportDialog {
 	private final ImInt fpsIndex = new ImInt(VideoExportPreferences.fpsPresetIndex());
 	private final ImDouble startSeconds = new ImDouble(0.0);
 	private final ImDouble endSeconds = new ImDouble(60.0);
-	private final ImBoolean hideUi = new ImBoolean(VideoExportPreferences.hideUi());
 	private final ImBoolean includeAudio = new ImBoolean(VideoExportPreferences.includeAudio());
 	private String statusMessage = "";
 	private boolean open;
@@ -52,7 +51,6 @@ public final class VideoExportDialog {
 		endSeconds.set(state.defaultEndSeconds());
 		resolutionIndex.set(VideoExportPreferences.resolutionPresetIndex());
 		fpsIndex.set(VideoExportPreferences.fpsPresetIndex());
-		hideUi.set(VideoExportPreferences.hideUi());
 		includeAudio.set(VideoExportPreferences.includeAudio());
 	}
 
@@ -122,12 +120,9 @@ public final class VideoExportDialog {
 		ImGui.sameLine();
 		ImGui.textDisabled(BBTexts.get("beatblock.export.duration_hint", state.timelineDurationSeconds()));
 
-		if (ImGui.checkbox(BBTexts.get("beatblock.export.hide_ui"), hideUi)) {
-			VideoExportPreferences.setHideUi(hideUi.get());
-		}
-		if (ImGui.isItemHovered()) {
-			ImGui.setTooltip(BBTexts.get("beatblock.export.hide_ui.tooltip"));
-		}
+		ImGui.spacing();
+		ImGui.textWrapped(BBTexts.get("beatblock.export.scene_only_hint"));
+
 		if (ImGui.checkbox(BBTexts.get("beatblock.export.include_audio"), includeAudio)) {
 			VideoExportPreferences.setIncludeAudio(includeAudio.get());
 		}
@@ -221,7 +216,6 @@ public final class VideoExportDialog {
 				fpsIndex.get(),
 				startSeconds.get(),
 				endSeconds.get(),
-				hideUi.get(),
 				includeAudio.get()
 			);
 			statusMessage = result.ok() ? "" : result.messageOrEmpty();

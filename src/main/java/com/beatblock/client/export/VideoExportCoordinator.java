@@ -20,7 +20,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 /**
- * 客户端视频导出协调器：逐帧 seek 时间线、捕获 framebuffer、写入 ffmpeg pipe。
+ * 客户端视频导出协调器：逐帧 seek 时间线、捕获纯 Minecraft 场景（不含 UI）、写入 ffmpeg pipe。
  */
 public final class VideoExportCoordinator {
 
@@ -42,7 +42,6 @@ public final class VideoExportCoordinator {
 	private int nextFrameIndex;
 	private int captureWidth;
 	private int captureHeight;
-	private boolean hideUi;
 	private boolean cancelRequested;
 	private int pendingWarmupFrames;
 
@@ -56,8 +55,9 @@ public final class VideoExportCoordinator {
 		return phase != Phase.IDLE;
 	}
 
-	public boolean shouldHideUi() {
-		return isActive() && hideUi;
+	/** 导出进行时隐藏编辑器面板，仅保留导出对话框等屏幕反馈。 */
+	public boolean shouldHideEditorChrome() {
+		return isActive();
 	}
 
 	public void start(VideoExportSettings exportSettings, VideoExportService exportService) {
@@ -78,7 +78,6 @@ public final class VideoExportCoordinator {
 		this.settings = exportSettings;
 		this.outputPath = exportSettings.outputPath();
 		this.service = exportService;
-		this.hideUi = exportSettings.hideUi();
 		this.nextFrameIndex = 0;
 		this.cancelRequested = false;
 		this.pendingWarmupFrames = 2;
@@ -235,7 +234,6 @@ public final class VideoExportCoordinator {
 		encoder = null;
 		nextFrameIndex = 0;
 		cancelRequested = false;
-		hideUi = false;
 	}
 
 	private void updateProgress(VideoExportProgress.State state, String message, int percent) {

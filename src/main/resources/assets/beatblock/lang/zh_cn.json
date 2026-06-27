@@ -1077,6 +1077,7 @@
   "beatblock.export.duration_hint": "时间线：%.1f 秒",
   "beatblock.export.hide_ui": "导出时隐藏编辑器 UI",
   "beatblock.export.hide_ui.tooltip": "仅捕获 Minecraft 画面，不包含 BeatBlock 面板。",
+  "beatblock.export.scene_only_hint": "离线逐帧渲染 Minecraft 场景（方块动画与镜头），不会录制编辑器界面或原版 HUD。",
   "beatblock.export.include_audio": "混入工程音频轨",
   "beatblock.export.start_button": "开始导出",
   "beatblock.export.ffmpeg.ok": "FFmpeg 已就绪",

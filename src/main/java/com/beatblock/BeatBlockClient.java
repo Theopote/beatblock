@@ -65,11 +65,14 @@ public class BeatBlockClient implements ClientModInitializer {
 		WorldRenderEvents.END_MAIN.register(context -> {
 			var consumers = context.consumers();
 			var matrices = context.matrices();
-			BeatBlockSelectedBlocksRenderer.renderIfNeeded(matrices, consumers);
-			BeatBlockSelectionRenderer.renderIfNeeded(matrices, consumers);
-			BeatBlockHoverOutlineRenderer.renderIfNeeded(matrices, consumers);
+			boolean exportingScene = VideoExportCoordinator.getInstance().isActive();
+			if (!exportingScene) {
+				BeatBlockSelectedBlocksRenderer.renderIfNeeded(matrices, consumers);
+				BeatBlockSelectionRenderer.renderIfNeeded(matrices, consumers);
+				BeatBlockHoverOutlineRenderer.renderIfNeeded(matrices, consumers);
+				CameraPathWorldRenderer.renderIfNeeded(matrices, consumers);
+			}
 			BeatBlockAnimatedBlocksRenderer.render(matrices, consumers);
-			CameraPathWorldRenderer.renderIfNeeded(matrices, consumers);
 		});
 
 		ClientTickEvents.END_CLIENT_TICK.register(client -> {
