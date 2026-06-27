@@ -34,6 +34,24 @@ public final class BlockAnimationEngine {
 	private final com.beatblock.engine.influence.BlockInfluenceOrchestrator influenceOrchestrator =
 		new com.beatblock.engine.influence.BlockInfluenceOrchestrator();
 	private Vec3d runtimeCameraPosition = Vec3d.ZERO;
+	private Vec3d runtimeCameraForward = new Vec3d(0, 0, 1);
+
+	public void setRuntimeCameraPosition(Vec3d cameraPosition) {
+		if (cameraPosition == null) return;
+		this.runtimeCameraPosition = cameraPosition;
+	}
+
+	public void setRuntimeCameraOrientation(float yawDegrees, float pitchDegrees) {
+		this.runtimeCameraForward = com.beatblock.engine.camera.CameraViewMath.forwardFromRotation(yawDegrees, pitchDegrees);
+	}
+
+	public Vec3d getRuntimeCameraPosition() {
+		return runtimeCameraPosition;
+	}
+
+	public Vec3d getRuntimeCameraForward() {
+		return runtimeCameraForward;
+	}
 
 	public StageObjectSystem getStageObjectSystem() {
 		return stageObjectSystem;
@@ -59,11 +77,6 @@ public final class BlockAnimationEngine {
 		return buildLayerManager;
 	}
 
-	public void setRuntimeCameraPosition(Vec3d cameraPosition) {
-		if (cameraPosition == null) return;
-		this.runtimeCameraPosition = cameraPosition;
-	}
-
 	/**
 	 * 每帧调用：根据时间线时间更新动画，移除已结束实例。
 	 */
@@ -87,6 +100,7 @@ public final class BlockAnimationEngine {
 	 * 由调用方决定写到哪个权威世界、在哪个线程写。
 	 */
 	public void tick(double timelineTimeSeconds, World world, WorldMutationSink sink) {
+		influenceOrchestrator.setRuntimeCamera(runtimeCameraPosition, runtimeCameraForward);
 		influenceOrchestrator.tick(timelineTimeSeconds, animationPlayer, buildSequencer, world, sink);
 	}
 
@@ -142,10 +156,14 @@ public final class BlockAnimationEngine {
 		if (edgePriority > 0.0 && !ordered.isEmpty()) {
 			ordered = applyEdgePrioritization(ordered, target.getBlocks(), edgePriority, runtimeCameraPosition, target.getCenter());
 		}
+		ordered = com.beatblock.timeline.generation.CameraStepModulation.reorderForFrustumGating(
+			ordered, runtimeCameraPosition, runtimeCameraForward, params);
 
 		List<com.beatblock.timeline.generation.StepSequencePlanner.PlannedStep> planned =
 			com.beatblock.timeline.generation.StepSequencePlanner.plan(
 				ordered, event, referenceBeatTimesSeconds, timelineBpm);
+		planned = com.beatblock.timeline.generation.CameraStepModulation.applyAdaptiveTiming(
+			planned, ordered, runtimeCameraPosition, params);
 		double duration = Math.max(0.01, event.getDurationSeconds());
 		float energy = event.getEnergy();
 		Vec3d center = target.getCenter();

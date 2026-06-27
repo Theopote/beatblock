@@ -49,6 +49,17 @@ public final class StepBurstEventFactory {
 		double timelineBpm,
 		Vec3d runtimeCameraPosition
 	) {
+		return expand(stepEvent, target, referenceBeatTimesSeconds, timelineBpm, runtimeCameraPosition, null);
+	}
+
+	public static List<TimelineAnimationEvent> expand(
+		TimelineAnimationEvent stepEvent,
+		StageObject target,
+		double[] referenceBeatTimesSeconds,
+		double timelineBpm,
+		Vec3d runtimeCameraPosition,
+		Vec3d runtimeCameraForward
+	) {
 		if (stepEvent == null || target == null || target.getBlocks().isEmpty()) {
 			return List.of();
 		}
@@ -63,9 +74,13 @@ public final class StepBurstEventFactory {
 			ordered = applyEdgePrioritization(
 				ordered, target.getBlocks(), edgePriority, runtimeCameraPosition, target.getCenter());
 		}
+		ordered = CameraStepModulation.reorderForFrustumGating(
+			ordered, runtimeCameraPosition, runtimeCameraForward, params);
 
 		List<StepSequencePlanner.PlannedStep> planned = StepSequencePlanner.plan(
 			ordered, stepEvent, referenceBeatTimesSeconds, timelineBpm);
+		planned = CameraStepModulation.applyAdaptiveTiming(
+			planned, ordered, runtimeCameraPosition, params);
 		if (planned.isEmpty()) return List.of();
 
 		List<TimelineAnimationEvent> burstEvents = new ArrayList<>(planned.size());

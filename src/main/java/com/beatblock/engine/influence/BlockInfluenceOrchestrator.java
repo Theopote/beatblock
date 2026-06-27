@@ -6,6 +6,7 @@ import com.beatblock.engine.EffectContext;
 import com.beatblock.engine.EngineAnimationInstance;
 import com.beatblock.engine.WorldMutationSink;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
 
 import java.util.HashMap;
@@ -24,9 +25,15 @@ public final class BlockInfluenceOrchestrator {
 	private final Map<String, Float> lastProgressByInstance = new HashMap<>();
 
 	private InfluenceFrame lastFrame = new InfluenceFrame();
+	private Vec3d runtimeCameraPosition;
+	private Vec3d runtimeCameraForward;
 
-	/** 真正的世界写入不再由本类直接持有 BlockControlExecutor 完成，统一改为 tick/applyFrame 注入的 sink。 */
 	public BlockInfluenceOrchestrator() {
+	}
+
+	public void setRuntimeCamera(Vec3d cameraPosition, Vec3d cameraForward) {
+		this.runtimeCameraPosition = cameraPosition;
+		this.runtimeCameraForward = cameraForward;
 	}
 
 	public InfluenceFrame getLastFrame() {
@@ -107,7 +114,12 @@ public final class BlockInfluenceOrchestrator {
 		lastProgressByInstance.put(instanceKey, t);
 
 		float energy = instance.getEnergy();
-		EffectContext ctx = new EffectContext(instance.getTarget().getCenter(), instance.getExtraParams());
+		EffectContext ctx = new EffectContext(
+			instance.getTarget().getCenter(),
+			instance.getExtraParams(),
+			runtimeCameraPosition,
+			runtimeCameraForward
+		);
 
 		for (BlockPos pos : instance.getTarget().getBlocks()) {
 			var block = frame.animatedBlockFor(pos);

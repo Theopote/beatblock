@@ -91,7 +91,9 @@ public final class BeatBlockClientDriver {
 		World world = mc != null ? mc.world : null;
 		var engine = ctx().blockAnimationEngine();
 		if (engine != null && mc != null && mc.gameRenderer != null && mc.gameRenderer.getCamera() != null) {
-			engine.setRuntimeCameraPosition(mc.gameRenderer.getCamera().getCameraPos());
+			var camera = mc.gameRenderer.getCamera();
+			engine.setRuntimeCameraPosition(camera.getCameraPos());
+			engine.setRuntimeCameraOrientation(camera.getYaw(), camera.getPitch());
 		}
 		com.beatblock.client.camera.TimelineCameraController.getInstance().tick();
 

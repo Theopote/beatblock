@@ -2,7 +2,9 @@ package com.beatblock.engine.influence;
 
 import com.beatblock.engine.AnimatedBlock;
 import com.beatblock.engine.EffectContext;
+import com.beatblock.engine.camera.CameraViewMath;
 import com.beatblock.engine.influence.CurveLibrary;
+import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
 
 /**
@@ -138,6 +140,36 @@ public final class BlockInfluenceEvaluator {
 		float frequency = (float) ctx.paramDouble("waveFrequency", channel.from() > 0f ? channel.from() : 0.5f);
 		float phase = (float) ctx.paramDouble("wavePhaseOffset", 0.0);
 		Vec3d pos = block.getPosition();
+		Vec3d cameraPos = ctx.getCameraPosition();
+
+		if (cameraPos != null) {
+			double nearDistance = ctx.paramDouble("cameraNearDistance", CameraViewMath.DEFAULT_NEAR_DISTANCE);
+			double farDistance = ctx.paramDouble("cameraFarDistance", CameraViewMath.DEFAULT_FAR_DISTANCE);
+			double nearScale = ctx.paramDouble("cameraNearScale", CameraViewMath.DEFAULT_NEAR_SCALE);
+			double farScale = ctx.paramDouble("cameraFarScale", CameraViewMath.DEFAULT_FAR_SCALE);
+			double viewCap = ctx.paramDouble("waveViewDistance", farDistance);
+			double halfFov = ctx.paramDouble("waveViewHalfFovDeg", CameraViewMath.DEFAULT_VIEW_HALF_FOV_DEG);
+			BlockPos orig = block.getOriginalPos();
+			double wave = CameraViewMath.radialWaveOffsetY(
+				orig,
+				cameraPos,
+				ctx.getCameraForward(),
+				t,
+				energy,
+				amplitude,
+				frequency,
+				phase,
+				nearDistance,
+				farDistance,
+				nearScale,
+				farScale,
+				viewCap,
+				halfFov
+			);
+			block.setPosition(pos.x, pos.y + wave, pos.z);
+			return;
+		}
+
 		double wave = Math.sin(pos.x * frequency + t * 6 + phase) * amplitude * Math.max(0f, energy);
 		block.setPosition(pos.x, pos.y + wave, pos.z);
 	}
