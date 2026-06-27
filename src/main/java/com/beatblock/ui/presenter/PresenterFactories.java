@@ -206,6 +206,20 @@ public final class PresenterFactories {
 		return new AutoMapSettingsPanelPresenter(() -> context);
 	}
 
+	public static QuickStartWizardPresenter quickStartWizardPresenter() {
+		return quickStartWizardPresenter(ctx());
+	}
+
+	public static QuickStartWizardPresenter quickStartWizardPresenter(BeatBlockContext context) {
+		return new QuickStartWizardPresenter(
+			menuBarPresenter(context),
+			autoMapSettingsPanelPresenter(context),
+			toolPanelPresenter(context),
+			rhythmDropPanelPresenter(context),
+			context::timeline
+		);
+	}
+
 	private static Vec3d currentCameraPositionOrZero() {
 		MinecraftClient client = MinecraftClient.getInstance();
 		if (client != null && client.gameRenderer != null && client.gameRenderer.getCamera() != null) {

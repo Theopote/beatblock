@@ -24,6 +24,7 @@ public class MenuBarPanel {
 	private final Runnable onResetLayout;
 	private final Runnable onSaveLayout;
 	private final Runnable onLoadLayout;
+	private final Runnable onOpenQuickStartWizard;
 	private boolean showImportDialog;
 	private boolean showOpenProjectDialog;
 	private boolean showSaveProjectDialog;
@@ -34,14 +35,15 @@ public class MenuBarPanel {
 	private String projectDialogMessage = "";
 
 	public MenuBarPanel(Runnable onCloseRequest, BeatBlockPanelVisibility panels, Runnable onOpenSmartAutoMap,
-			Runnable onGenerateRhythmDrop, Runnable onResetLayout, Runnable onSaveLayout, Runnable onLoadLayout) {
+			Runnable onGenerateRhythmDrop, Runnable onResetLayout, Runnable onSaveLayout, Runnable onLoadLayout,
+			Runnable onOpenQuickStartWizard) {
 		this(onCloseRequest, panels, onOpenSmartAutoMap, onGenerateRhythmDrop, onResetLayout, onSaveLayout, onLoadLayout,
-			PresenterFactories.menuBarPresenter());
+			onOpenQuickStartWizard, PresenterFactories.menuBarPresenter());
 	}
 
 	MenuBarPanel(Runnable onCloseRequest, BeatBlockPanelVisibility panels, Runnable onOpenSmartAutoMap,
 			Runnable onGenerateRhythmDrop, Runnable onResetLayout, Runnable onSaveLayout, Runnable onLoadLayout,
-			MenuBarPresenter presenter) {
+			Runnable onOpenQuickStartWizard, MenuBarPresenter presenter) {
 		this.presenter = presenter;
 		this.onCloseRequest = onCloseRequest;
 		this.panels = panels != null ? panels : new BeatBlockPanelVisibility();
@@ -50,6 +52,7 @@ public class MenuBarPanel {
 		this.onResetLayout = onResetLayout != null ? onResetLayout : () -> {};
 		this.onSaveLayout = onSaveLayout != null ? onSaveLayout : () -> {};
 		this.onLoadLayout = onLoadLayout != null ? onLoadLayout : () -> {};
+		this.onOpenQuickStartWizard = onOpenQuickStartWizard != null ? onOpenQuickStartWizard : () -> {};
 	}
 
 	public void render() {
@@ -143,6 +146,13 @@ public class MenuBarPanel {
 				ImGui.endMenu();
 			}
 			if (ImGui.beginMenu(BBTexts.get("beatblock.menu.help"))) {
+				if (ImGui.menuItem(BBTexts.get("beatblock.menu.quick_start_wizard"))) {
+					onOpenQuickStartWizard.run();
+				}
+				if (ImGui.isItemHovered()) {
+					ImGui.setTooltip(BBTexts.get("beatblock.tooltip.quick_start_wizard"));
+				}
+				ImGui.separator();
 				if (ImGui.menuItem(BBTexts.get("beatblock.menu.about"))) {
 					showAboutDialog = true;
 				}

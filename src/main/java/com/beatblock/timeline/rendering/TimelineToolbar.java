@@ -24,6 +24,7 @@ public final class TimelineToolbar {
 	private final TimelineToolbarTransportStrip transportStrip;
 	private final TimelineToolbarActionRollbackControls actionRollbackControls;
 	private final TimelineToolbarToolsControls toolsControls;
+	private final TimelineToolbarEditControls editControls;
 	private final TimelineToolbarSnapGridControls snapGridControls;
 	private final TimelineToolbarViewControls viewControls;
 	private final TimelineToolbarLoopSpeedControls loopSpeedControls;
@@ -53,12 +54,13 @@ public final class TimelineToolbar {
 		var trackHeightControls = new TimelineToolbarTrackHeightControls();
 		this.actionRollbackControls = new TimelineToolbarActionRollbackControls(config, actionRollbackComboIndex);
 		this.toolsControls = new TimelineToolbarToolsControls(actions, feedback, bindingEditorPopup);
+		this.editControls = new TimelineToolbarEditControls();
 		this.snapGridControls = new TimelineToolbarSnapGridControls();
 		this.viewControls = new TimelineToolbarViewControls(zoomComboIndex, trackHeightControls);
 		this.loopSpeedControls = new TimelineToolbarLoopSpeedControls(transport, speedComboIndex, actionRollbackControls);
 		this.demucsControls = new TimelineDemucsMappingControls(config);
 		this.overflowMenu = new TimelineToolbarOverflowMenu(
-			loopSpeedControls, snapGridControls, viewControls, toolsControls, demucsControls);
+			loopSpeedControls, snapGridControls, viewControls, toolsControls, editControls, demucsControls);
 	}
 
 	public void render(TimelineEditor editor, TimelineToolbarState toolbarState) {
@@ -78,6 +80,9 @@ public final class TimelineToolbar {
 
 		snapGridControls.renderInline(toolbarState);
 		viewControls.renderInline(editor);
+		TimelineToolbarImGui.nextGroupOrWrap(0);
+
+		editControls.renderInline(editor);
 		TimelineToolbarImGui.nextGroupOrWrap(0);
 
 		toolsControls.renderInline();

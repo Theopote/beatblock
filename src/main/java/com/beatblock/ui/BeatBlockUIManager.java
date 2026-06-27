@@ -40,6 +40,7 @@ public class BeatBlockUIManager {
 	private final SelectionPropertiesPanel selectionPropertiesPanel;
 	private final LayerPanel layerPanel;
 	private final RhythmDropPanel rhythmDropPanel;
+	private final QuickStartWizardPanel quickStartWizardPanel;
 
 	private final BeatBlockPanelVisibility panelVisibility = new BeatBlockPanelVisibility();
 	private boolean firstLayout = true;
@@ -53,7 +54,8 @@ public class BeatBlockUIManager {
 		this.menuBarPanel = new MenuBarPanel(onCloseRequest, panelVisibility,
 			() -> toolPanel.setShowAutoMapSettings(true),
 			this::generateRhythmDropFromMenu,
-			this::resetLayoutState, this::saveCurrentLayout, this::loadSavedLayout);
+			this::resetLayoutState, this::saveCurrentLayout, this::loadSavedLayout,
+			this::openQuickStartWizard);
 		this.eventPropertiesPanel = new EventPropertiesPanel();
 		this.cameraPropertiesPanel = new CameraPropertiesPanel();
 		this.timelinePanel = new TimelinePanel();
@@ -61,6 +63,11 @@ public class BeatBlockUIManager {
 		this.selectionPropertiesPanel = new SelectionPropertiesPanel();
 		this.layerPanel = new LayerPanel();
 		this.rhythmDropPanel = new RhythmDropPanel();
+		this.quickStartWizardPanel = new QuickStartWizardPanel();
+	}
+
+	public void openQuickStartWizard() {
+		quickStartWizardPanel.open();
 	}
 
 	public void setOnCloseRequest(Runnable onCloseRequest) {
@@ -150,6 +157,7 @@ public class BeatBlockUIManager {
 		rhythmDropPanel.render(panelVisibility.rhythmDrop);
 		ImGui.popStyleColor(5);
 
+		quickStartWizardPanel.render();
 		BeatBlockLassoOverlay.render();
 	}
 

@@ -4,6 +4,7 @@ import com.beatblock.audio.MusicPlayer;
 import com.beatblock.timeline.command.CommandManager;
 import com.beatblock.timeline.editor.*;
 import com.beatblock.timeline.interaction.TimelineInteraction;
+import com.beatblock.timeline.interaction.TimelineInteractionDeleteSupport;
 import com.beatblock.timeline.rendering.TimelineLayout;
 import com.beatblock.timeline.rendering.TimelineRenderer;
 import com.beatblock.timeline.rendering.TimelineTrackMeta;
@@ -438,5 +439,36 @@ public final class TimelineEditor {
 	 */
 	public void shutdown() {
 		renderer.shutdown();
+	}
+
+	public void copySelectedEvents() {
+		interactionSystem.copySelectedEvents(timeline, state.getSelectionState());
+	}
+
+	public void pasteClipboardAtPlayhead() {
+		interactionSystem.pasteClipboardEvents(
+			timeline,
+			state.getSelectionState(),
+			state.getClock().getCurrentTimeSeconds(),
+			trackListState
+		);
+	}
+
+	public void deleteSelectedEntries() {
+		interactionSystem.deleteSelectedEntries(timeline, state.getSelectionState(), trackListState);
+	}
+
+	public boolean hasDeletableSelection() {
+		return TimelineInteractionDeleteSupport.hasDeletableSelection(
+			timeline, state.getSelectionState(), trackListState);
+	}
+
+	public boolean hasClipboardContent() {
+		return !interactionSystem.clipboardEvents().isEmpty();
+	}
+
+	public boolean hasTimelineSelection() {
+		SelectionState selection = state.getSelectionState();
+		return !selection.getSelectedEvents().isEmpty() || !selection.getSelectedClips().isEmpty();
 	}
 }
