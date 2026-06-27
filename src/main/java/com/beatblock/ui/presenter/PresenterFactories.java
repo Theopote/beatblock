@@ -65,6 +65,21 @@ public final class PresenterFactories {
 		return ToolPanelPresenterFactory.create(context);
 	}
 
+	public static RhythmDropPanelPresenter rhythmDropPanelPresenter() {
+		return rhythmDropPanelPresenter(ctx());
+	}
+
+	public static RhythmDropPanelPresenter rhythmDropPanelPresenter(BeatBlockContext context) {
+		return new RhythmDropPanelPresenter(
+			BeatBlockSelectionManager::get,
+			context::timeline,
+			context::timelineEditor,
+			() -> context.blockAnimationEngine() != null
+				? context.blockAnimationEngine().getStageObjectSystem()
+				: null
+		);
+	}
+
 	public static TimelinePanelPresenter timelinePanelPresenter() {
 		return new TimelinePanelPresenter();
 	}

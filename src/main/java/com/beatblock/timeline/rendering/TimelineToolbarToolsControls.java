@@ -12,6 +12,8 @@ final class TimelineToolbarToolsControls {
 	private static final String TOOLTIP_AUTO_MAP = "根据频段事件自动生成动画事件（需先导入音乐）";
 	private static final String TOOLTIP_BAKE_STEP =
 		"将 dispatchModel=STEP 的事件烘焙为 N 个带绝对时间的普通 BURST 事件（可 Undo）；需 StageObject 与参考节拍";
+	private static final String TOOLTIP_RHYTHM_DROP =
+		"从当前方块选区按节拍生成 RhythmDrop 天降事件（写入方块动画轨道）；需先选中落点方块";
 
 	private final TimelineToolbarActionsPresenter actions;
 	private final TimelineToolbarFeedbackPresenter feedback;
@@ -38,6 +40,8 @@ final class TimelineToolbarToolsControls {
 		TimelineToolbarImGui.nextItemInGroup();
 		renderBakeStep("烘焙 STEP##tlBakeStep", "");
 		TimelineToolbarImGui.nextItemInGroup();
+		renderRhythmDrop("天降##tlRhythmDrop", "");
+		TimelineToolbarImGui.nextItemInGroup();
 		TimelineToolbarImGui.renderFeedback(feedback.viewToolActionFeedback());
 	}
 
@@ -50,6 +54,7 @@ final class TimelineToolbarToolsControls {
 		bindingEditorPopup.renderIfOpen();
 		renderAutoMap("Auto Map##tlMoreAutoMap", TOOLTIP_AUTO_MAP);
 		renderBakeStep("烘焙 STEP##tlMoreBakeStep", TOOLTIP_BAKE_STEP);
+		renderRhythmDrop("天降方块##tlMoreRhythmDrop", TOOLTIP_RHYTHM_DROP);
 		TimelineToolbarImGui.renderFeedback(feedback.viewToolActionFeedback());
 	}
 
@@ -93,5 +98,13 @@ final class TimelineToolbarToolsControls {
 			feedback.setToolActionFeedback(outcome.message(), outcome.success());
 		}
 		if (ImGui.isItemHovered()) ImGui.setTooltip(tooltipOverride.isEmpty() ? TOOLTIP_BAKE_STEP : tooltipOverride);
+	}
+
+	private void renderRhythmDrop(String label, String tooltipOverride) {
+		if (ImGui.button(label)) {
+			var outcome = actions.runGenerateRhythmDrops();
+			feedback.setToolActionFeedback(outcome.message(), outcome.success());
+		}
+		if (ImGui.isItemHovered()) ImGui.setTooltip(tooltipOverride.isEmpty() ? TOOLTIP_RHYTHM_DROP : tooltipOverride);
 	}
 }

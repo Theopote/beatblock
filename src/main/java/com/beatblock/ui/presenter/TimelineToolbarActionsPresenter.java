@@ -7,6 +7,7 @@ import com.beatblock.timeline.TimelineEditor;
 import com.beatblock.timeline.binding.AnimationBindingEngine;
 import com.beatblock.timeline.generation.StepSequenceBaker;
 import com.beatblock.timeline.rendering.TimelineTrackMeta;
+import com.beatblock.ui.presenter.RhythmDropPanelPresenter.GenerateRequest;
 import net.minecraft.util.math.Vec3d;
 
 import java.util.function.Supplier;
@@ -21,15 +22,26 @@ public final class TimelineToolbarActionsPresenter {
 	private final Supplier<Timeline> timeline;
 	private final Supplier<TimelineEditor> timelineEditor;
 	private final Supplier<Vec3d> cameraPosition;
+	private final RhythmDropPanelPresenter rhythmDropPresenter;
 
 	public TimelineToolbarActionsPresenter(
 		Supplier<Timeline> timeline,
 		Supplier<TimelineEditor> timelineEditor,
 		Supplier<Vec3d> cameraPosition
 	) {
+		this(timeline, timelineEditor, cameraPosition, PresenterFactories.rhythmDropPanelPresenter());
+	}
+
+	TimelineToolbarActionsPresenter(
+		Supplier<Timeline> timeline,
+		Supplier<TimelineEditor> timelineEditor,
+		Supplier<Vec3d> cameraPosition,
+		RhythmDropPanelPresenter rhythmDropPresenter
+	) {
 		this.timeline = timeline;
 		this.timelineEditor = timelineEditor;
 		this.cameraPosition = cameraPosition;
+		this.rhythmDropPresenter = rhythmDropPresenter;
 	}
 
 	public ActionOutcome runBindingMap() {
@@ -51,6 +63,30 @@ public final class TimelineToolbarActionsPresenter {
 		int count = AutoMapGenerator.generate(current, config, true);
 		syncClockDuration();
 		return new ActionOutcome("Auto Map generated " + count + " events", count > 0, count);
+	}
+
+	public ActionOutcome runGenerateRhythmDrops() {
+		PresenterResult result = rhythmDropPresenter.generateFromSelectionWithDefaults();
+		syncClockDuration();
+		return new ActionOutcome(
+			result.messageOrEmpty().isBlank()
+				? (result.ok() ? "RhythmDrop 已生成" : "RhythmDrop 生成失败")
+				: result.messageOrEmpty(),
+			result.ok(),
+			rhythmDropPresenter.viewState().selectionCount()
+		);
+	}
+
+	public ActionOutcome runGenerateRhythmDrops(GenerateRequest request) {
+		PresenterResult result = rhythmDropPresenter.generateFromSelection(request);
+		syncClockDuration();
+		return new ActionOutcome(
+			result.messageOrEmpty().isBlank()
+				? (result.ok() ? "RhythmDrop 已生成" : "RhythmDrop 生成失败")
+				: result.messageOrEmpty(),
+			result.ok(),
+			rhythmDropPresenter.viewState().selectionCount()
+		);
 	}
 
 	public ActionOutcome runBakeStepSequences() {

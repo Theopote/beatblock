@@ -6,7 +6,10 @@ import com.beatblock.selection.SelectionMode;
 import com.beatblock.ui.layout.BeatBlockDockPanelBegin;
 import com.beatblock.ui.layout.BeatBlockDockSpaceLayoutBuilder;
 import com.beatblock.ui.presenter.PresenterFactories;
+import com.beatblock.ui.presenter.RhythmDropPanelPresenter;
 import com.beatblock.ui.presenter.ToolPanelPresenter;
+import com.beatblock.timeline.generation.RhythmDropEventFactory;
+import com.beatblock.timeline.generation.RhythmDropGenerator;
 import imgui.ImGui;
 import imgui.flag.ImGuiCond;
 import imgui.flag.ImGuiWindowFlags;
@@ -15,6 +18,8 @@ import imgui.type.ImInt;
 import imgui.type.ImString;
 import net.minecraft.util.math.BlockPos;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 
 /**
@@ -30,6 +35,7 @@ public class ToolPanel {
 	private boolean showAutoMapSettings = false;
 	private final AutoMapSettingsPanel autoMapSettingsPanel = new AutoMapSettingsPanel();
 	private final ToolPanelPresenter presenter;
+	private final RhythmDropPanelPresenter rhythmDropPresenter;
 	private final ImString stageObjectNameBuffer = new ImString(64);
 	private final ImBoolean stageObjectIncludeAir = new ImBoolean(false);
 	private final ImInt stageObjectSortingIndex = new ImInt(0);
@@ -45,19 +51,33 @@ public class ToolPanel {
 	};
 	private final Runnable onSelectionToolChosen;
 
+	private final ImBoolean rhythmDropStartAtNextBeat = new ImBoolean(true);
+	private final ImString rhythmDropFallDurationBuffer = new ImString(8);
+	private final ImString rhythmDropFallHeightBuffer = new ImString(8);
+	private final ImInt rhythmDropTargetIndex = new ImInt(0);
+	private String rhythmDropMessage;
+	private long rhythmDropMessageTimeMs;
+
 	public ToolPanel() {
 		this(null);
 	}
 
 	public ToolPanel(Runnable onSelectionToolChosen) {
-		this(onSelectionToolChosen, PresenterFactories.toolPanelPresenter());
+		this(onSelectionToolChosen, PresenterFactories.toolPanelPresenter(), PresenterFactories.rhythmDropPanelPresenter());
 	}
 
 	ToolPanel(Runnable onSelectionToolChosen, ToolPanelPresenter presenter) {
+		this(onSelectionToolChosen, presenter, PresenterFactories.rhythmDropPanelPresenter());
+	}
+
+	ToolPanel(Runnable onSelectionToolChosen, ToolPanelPresenter presenter, RhythmDropPanelPresenter rhythmDropPresenter) {
 		this.onSelectionToolChosen = onSelectionToolChosen;
 		this.presenter = presenter;
+		this.rhythmDropPresenter = rhythmDropPresenter;
 		stageObjectNameBuffer.set("selection_object");
 		stageObjectStaggerBuffer.set("0.00");
+		rhythmDropFallDurationBuffer.set(String.format(Locale.ROOT, "%.1f", RhythmDropEventFactory.DEFAULT_FALL_DURATION_SECONDS));
+		rhythmDropFallHeightBuffer.set(String.format(Locale.ROOT, "%.1f", RhythmDropEventFactory.DEFAULT_FALL_HEIGHT_BLOCKS));
 	}
 
 	/** 由菜单栏「演出 → Smart Auto Map」调用，打开设置弹窗 */
@@ -98,6 +118,8 @@ public class ToolPanel {
 					lastAutoMapResult.getParticleEvents()));
 			}
 
+			renderRhythmDropGenerator();
+
 			renderStageObjectCreator();
 		} finally {
 			BeatBlockDockPanelBegin.endWithRecord(BeatBlockDockSpaceLayoutBuilder.TOOL_PANEL_WINDOW);
@@ -132,6 +154,102 @@ public class ToolPanel {
 		}
 		ImGui.textWrapped("笔刷含球体/立方等形状：单击盖章或按住涂抹。框选/线选为两点；套索为拖画。线粗细等在「视图 → 选择属性」；换选择工具不会自动打开该面板。");
 		ImGui.separator();
+	}
+
+	private void renderRhythmDropGenerator() {
+		ImGui.spacing();
+		ImGui.textDisabled("天降方块（RhythmDrop）");
+		ImGui.separator();
+		ImGui.textWrapped(
+			"选中已存在于世界中的落点方块，按节拍依次生成纯视觉下落动画（写入「方块动画」轨道）。"
+				+ "每个事件精确落在对应坐标，命中瞬间触发粒子，不改变真实方块。");
+
+		RhythmDropPanelPresenter.ViewState state = rhythmDropPresenter.viewState();
+		ImGui.textDisabled(String.format(Locale.ROOT,
+			"当前选区：%d 个落点 · 起点 %.2fs（播放头）", state.selectionCount(), state.playheadSeconds()));
+		ImGui.textDisabled("节拍：" + state.beatGridDescription());
+
+		ImGui.checkbox("从下一拍开始（否则第一落在播放头）##rhythmDropNextBeat", rhythmDropStartAtNextBeat);
+
+		ImGui.setNextItemWidth(-1f);
+		ImGui.inputText("下落时长(秒)##rhythmDropDuration", rhythmDropFallDurationBuffer);
+		ImGui.setNextItemWidth(-1f);
+		ImGui.inputText("下落高度(格)##rhythmDropHeight", rhythmDropFallHeightBuffer);
+
+		List<String> targetLabels = buildRhythmDropTargetLabels(state.stageObjects());
+		if (rhythmDropTargetIndex.get() >= targetLabels.size()) {
+			rhythmDropTargetIndex.set(0);
+		}
+		ImGui.setNextItemWidth(-1f);
+		if (ImGui.beginCombo("目标 StageObject##rhythmDropTarget", targetLabels.get(rhythmDropTargetIndex.get()))) {
+			for (int i = 0; i < targetLabels.size(); i++) {
+				if (ImGui.selectable(targetLabels.get(i), rhythmDropTargetIndex.get() == i)) {
+					rhythmDropTargetIndex.set(i);
+				}
+			}
+			ImGui.endCombo();
+		}
+		if (ImGui.isItemHovered()) {
+			ImGui.setTooltip("自动锚点仅用于时间线引用；实际落点由每个事件的 singleBlock 参数决定。");
+		}
+
+		boolean canGenerate = state.selectionCount() > 0;
+		if (!canGenerate) ImGui.beginDisabled();
+		if (ImGui.button("生成天降方块事件##rhythmDropGenerate", -1f, 0f)) {
+			var result = rhythmDropPresenter.generateFromSelection(buildRhythmDropRequest(state.stageObjects()));
+			setRhythmDropMessage(result.messageOrEmpty());
+		}
+		if (!canGenerate) ImGui.endDisabled();
+		if (ImGui.isItemHovered()) {
+			ImGui.setTooltip("需先导入音乐以使用特征轨节拍；无节拍时按 Timeline BPM 固定间隔排布。");
+		}
+
+		if (rhythmDropMessage != null && !rhythmDropMessage.isBlank()
+			&& System.currentTimeMillis() - rhythmDropMessageTimeMs < 5000L) {
+			ImGui.textWrapped(rhythmDropMessage);
+		}
+	}
+
+	private List<String> buildRhythmDropTargetLabels(List<ToolPanelPresenter.StageObjectListItem> objects) {
+		List<String> labels = new ArrayList<>();
+		labels.add("自动（rhythm_drop_anchor）");
+		if (objects != null) {
+			for (var obj : objects) {
+				if (obj == null || RhythmDropGenerator.DEFAULT_ANCHOR_ID.equals(obj.id())) continue;
+				labels.add(obj.name() + "  [" + obj.id() + "]");
+			}
+		}
+		return labels;
+	}
+
+	private RhythmDropPanelPresenter.GenerateRequest buildRhythmDropRequest(
+		List<ToolPanelPresenter.StageObjectListItem> objects
+	) {
+		String targetId = RhythmDropGenerator.DEFAULT_ANCHOR_ID;
+		int idx = rhythmDropTargetIndex.get();
+		if (idx > 0 && objects != null) {
+			int objectIndex = 0;
+			for (var obj : objects) {
+				if (obj == null || RhythmDropGenerator.DEFAULT_ANCHOR_ID.equals(obj.id())) continue;
+				objectIndex++;
+				if (objectIndex == idx) {
+					targetId = obj.id();
+					break;
+				}
+			}
+		}
+		return new RhythmDropPanelPresenter.GenerateRequest(
+			ToolPanelPresenter.parseStaggerSeconds(rhythmDropFallDurationBuffer.get()),
+			ToolPanelPresenter.parseStaggerSeconds(rhythmDropFallHeightBuffer.get()),
+			rhythmDropStartAtNextBeat.get(),
+			targetId
+		);
+	}
+
+	private void setRhythmDropMessage(String msg) {
+		if (msg == null || msg.isBlank()) return;
+		rhythmDropMessage = msg;
+		rhythmDropMessageTimeMs = System.currentTimeMillis();
 	}
 
 	private void renderStageObjectCreator() {
