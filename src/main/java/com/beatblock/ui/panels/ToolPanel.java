@@ -130,99 +130,235 @@ public class ToolPanel {
 			}
 			ImGui.endCombo();
 		}
-		ImGui.textWrapped("笔刷含球体/立方等形状：单击盖章或按住涂抹。框选/线选为两点；套索为拖画。线粗细等在「视图 → 选择属性」；换选择工具不会自动打开该面板。");
+
+		// === 动态显示当前工具的属性（集成选择属性面板功能） ===
+		ImGui.spacing();
+		ImGui.textColored(0.7f, 0.9f, 1f, 1f, "工具设置:");
 		ImGui.separator();
+		renderToolSpecificProperties(state.mode());
+
+		// === 通用属性 ===
+		ImGui.spacing();
+		ImGui.textColored(0.7f, 0.9f, 1f, 1f, "通用设置:");
+		ImGui.separator();
+		renderCommonSelectionProperties();
+
+		ImGui.separator();
+	}
+
+	/**
+	 * 根据当前选择的工具动态显示相应的属性（原SelectionPropertiesPanel的功能）
+	 */
+	private void renderToolSpecificProperties(SelectionMode mode) {
+		var selMgr = com.beatblock.selection.BeatBlockSelectionManager.get();
+
+		switch (mode) {
+			case BRUSH -> {
+				com.beatblock.selection.BrushShape shape = selMgr.getBrushShape();
+				String shapeLabel = shape == com.beatblock.selection.BrushShape.SPHERE ? "球体" : "立方体";
+				if (ImGui.beginCombo("形状##brushShape", shapeLabel)) {
+					if (ImGui.selectable("球体##sphereOpt", shape == com.beatblock.selection.BrushShape.SPHERE)) {
+						selMgr.setBrushShape(com.beatblock.selection.BrushShape.SPHERE);
+					}
+					if (ImGui.selectable("立方体##cubeOpt", shape == com.beatblock.selection.BrushShape.CUBE)) {
+						selMgr.setBrushShape(com.beatblock.selection.BrushShape.CUBE);
+					}
+					ImGui.endCombo();
+				}
+				int[] radius = {selMgr.getSphereBrushRadius()};
+				ImGui.setNextItemWidth(-1f);
+				if (ImGui.sliderInt("大小##brushSize", radius, 1, 32)) {
+					selMgr.setSphereBrushRadius(radius[0]);
+				}
+			}
+			case LINE -> {
+				int[] thickness = {selMgr.getLineThicknessRadius()};
+				ImGui.setNextItemWidth(-1f);
+				if (ImGui.sliderInt("线粗细##lineThick", thickness, 0, 32)) {
+					selMgr.setLineThicknessRadius(thickness[0]);
+				}
+			}
+			case CONNECTED, SELECTION_WAND -> {
+				int[] spread = {selMgr.getMaxMagicWandSpreadFromSeed()};
+				ImGui.setNextItemWidth(-1f);
+				if (ImGui.sliderInt("扩散半径##wandSpread", spread, 1, 256)) {
+					selMgr.setMaxMagicWandSpreadFromSeed(spread[0]);
+				}
+				boolean fullState = selMgr.isConnectedMatchFullState();
+				if (ImGui.checkbox("完整状态匹配##fullState", new ImBoolean(fullState))) {
+					selMgr.setConnectedMatchFullState(!fullState);
+				}
+			}
+			case PLANE_SLICE -> {
+				net.minecraft.util.math.Direction override = selMgr.getPlaneSliceFaceOverride();
+				String[] faceLabels = {"自动", "+Y", "-Y", "+X", "-X", "+Z", "-Z"};
+				int faceIndex = override == null ? 0 :
+					switch (override) {
+						case UP -> 1; case DOWN -> 2; case EAST -> 3;
+						case WEST -> 4; case SOUTH -> 5; case NORTH -> 6;
+					};
+				ImInt faceIndexImInt = new ImInt(faceIndex);
+				if (ImGui.combo("切片朝向##planeDir", faceIndexImInt, faceLabels)) {
+					net.minecraft.util.math.Direction newDir = switch (faceIndexImInt.get()) {
+						case 1 -> net.minecraft.util.math.Direction.UP;
+						case 2 -> net.minecraft.util.math.Direction.DOWN;
+						case 3 -> net.minecraft.util.math.Direction.EAST;
+						case 4 -> net.minecraft.util.math.Direction.WEST;
+						case 5 -> net.minecraft.util.math.Direction.SOUTH;
+						case 6 -> net.minecraft.util.math.Direction.NORTH;
+						default -> null;
+					};
+					selMgr.setPlaneSliceFaceOverride(newDir);
+				}
+			}
+			case OFF, CLICK, BOX, COLUMN, LASSO -> {
+				ImGui.textDisabled("（无特殊设置）");
+			}
+		}
+	}
+
+	/**
+	 * 渲染所有工具通用的属性
+	 */
+	private void renderCommonSelectionProperties() {
+		var selMgr = com.beatblock.selection.BeatBlockSelectionManager.get();
+
+		ImGui.text("操作:");
+		com.beatblock.selection.SelectionOperation op = selMgr.getOperation();
+		if (ImGui.radioButton("新建##opNew", op == com.beatblock.selection.SelectionOperation.NEW)) {
+			selMgr.setOperation(com.beatblock.selection.SelectionOperation.NEW);
+		}
+		ImGui.sameLine();
+		if (ImGui.radioButton("加选##opAdd", op == com.beatblock.selection.SelectionOperation.ADD)) {
+			selMgr.setOperation(com.beatblock.selection.SelectionOperation.ADD);
+		}
+		ImGui.sameLine();
+		if (ImGui.radioButton("减选##opSub", op == com.beatblock.selection.SelectionOperation.SUBTRACT)) {
+			selMgr.setOperation(com.beatblock.selection.SelectionOperation.SUBTRACT);
+		}
+
+		int[] maxDist = {selMgr.getMaxDistanceFromCamera()};
+		ImGui.setNextItemWidth(-1f);
+		if (ImGui.sliderInt("相机距离##camDist", maxDist, 16, 512)) {
+			selMgr.setMaxDistanceFromCamera(maxDist[0]);
+		}
+
+		boolean includeAir = selMgr.isIncludeAir();
+		if (ImGui.checkbox("包含空气##includeAir", new ImBoolean(includeAir))) {
+			selMgr.setIncludeAir(!includeAir);
+		}
+
+		int selCount = selMgr.getSelectedBlocks().size();
+		if (selCount > 0) {
+			ImGui.textColored(0.4f, 1f, 0.4f, 1f,
+				String.format(java.util.Locale.ROOT, "已选: %d 个方块", selCount));
+		}
 	}
 
 	private void renderStageObjectCreator() {
 		ImGui.spacing();
 		ImGui.textDisabled("动画场景对象（StageObject）");
 		ImGui.separator();
-		ImGui.textWrapped(
-				"时间线里的方块动画事件通过名称引用 StageObject。创建时需要一块「轴对齐长方体」内的方块："
-						+ "请优先用上方「方块选择工具」做出选区（任意形状均可），再点下面按钮把该选区的外接包围盒填入；"
-						+ "只有不打算用选区工具时，才展开「手动角点」用准星点两个角。");
+		ImGui.textWrapped("选择方块后创建对象，用于时间线动画事件。");
 
 		var selectionState = presenter.selectionToolViewState();
 		int selCount = selectionState.selectionCount();
 		if (selCount > 0) {
-			ImGui.textDisabled(String.format(java.util.Locale.ROOT, "当前方块选区：%d 个方块（包围盒用于下方创建）", selCount));
+			ImGui.textColored(0.4f, 1f, 0.4f, 1f,
+				String.format(java.util.Locale.ROOT, "✓ 已选方块：%d 个", selCount));
 		} else {
-			ImGui.textDisabled("当前无方块选区：可先用框选/魔棒等建立选区，或展开「手动角点」。");
+			ImGui.textColored(1f, 0.6f, 0.2f, 1f, "⚠ 请先用上方工具选择方块");
 		}
 
-		if (ImGui.button("用当前方块选区包围盒填入##stageFromSel", -1f, 0f)) {
-			applyStageObjectMessage(presenter.fillCornersFromSelection().result());
-		}
-		if (ImGui.isItemHovered()) {
-			ImGui.setTooltip("与上方选区工具联动：取 BeatBlock 选择管理器中已选方块的最小/最大角作为创建包围盒（与框选完成后的结果一致，无需再点「设置 A/B」）。");
-		}
-
+		// === 快速创建按钮（推荐） ===
 		boolean canCreateFromSelection = selCount > 0;
 		if (!canCreateFromSelection) ImGui.beginDisabled();
-		if (ImGui.button("从当前方块选区直接创建（精确快照）##stageCreateFromSelection", -1f, 0f)) {
-			var outcome = presenter.createFromSelectionSnapshot(buildStageObjectRequest());
+
+		ImGui.pushStyleColor(imgui.flag.ImGuiCol.Button, 0.2f, 0.6f, 0.2f, 1f);
+		ImGui.pushStyleColor(imgui.flag.ImGuiCol.ButtonHovered, 0.3f, 0.7f, 0.3f, 1f);
+		ImGui.pushStyleColor(imgui.flag.ImGuiCol.ButtonActive, 0.15f, 0.5f, 0.15f, 1f);
+
+		if (ImGui.button("快速创建 (推荐)##quickCreate", -1f, 32f)) {
+			quickCreateFromSelection();
+		}
+
+		ImGui.popStyleColor(3);
+
+		if (ImGui.isItemHovered()) {
+			ImGui.setTooltip("一键创建：自动命名、使用默认参数\n适合快速开始创作");
+		}
+
+		if (!canCreateFromSelection) ImGui.endDisabled();
+
+		// === 精确创建（快照模式） ===
+		ImGui.spacing();
+		if (!canCreateFromSelection) ImGui.beginDisabled();
+		if (ImGui.button("精确创建 (保留选区形状)##stageCreateFromSelection", -1f, 0f)) {
+			var outcome = presenter.createFromSelectionSnapshot(buildQuickStageObjectRequest());
 			applyStageObjectMessage(outcome.result());
 		}
 		if (!canCreateFromSelection) ImGui.endDisabled();
 		if (ImGui.isItemHovered()) {
-			ImGui.setTooltip("按当前选中的方块集合直接建组（不扩成包围盒），并记录为 selection_snapshot 来源。");
+			ImGui.setTooltip("保留当前选中的方块集合（不扩成矩形），适合不规则形状");
 		}
 
-		ToolPanelPresenter.CornerState corners = presenter.currentCorners();
-		ImGui.textDisabled("创建包围盒角点");
-		ImGui.textDisabled("  A: " + ToolPanelPresenter.formatPos(corners.posA()));
-		ImGui.textDisabled("  B: " + ToolPanelPresenter.formatPos(corners.posB()));
-		long selectionVolume = ToolPanelPresenter.estimateSelectionVolume(corners.posA(), corners.posB());
-		if (selectionVolume > 0) {
-			ImGui.textDisabled(String.format(java.util.Locale.ROOT, "  包围盒体积（估算）: %d 方块", selectionVolume));
-		}
-
+		// === 高级选项（折叠） ===
+		ImGui.spacing();
 		ImGui.setNextItemOpen(false, ImGuiCond.Once);
-		if (ImGui.collapsingHeader("手动角点（准星拾取，可选）##stageManualHdr")) {
-			ImGui.textWrapped("与「方块选择」独立：在场景区用准星对准方块，分别指定长方体的两个对角。");
-			if (ImGui.button("准星 → A##stageObjSetA")) {
-				applyStageObjectMessage(presenter.setCornerFromCrosshair(true).result());
+		if (ImGui.collapsingHeader("高级选项 (可选)##stageAdvanced")) {
+			ImGui.textWrapped("自定义名称和参数。大部分情况使用默认即可。");
+
+			ImGui.spacing();
+			ImGui.text("对象名称:");
+			ImGui.setNextItemWidth(-1f);
+			ImGui.inputText("##stageObjName", stageObjectNameBuffer);
+
+			ImGui.text("包围盒角点:");
+			ToolPanelPresenter.CornerState corners = presenter.currentCorners();
+			ImGui.textDisabled("  A: " + ToolPanelPresenter.formatPos(corners.posA()));
+			ImGui.textDisabled("  B: " + ToolPanelPresenter.formatPos(corners.posB()));
+
+			if (ImGui.button("用选区包围盒填入##stageFromSel", -1f, 0f)) {
+				applyStageObjectMessage(presenter.fillCornersFromSelection().result());
 			}
-			if (ImGui.isItemHovered()) {
-				ImGui.setTooltip("使用当前光标射线击中的方块坐标");
+
+			ImGui.setNextItemOpen(false, ImGuiCond.Once);
+			if (ImGui.treeNode("准星拾取角点##stageManualCorner")) {
+				ImGui.textWrapped("用准星对准方块，分别指定长方体的两个对角。");
+				if (ImGui.button("准星 → A##stageObjSetA")) {
+					applyStageObjectMessage(presenter.setCornerFromCrosshair(true).result());
+				}
+				ImGui.sameLine();
+				if (ImGui.button("准星 → B##stageObjSetB")) {
+					applyStageObjectMessage(presenter.setCornerFromCrosshair(false).result());
+				}
+				if (ImGui.button("清空##stageObjClearSelection")) {
+					applyStageObjectMessage(presenter.clearCorners().result());
+				}
+				ImGui.treePop();
 			}
-			ImGui.sameLine();
-			if (ImGui.button("准星 → B##stageObjSetB")) {
-				applyStageObjectMessage(presenter.setCornerFromCrosshair(false).result());
+
+			ImGui.spacing();
+			ImGui.checkbox("包含空气方块##stageObjIncludeAir", stageObjectIncludeAir);
+
+			ImGui.spacing();
+			ImGui.text("排序策略:");
+			ImGui.setNextItemWidth(-1f);
+			ImGui.combo("##stageGroupSorting", stageObjectSortingIndex, STAGE_GROUP_SORTING_LABELS);
+
+			ImGui.text("步进延迟(秒):");
+			ImGui.setNextItemWidth(-1f);
+			ImGui.inputText("##stageGroupStagger", stageObjectStaggerBuffer);
+
+			ImGui.spacing();
+			boolean canCreate = corners.posA() != null && corners.posB() != null;
+			if (!canCreate) ImGui.beginDisabled();
+			if (ImGui.button("使用自定义参数创建##stageObjCreate", -1f, 0f)) {
+				var outcome = presenter.createFromCuboid(buildStageObjectRequest());
+				applyStageObjectMessage(outcome.result());
 			}
-			if (ImGui.button("清空手动角点##stageObjClearSelection")) {
-				applyStageObjectMessage(presenter.clearCorners().result());
-			}
-			if (ImGui.isItemHovered()) {
-				ImGui.setTooltip("仅清除此处角点，不影响上方「方块选择工具」的选区");
-			}
-			BlockPos lastLeft = BeatBlockWorldPick.getLastLeftClickedBlock();
-			if (lastLeft != null) {
-				ImGui.textDisabled("最近左键方块: " + ToolPanelPresenter.formatPos(lastLeft));
-			}
+			if (!canCreate) ImGui.endDisabled();
 		}
-
-		ImGui.checkbox("包含空气方块##stageObjIncludeAir", stageObjectIncludeAir);
-		if (ImGui.isItemHovered()) {
-			ImGui.setTooltip("关闭后仅采集非空气方块，推荐用于已有建筑对象");
-		}
-
-		ImGui.setNextItemWidth(-1f);
-		ImGui.inputText("对象名称##stageObjName", stageObjectNameBuffer);
-
-		ImGui.setNextItemWidth(-1f);
-		ImGui.combo("组排序策略##stageGroupSorting", stageObjectSortingIndex, STAGE_GROUP_SORTING_LABELS);
-		ImGui.setNextItemWidth(-1f);
-		ImGui.inputText("组默认步进延迟(秒)##stageGroupStagger", stageObjectStaggerBuffer);
-
-		boolean canCreate = corners.posA() != null && corners.posB() != null;
-		if (!canCreate) ImGui.beginDisabled();
-		if (ImGui.button("从选区创建 StageObject##stageObjCreate", -1f, 0f)) {
-			var outcome = presenter.createFromCuboid(buildStageObjectRequest());
-			applyStageObjectMessage(outcome.result());
-		}
-		if (!canCreate) ImGui.endDisabled();
 
 		if (stageObjectMessage != null && !stageObjectMessage.isBlank()
 				&& System.currentTimeMillis() - stageObjectMessageTimeMs < 5000L) {
@@ -269,6 +405,66 @@ public class ToolPanel {
 			ToolPanelPresenter.sortingStrategyAtIndex(stageObjectSortingIndex.get()),
 			ToolPanelPresenter.parseStaggerSeconds(stageObjectStaggerBuffer.get())
 		);
+	}
+
+	/**
+	 * 快速创建：自动生成名称，使用默认参数
+	 */
+	private void quickCreateFromSelection() {
+		// 自动生成名称 selection_1, selection_2, ...
+		String autoName = generateAutoObjectName();
+
+		// 使用默认参数
+		ToolPanelPresenter.StageObjectCreateRequest request =
+			new ToolPanelPresenter.StageObjectCreateRequest(
+				autoName,
+				false,  // 默认不包含空气
+				com.beatblock.engine.GroupSortingStrategy.SEQUENTIAL,  // 默认顺序
+				0.0     // 默认无延迟
+			);
+
+		var outcome = presenter.createFromSelectionSnapshot(request);
+		applyStageObjectMessage(outcome.result());
+
+		// 如果创建成功，显示提示
+		if (outcome.result().ok()) {
+			stageObjectMessage = "✓ 已创建对象: " + autoName +
+				"\n现在可以在时间线中添加事件并选择此对象";
+			stageObjectMessageTimeMs = System.currentTimeMillis();
+		}
+	}
+
+	/**
+	 * 用于快速创建的简化请求（使用当前输入但允许为空时自动命名）
+	 */
+	private ToolPanelPresenter.StageObjectCreateRequest buildQuickStageObjectRequest() {
+		String name = stageObjectNameBuffer.get();
+		if (name == null || name.isBlank()) {
+			name = generateAutoObjectName();
+		}
+		return new ToolPanelPresenter.StageObjectCreateRequest(
+			name,
+			stageObjectIncludeAir.get(),
+			ToolPanelPresenter.sortingStrategyAtIndex(stageObjectSortingIndex.get()),
+			ToolPanelPresenter.parseStaggerSeconds(stageObjectStaggerBuffer.get())
+		);
+	}
+
+	/**
+	 * 自动生成对象名称 selection_1, selection_2, ...
+	 */
+	private String generateAutoObjectName() {
+		var existingObjects = presenter.listStageObjects();
+		int counter = 1;
+		while (true) {
+			String candidate = "selection_" + counter;
+			boolean exists = existingObjects.stream()
+				.anyMatch(obj -> obj.id().equals(candidate));
+			if (!exists) {
+				return candidate;
+			}
+			counter++;
+		}
 	}
 
 	private void applyStageObjectMessage(com.beatblock.ui.presenter.PresenterResult result) {
